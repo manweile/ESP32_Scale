@@ -1,18 +1,21 @@
 {
   "version": "2.0.0",
   "inputs": [
+    // path to openOCD executable, default to "openocd" which should work if it's in PATH, otherwise user can provide full path to openocd.exe
     {
       "id": "openocdPath",
       "type": "promptString",
       "description": "OpenOCD executable path",
       "default": "openocd"
     },
+    // path to openOCD scripts directory, which contains interface/ and target/ subdirectories, default to the typical installation path for OpenOCD for ESP32 on Windows, but user can provide a different path if needed
     {
       "id": "openocdScriptsDir",
       "type": "promptString",
       "description": "OpenOCD scripts directory (contains interface/ and target/)",
       "default": "C:/Espressif/tools/openocd-esp32/share/openocd/scripts"
     },
+    // ESP-Prog upload baudrate, default to 921600 which is a common high speed for ESP32 uploads, but user can choose a different baudrate if they have stability issues at higher speeds
     {
       "id": "uploadSpeed",
       "type": "pickString",
@@ -25,6 +28,7 @@
       ],
       "default": "921600"
     },
+    // Serial monitor baudrate, default to 115200 which is the most common baudrate for ESP32 serial output, but user can choose a different baudrate if their board is configured differently
     {
       "id": "monitorBaud",
       "type": "pickString",
@@ -32,42 +36,87 @@
       "options": [
         "115200",
         "74880",
+        "38400",
         "9600"
       ],
       "default": "115200"
+    },
+    // list of FQBN for the boards I have and are installed in arduino-cli
+    {
+        "type": "pickString",
+        "id": "FQBN",
+        "description": "Fully Qualified Board Name (FQBN) to use",
+        "options": [
+            "esp32:esp32:esp32thing",
+        ]
+    },
+    // list of build dirs for the FQBN of boards I have and are installed in arduino-cli
+    {
+        "type": "pickString",
+        "id": "FQBNDIR",
+        "description": "Fully Qualified Board Name (FQBN) build directory to use",
+        "options": [
+            "esp32.esp32.esp32thing"
+        ]
     }
   ],
   "tasks": [
+    // all arduino-cli tasks require arduino-cli path in User and/or System PATH
+    // and a properly configured & located arduino-cli.yaml file
+
+    // Arduinco CLI Production Compile task compiles the sketch without cleaning the build directory, which allows for faster incremental builds, 
+    // but may cause issues if there are significant changes to the code or dependencies, 
+    // in which case the user can run the "Arduino-CLI Production Clean Rebuild" task to force a full rebuild from scratch
+    // arduino-cli compile --fqbn esp32:esp32:esp32thing D:\MyArduino\Projects\ESP32_Scale/PropaneScale
     {
-      "label": "Arduino: Compile (ESP32 Thing)",
+      "label": "Arduino-CLI Production File Compile",
       "type": "shell",
       "command": "arduino-cli",
       "args": [
         "compile",
-        "--clean",
-        "-v",
-        "--fqbn",
-        "esp32:esp32:esp32thing",
+        "--fqbn", "${input:FQBN}",
         "${workspaceFolder}/PropaneScale"
       ],
       "group": {
         "kind": "build",
         "isDefault": true
       },
+      "presentation": {
+          "echo": true,
+          "reveal": "always",
+          "focus": false,
+          "panel": "shared"
+      },
       "problemMatcher": []
     },
     {
-      "label": "JTAG: Build Debug (ESP32 Thing)",
+      "label": "Arduino-CLI Production Clean Rebuild",
+      "type": "shell",
+      "command": "arduino-cli",
+      "args": [
+        "compile",
+        "-v",
+        "--clean",
+        "--fqbn", "${input:FQBN}",
+        "${workspaceFolder}/PropaneScale"
+      ],
+      "presentation": {
+          "echo": true,
+          "reveal": "always",
+          "focus": false,
+          "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Arduino-CLI Debug File Compile",
       "type": "shell",
       "command": "arduino-cli",
       "args": [
         "compile",
         "--clean",
         "-v",
-        "--fqbn",
-        "esp32:esp32:esp32thing",
-        "--build-path",
-        "${workspaceFolder}/.build/esp32-thing-debug",
+        "--fqbn", "${input:FQBN}",
         "--build-property",
         "build.extra_flags=-Og -g3",
         "${workspaceFolder}/PropaneScale"
@@ -114,7 +163,7 @@
       "label": "JTAG: Build Debug + Start OpenOCD",
       "dependsOrder": "sequence",
       "dependsOn": [
-        "JTAG: Build Debug (ESP32 Thing)",
+        "Arduino-CLI Debug File Compile",
         "JTAG: Start OpenOCD (ESP-Prog)"
       ],
       "problemMatcher": []
