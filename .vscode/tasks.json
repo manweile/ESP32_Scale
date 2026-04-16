@@ -1,34 +1,43 @@
 {
   "version": "2.0.0",
   "inputs": [
-    // path to openOCD executable, default to "openocd" which should work if it's in PATH, otherwise user can provide full path to openocd.exe
-    {
-      "id": "openocdPath",
-      "type": "promptString",
-      "description": "OpenOCD executable path",
-      "default": "openocd"
-    },
-    // path to openOCD scripts directory, which contains interface/ and target/ subdirectories, default to the typical installation path for OpenOCD for ESP32 on Windows, but user can provide a different path if needed
-    {
-      "id": "openocdScriptsDir",
-      "type": "promptString",
-      "description": "OpenOCD scripts directory (contains interface/ and target/)",
-      "default": "C:/Espressif/tools/openocd-esp32/share/openocd/scripts"
-    },
-    // ESP-Prog upload baudrate, default to 921600 which is a common high speed for ESP32 uploads, but user can choose a different baudrate if they have stability issues at higher speeds
-    {
-      "id": "uploadSpeed",
-      "type": "pickString",
-      "description": "ESP-Prog upload baudrate",
-      "options": [
-        "921600",
-        "460800",
-        "230400",
-        "115200"
-      ],
-      "default": "921600"
-    },
-    // Serial monitor baudrate, default to 115200 which is the most common baudrate for ESP32 serial output, but user can choose a different baudrate if their board is configured differently
+    // // path to openOCD executable, 
+    // // default to "openocd" which should work if it's in PATH, 
+    // // otherwise user can provide full path to openocd.exe
+    // {
+    //   "id": "openocdPath",
+    //   "type": "promptString",
+    //   "description": "OpenOCD executable path",
+    //   "default": "openocd"
+    // },
+    // // path to openOCD scripts directory, 
+    // // which contains interface/ and target/ subdirectories, 
+    // // default to the typical installation path for OpenOCD for ESP32 on Windows, 
+    // // but user can provide a different path if needed
+    // {
+    //   "id": "openocdScriptsDir",
+    //   "type": "promptString",
+    //   "description": "OpenOCD scripts directory (contains interface/ and target/)",
+    //   "default": "C:/Espressif/tools/openocd-esp32/share/openocd/scripts"
+    // },
+    // // ESP-Prog upload baudrate, 
+    // // default to 921600 which is a common high speed for ESP32 uploads, 
+    // // but user can choose a different baudrate if they have stability issues at higher speeds
+    // {
+    //   "id": "uploadSpeed",
+    //   "type": "pickString",
+    //   "description": "Upload baudrate",
+    //   "options": [
+    //     "921600",
+    //     "460800",
+    //     "230400",
+    //     "115200"
+    //   ],
+    //   "default": "921600"
+    // },
+    // Serial monitor baudrate, 
+    // default to 115200 which is the most common baudrate for ESP32 serial output, 
+    // but user can choose a different baudrate if their board is configured differently
     {
       "id": "monitorBaud",
       "type": "pickString",
@@ -48,6 +57,7 @@
         "description": "Fully Qualified Board Name (FQBN) to use",
         "options": [
             "esp32:esp32:esp32thing",
+            "esp8266:esp8266:thingdev"
         ]
     },
     // list of build dirs for the FQBN of boards I have and are installed in arduino-cli
@@ -56,24 +66,36 @@
         "id": "FQBNDIR",
         "description": "Fully Qualified Board Name (FQBN) build directory to use",
         "options": [
-            "esp32.esp32.esp32thing"
+            "esp32.esp32.esp32thing",
+            "esp8266.esp8266.thingdev"
         ]
+    },
+    // dynamic com port list from google search: vs code tasks.json input com ports extension "Command Variable"
+    {
+        "id": "COMPort",
+        "type": "command",
+        "command": "shellCommand.execute",
+        "args": {
+            // alternative windows only command: "powershell -Command \"[System.IO.Ports.SerialPort]::GetPortNames()\""
+            "command": "python ${workspaceFolder}/PropaneScale/list_ports.py",
+            "description": "Select the COM port for upload"
+        }
     }
   ],
   "tasks": [
     // all arduino-cli tasks require arduino-cli path in User and/or System PATH
     // and a properly configured & located arduino-cli.yaml file
 
-    // Arduinco CLI Production Compile task compiles the sketch without cleaning the build directory, which allows for faster incremental builds, 
-    // but may cause issues if there are significant changes to the code or dependencies, 
-    // in which case the user can run the "Arduino-CLI Production Clean Rebuild" task to force a full rebuild from scratch
-    // arduino-cli compile --fqbn esp32:esp32:esp32thing D:\MyArduino\Projects\ESP32_Scale/PropaneScale
+    // Arduino CLI Production Quick Compile task compiles the without cleaning build directory for faster incremental builds, 
+    // if there are significant changes to the code or dependencies run the "Arduino-CLI Production Clean Rebuild" task to force a full rebuild
+    // arduino-cli compile -v --fqbn esp32:esp32:esp32thing D:\MyArduino\Projects\ESP32_Scale/PropaneScale
     {
-      "label": "Arduino-CLI Production File Compile",
+      "label": "Arduino-CLI Production Quick Compile",
       "type": "shell",
       "command": "arduino-cli",
       "args": [
         "compile",
+        "-v",
         "--fqbn", "${input:FQBN}",
         "${workspaceFolder}/PropaneScale"
       ],
@@ -89,6 +111,9 @@
       },
       "problemMatcher": []
     },
+    // Arduino CLI Production Clean Rebuild task compiles the sketch with the --clean flag, 
+    // forces a full rebuild from scratch, but takes longer to complete
+    // arduino-cli compile -v --clean --fqbn esp32:esp32:esp32thing D:\MyArduino\Projects\ESP32_Scale/PropaneScale
     {
       "label": "Arduino-CLI Production Clean Rebuild",
       "type": "shell",
@@ -108,163 +133,222 @@
       },
       "problemMatcher": []
     },
+    // Arduino CLI Debug File Compile task compiles the sketch with the --clean flag and extra debug flags, 
+    // forces a full rebuild from scratch, includes debug symbols and disables optimizations,  results in muxch bigger file
+    // arduino-cli compile -v --fqbn esp32:esp32:esp32thing --build-property 'build.extra_flags=-Og -g3' D:\MyArduino\Projects\ESP32_Scale/PropaneScale
     {
       "label": "Arduino-CLI Debug File Compile",
       "type": "shell",
       "command": "arduino-cli",
       "args": [
         "compile",
-        "--clean",
         "-v",
+        "--clean",
         "--fqbn", "${input:FQBN}",
-        "--build-property",
-        "build.extra_flags=-Og -g3",
+        "--build-property", "build.extra_flags=-Og -g3",
         "${workspaceFolder}/PropaneScale"
       ],
       "problemMatcher": []
     },
+    // task to upload the sketch using USB serial via arduino-cli directly
+    // arduino-cli upload -v -p COM4 --fqbn esp32:esp32:esp32thing D:\MyArduino\Projects\ESP32_Scale/PropaneScale
     {
-      "label": "JTAG: Start OpenOCD (ESP-Prog)",
+      "label": "Arduino CLI USB Upload",
       "type": "shell",
-      "command": "${input:openocdPath}",
+      "command": "arduino-cli",
       "args": [
-        "-s",
-        "${input:openocdScriptsDir}",
-        "-f",
-        "${workspaceFolder}/.vscode/openocd-esp-prog-esp32.cfg"
-      ],
-      "isBackground": true,
-      "problemMatcher": {
-        "owner": "openocd",
-        "pattern": {
-          "regexp": "^$"
-        },
-        "background": {
-          "activeOnStart": true,
-          "beginsPattern": "^.*$",
-          "endsPattern": "Listening on port 3333 for gdb connections"
-        }
-      }
-    },
-    {
-      "label": "JTAG: Stop OpenOCD",
-      "type": "shell",
-      "command": "powershell",
-      "args": [
-        "-NoProfile",
-        "-ExecutionPolicy",
-        "Bypass",
-        "-Command",
-        "Get-Process openocd -ErrorAction SilentlyContinue | Stop-Process -Force"
-      ],
-      "problemMatcher": []
-    },
-    {
-      "label": "JTAG: Build Debug + Start OpenOCD",
-      "dependsOrder": "sequence",
-      "dependsOn": [
-        "Arduino-CLI Debug File Compile",
-        "JTAG: Start OpenOCD (ESP-Prog)"
-      ],
-      "problemMatcher": []
-    },
-    {
-      "label": "Arduino: Upload (ESP-Prog)",
-      "type": "shell",
-      "command": "powershell",
-      "args": [
-        "-NoProfile",
-        "-ExecutionPolicy",
-        "Bypass",
-        "-File",
-        "${workspaceFolder}/.vscode/arduino-cli-auto.ps1",
         "upload",
-        "-SketchPath",
-        "${workspaceFolder}/PropaneScale",
-        "-Fqbn",
-        "esp32:esp32:esp32thing",
-        "-UploadSpeed",
-        "${input:uploadSpeed}"
+        "-v",
+        "-p", "${input:COMPort}",
+        "--fqbn", "${input:FQBN}",
+        "${workspaceFolder}/PropaneScale"
       ],
       "problemMatcher": []
     },
+    // task to open com port for monitoring using arduino-cli directly
+    // runs in a dedicated terminal tab named "Arduino CLI USB Serial Monitor"
+    // arduino-cli monitor -p COM4 --config baudrate=115200 --fqbn esp32:esp32:esp32thing
     {
-      "label": "Arduino: Upload (USB)",
+      "label": "Arduino CLI USB Serial Monitor",
       "type": "shell",
-      "command": "powershell",
+      "command": "arduino-cli",
       "args": [
-        "-NoProfile",
-        "-ExecutionPolicy",
-        "Bypass",
-        "-File",
-        "${workspaceFolder}/.vscode/arduino-cli-auto.ps1",
-        "upload-usb",
-        "-SketchPath",
-        "${workspaceFolder}/PropaneScale",
-        "-Fqbn",
-        "esp32:esp32:esp32thing",
-        "-UploadSpeed",
-        "${input:uploadSpeed}"
-      ],
-      "problemMatcher": []
-    },
-    {
-      "label": "Arduino: Monitor (ESP-Prog)",
-      "type": "shell",
-      "command": "powershell",
-      "args": [
-        "-NoProfile",
-        "-ExecutionPolicy",
-        "Bypass",
-        "-File",
-        "${workspaceFolder}/.vscode/arduino-cli-auto.ps1",
         "monitor",
-        "-Baudrate",
-        "${input:monitorBaud}"
+        "-p", "${input:COMPort}",
+        "--config", "baudrate=${input:monitorBaud}",
+        "--fqbn", "${input:FQBN}"
       ],
       "isBackground": true,
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": true,
+        "panel": "dedicated"
+      },
       "problemMatcher": []
     },
-    {
-      "label": "Arduino: Monitor (USB)",
-      "type": "shell",
-      "command": "powershell",
-      "args": [
-        "-NoProfile",
-        "-ExecutionPolicy",
-        "Bypass",
-        "-File",
-        "${workspaceFolder}/.vscode/arduino-cli-auto.ps1",
-        "monitor-usb",
-        "-Baudrate",
-        "${input:monitorBaud}"
-      ],
-      "isBackground": true,
-      "problemMatcher": []
-    },
-    {
-      "label": "Arduino: Compile + Upload + Monitor (USB)",
-      "dependsOrder": "sequence",
-      "dependsOn": [
-        "Arduino: Compile (ESP32 Thing)",
-        "Arduino: Upload (USB)",
-        "Arduino: Monitor (USB)"
-      ],
-      "problemMatcher": []
-    },
-    {
-      "label": "Arduino: Detect Port (ESP-Prog)",
-      "type": "shell",
-      "command": "powershell",
-      "args": [
-        "-NoProfile",
-        "-ExecutionPolicy",
-        "Bypass",
-        "-File",
-        "${workspaceFolder}/.vscode/arduino-cli-auto.ps1",
-        "detect"
-      ],
-      "problemMatcher": []
-    }
+    // // task to start OpenOCD with the ESP-Prog configuration for ESP32
+    // {
+    //   "label": "JTAG: Start OpenOCD (ESP-Prog)",
+    //   "type": "shell",
+    //   "command": "${input:openocdPath}",
+    //   "args": [
+    //     "-s",
+    //     "${input:openocdScriptsDir}",
+    //     "-f",
+    //     "${workspaceFolder}/.vscode/openocd-esp-prog-esp32.cfg"
+    //   ],
+    //   "isBackground": true,
+    //   "problemMatcher": {
+    //     "owner": "openocd",
+    //     "pattern": {
+    //       "regexp": "^$"
+    //     },
+    //     "background": {
+    //       "activeOnStart": true,
+    //       "beginsPattern": "^.*$",
+    //       "endsPattern": "Listening on port 3333 for gdb connections"
+    //     }
+    //   }
+    // },
+    // // task to stop OpenOCD by killing the openocd process
+    // {
+    //   "label": "JTAG: Stop OpenOCD",
+    //   "type": "shell",
+    //   "command": "powershell",
+    //   "args": [
+    //     "-NoProfile",
+    //     "-ExecutionPolicy",
+    //     "Bypass",
+    //     "-Command",
+    //     "Get-Process openocd -ErrorAction SilentlyContinue | Stop-Process -Force"
+    //   ],
+    //   "problemMatcher": []
+    // },
+    // // task to build the sketch with debug flags and then start OpenOCD
+    // {
+    //   "label": "JTAG: Build Debug + Start OpenOCD",
+    //   "dependsOrder": "sequence",
+    //   "dependsOn": [
+    //     "Arduino-CLI Debug File Compile",
+    //     "JTAG: Start OpenOCD (ESP-Prog)"
+    //   ],
+    //   "problemMatcher": []
+    // },
+    // // task to stop OpenOCD and then build the sketch without debug flags
+    // {
+    //   "label": "JTAG: Stop OpenOCD + Build Production",
+    //   "dependsOrder": "sequence",
+    //   "dependsOn": [
+    //     "JTAG: Stop OpenOCD",
+    //     "Arduino-CLI Production File Compile"
+    //   ],
+    //   "problemMatcher": []
+    // },
+    // // task to upload the sketch using ESP-Prog
+    // // uses the arduino-cli-auto.ps1 script to handle the upload process,
+    // // and uploading the compiled sketch to the board
+    // {
+    //   "label": "Arduino: Upload (ESP-Prog)",
+    //   "type": "shell",
+    //   "command": "powershell",
+    //   "args": [
+    //     "-NoProfile",
+    //     "-ExecutionPolicy",
+    //     "Bypass",
+    //     "-File",
+    //     "${workspaceFolder}/.vscode/arduino-cli-auto.ps1",
+    //     "upload",
+    //     "-SketchPath",
+    //     "${workspaceFolder}/PropaneScale",
+    //     "-Fqbn",
+    //     "esp32:esp32:esp32thing",
+    //     "-UploadSpeed",
+    //     "${input:uploadSpeed}"
+    //   ],
+    //   "problemMatcher": []
+    // },
+    // // task to upload the sketch using USB serial via the arduino-cli-auto.ps1 script
+    // {
+    //   "label": "Powershell USB Upload",
+    //   "type": "shell",
+    //   "command": "powershell",
+    //   "args": [
+    //     "-NoProfile",
+    //     "-ExecutionPolicy",
+    //     "Bypass",
+    //     "-File",
+    //     "${workspaceFolder}/.vscode/arduino-cli-auto.ps1",
+    //     "upload-usb",
+    //     "-SketchPath",
+    //     "${workspaceFolder}/PropaneScale",
+    //     "-Fqbn", "${input:FQBN}",
+    //     "-UploadSpeed",
+    //     "${input:uploadSpeed}"
+    //   ],
+    //   "problemMatcher": []
+    // },
+    // // task to start the serial monitor using the arduino-cli-auto.ps1 script
+    // {
+    //   "label": "Arduino: Monitor (ESP-Prog)",
+    //   "type": "shell",
+    //   "command": "powershell",
+    //   "args": [
+    //     "-NoProfile",
+    //     "-ExecutionPolicy",
+    //     "Bypass",
+    //     "-File",
+    //     "${workspaceFolder}/.vscode/arduino-cli-auto.ps1",
+    //     "monitor",
+    //     "-Baudrate",
+    //     "${input:monitorBaud}"
+    //   ],
+    //   "isBackground": true,
+    //   "problemMatcher": []
+    // },
+    // // task to start the serial monitor using the arduino-cli-auto.ps1 script for USB serial
+    // {
+    //   "label": "USB Com Port Monitor",
+    //   "type": "shell",
+    //   "command": "powershell",
+    //   "args": [
+    //     "-NoProfile",
+    //     "-ExecutionPolicy",
+    //     "Bypass",
+    //     "-File",
+    //     "${workspaceFolder}/.vscode/arduino-cli-auto.ps1",
+    //     "monitor-usb",
+    //     "-Baudrate",
+    //     "${input:monitorBaud}"
+    //   ],
+    //   "isBackground": true,
+    //   "problemMatcher": []
+    // },
+    // // task to upload the sketch using USB serial and then start the serial monitor, both via the arduino-cli-auto.ps1 script
+    // {
+    //   "label": "Arduino: Compile + Upload + Monitor (USB)",
+    //   "dependsOrder": "sequence",
+    //   "dependsOn": [
+    //     "Arduino: Compile (ESP32 Thing)",
+    //     "USB Upload",
+    //     "USB Com Port Monitor"
+    //   ],
+    //   "problemMatcher": []
+    // },
+    // // task to detect the COM port of the board using the arduino-cli-auto.ps1 script
+    // {
+    //   "label": "Arduino: Detect Port (ESP-Prog)",
+    //   "type": "shell",
+    //   "command": "powershell",
+    //   "args": [
+    //     "-NoProfile",
+    //     "-ExecutionPolicy",
+    //     "Bypass",
+    //     "-File",
+    //     "${workspaceFolder}/.vscode/arduino-cli-auto.ps1",
+    //     "detect"
+    //   ],
+    //   "problemMatcher": []
+    // }
   ]
 }
