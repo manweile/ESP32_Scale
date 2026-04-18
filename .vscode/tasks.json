@@ -20,21 +20,21 @@
     //   "description": "OpenOCD scripts directory (contains interface/ and target/)",
     //   "default": "C:/Espressif/tools/openocd-esp32/share/openocd/scripts"
     // },
-    // // ESP-Prog upload baudrate, 
-    // // default to 921600 which is a common high speed for ESP32 uploads, 
-    // // but user can choose a different baudrate if they have stability issues at higher speeds
-    // {
-    //   "id": "uploadSpeed",
-    //   "type": "pickString",
-    //   "description": "Upload baudrate",
-    //   "options": [
-    //     "921600",
-    //     "460800",
-    //     "230400",
-    //     "115200"
-    //   ],
-    //   "default": "921600"
-    // },
+    // esptool.py upload baudrate, 
+    // default to 921600 which is a common high speed for ESP32 uploads, 
+    // but user can choose a different baudrate if they have stability issues at higher speeds
+    {
+      "id": "uploadSpeed",
+      "type": "pickString",
+      "description": "Upload baudrate",
+      "options": [
+        "921600",
+        "460800",
+        "230400",
+        "115200"
+      ],
+      "default": "921600"
+    },
     // Serial monitor baudrate, 
     // default to 115200 which is the most common baudrate for ESP32 serial output, 
     // but user can choose a different baudrate if their board is configured differently
@@ -51,6 +51,8 @@
       "default": "115200"
     },
     // list of FQBN for the boards I have and are installed in arduino-cli
+    // FQBN is colon separated string with format: "package:architecture:board",  
+    // used for arduino-cli compile and upload tasks to specify the target board configuration
     {
         "type": "pickString",
         "id": "FQBN",
@@ -61,6 +63,8 @@
         ]
     },
     // list of build dirs for the FQBN of boards I have and are installed in arduino-cli
+    // FQBNDIR is dot separated string with format: "package.architecture.board",  
+    // used for constructing the path to the pre-built binary for arduino-cli upload task
     {
         "type": "pickString",
         "id": "FQBNDIR",
@@ -80,13 +84,32 @@
             "command": "python ${workspaceFolder}/PropaneScale/list_ports.py",
             "description": "Select the COM port for upload"
         }
+    },
+    // open a file dialog to select a merged ESP32 binary for esptool upload
+    // defaultUri ends in the selected FQBNDIR build folder
+    {
+        "id": "openMergedBinDialog",
+        "type": "command",
+        "command": "extension.commandvariable.file.openDialog",
+        "args": {
+            "canSelect": "files",
+        "defaultUri": "${workspaceFolder}/PropaneScale/build/${input:FQBNDIR}/",
+        "include": "**/${fileBasename}.merged.bin",
+            "filters": {
+          "Merged BIN": ["merged.bin"]
+            }
+        }
     }
   ],
   "tasks": [
-    // all arduino-cli tasks require arduino-cli path in User and/or System PATH
-    // and a properly configured & located arduino-cli.yaml file
 
-    // Arduino CLI Production Quick Compile task compiles the without cleaning build directory for faster incremental builds, 
+    /** 
+     * Arduino-cli tasks to compile and upload the sketch using arduino-cli directly from the command line
+     * all arduino-cli tasks require arduino-cli path in User and/or System PATH
+     * and a properly configured & located arduino-cli.yaml file
+     */
+
+    // Arduino CLI Production Quick Compile task compiles the sketch without cleaning the build directory for faster incremental builds, 
     // if there are significant changes to the code or dependencies run the "Arduino-CLI Production Clean Rebuild" task to force a full rebuild
     // arduino-cli compile -v --fqbn esp32:esp32:esp32thing D:\MyArduino\Projects\ESP32_Scale/PropaneScale
     {
@@ -134,7 +157,7 @@
       "problemMatcher": []
     },
     // Arduino CLI Debug File Compile task compiles the sketch with the --clean flag and extra debug flags, 
-    // forces a full rebuild from scratch, includes debug symbols and disables optimizations,  results in muxch bigger file
+    // forces a full rebuild from scratch, includes debug symbols and disables optimizations,  results in much bigger file
     // arduino-cli compile -v --fqbn esp32:esp32:esp32thing --build-property 'build.extra_flags=-Og -g3' D:\MyArduino\Projects\ESP32_Scale/PropaneScale
     {
       "label": "Arduino-CLI Debug File Compile",
@@ -150,8 +173,9 @@
       ],
       "problemMatcher": []
     },
-    // task to upload the sketch using USB serial via arduino-cli directly
-    // arduino-cli upload -v -p COM4 --fqbn esp32:esp32:esp32thing D:\MyArduino\Projects\ESP32_Scale/PropaneScale
+    // task to upload the sketch using USB serial via arduino-cli directly,
+    // using --input-dir to upload the pre-built binary from the build directory
+    // arduino-cli upload -v -p COM4 --fqbn esp32:esp32:esp32thing --input-dir D:\MyArduino\Projects\ESP32_Scale/PropaneScale/build/esp32.esp32.esp32thing D:\MyArduino\Projects\ESP32_Scale/PropaneScale
     {
       "label": "Arduino CLI USB Upload",
       "type": "shell",
@@ -161,6 +185,7 @@
         "-v",
         "-p", "${input:COMPort}",
         "--fqbn", "${input:FQBN}",
+        "--input-dir", "${workspaceFolder}/PropaneScale/build/${input:FQBNDIR}",
         "${workspaceFolder}/PropaneScale"
       ],
       "problemMatcher": []
@@ -187,6 +212,88 @@
       },
       "problemMatcher": []
     },
+
+    /**
+     * ESPTool tasks
+     * these tasks use esptool.exe directly to either upload the pre-compiled binary or merge the binary components into a single file
+     * requires esptool.exe which is included with the esp32 arduino core installation in the arduino15 directory
+     */
+
+    // helper task to prompt FQBNDIR before opening the file picker
+    // WARNING: the selected base filename .merged.bin file MUST already exist
+    {
+      "label": "ESPTool Select FQBNDIR",
+      "type": "shell",
+      "command": "echo",
+      "args": [
+        "Selected build dir: ${input:FQBNDIR}",
+        "WARNING: The ${fileBasename}.merged.bin file MUST exist before upload"
+      ],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    // task that uploads selected merged binary using esptool.exe
+    // WARNING: the selected base filename .merged.bin file MUST exist
+    // esptool.exe --verbose --chip esp32 --port COM4 --baud 921600 write-flash -z 0x0 D:\MyArduino\Projects\ESP32_Scale/build/esp32.esp32.esp32thing/PropaneScale.ino.merged.bin
+    {
+      "label": "ESPTool USB Upload (Select BIN)",
+      "hide": true,
+      "type": "shell",
+      "command": "${env:LOCALAPPDATA}/Arduino15/packages/esp32/tools/esptool_py/5.1.0/esptool.exe",
+      "args": [
+        "--verbose",
+        "--chip", "esp32",
+        "--port", "${input:COMPort}",
+        "--baud", "${input:uploadSpeed}",
+        "write-flash",
+        "-z",
+        "0x0",
+        "${input:openMergedBinDialog}"
+      ],
+      "problemMatcher": []
+    },
+    // wrapper task to ensure FQBNDIR prompt appears before the file dialog
+    {
+      "label": "ESPTool USB Upload",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "ESPTool Select FQBNDIR",
+        "ESPTool USB Upload (Select BIN)"
+      ],
+      "problemMatcher": []
+    },
+    // // task to generate a single production image using esptool.exe only
+    // // requires existing .bootloader.bin, .partitions.bin, and .bin artifacts
+    // // %LOCALAPPDATA%/Arduino15/packages/esp32/tools/esptool_py/5.1.0/esptool.exe 
+    // // --chip esp32 merge-bin -o PropaneScale.ino.merged.bin 
+    // // 0x1000 PropaneScale.ino.bootloader.bin 0x8000 PropaneScale.ino.partitions.bin 0x10000 PropaneScale.ino.bin
+    // {
+    //   "label": "ESPTool Production File Compile",
+    //   "type": "shell",
+    //   "command": "${env:LOCALAPPDATA}/Arduino15/packages/esp32/tools/esptool_py/5.1.0/esptool.exe",
+    //   "args": [
+    //     "--verbose", "--chip", "esp32",
+    //     "merge-bin",
+    //     "-o", "${workspaceFolder}/PropaneScale/build/${input:FQBNDIR}/${fileBasename}.merged.bin",
+    //     "0x1000", "${workspaceFolder}/PropaneScale/build/${input:FQBNDIR}/${fileBasename}.bootloader.bin",
+    //     "0x8000", "${workspaceFolder}/PropaneScale/build/${input:FQBNDIR}/${fileBasename}.partitions.bin",
+    //     "0x10000", "${workspaceFolder}/PropaneScale/build/${input:FQBNDIR}/${fileBasename}.bin"
+    //   ],
+    //   "problemMatcher": []
+    // },
+
+    /**
+     * JTAG OpenOCD tasks
+     * these tasks use OpenOCD to program and debug the ESP32 using the ESP-Prog JTAG debugger
+     * requires OpenOCD with the appropriate configuration file for the ESP32 and ESP-Prog, 
+     * and the arduino-cli-auto.ps1 script to handle uploads and serial monitoring via OpenOCD
+     */
+
     // // task to start OpenOCD with the ESP-Prog configuration for ESP32
     // {
     //   "label": "JTAG: Start OpenOCD (ESP-Prog)",
