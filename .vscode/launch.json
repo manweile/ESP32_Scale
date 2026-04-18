@@ -1,12 +1,16 @@
 {
   "version": "0.2.0",
   "inputs": [
+    // Location of your xtensa-esp32-elf-gdb executable, which is part of the ESP32 toolchain. 
+    // This is needed for the JTAG debug configuration.
     {
       "id": "gdbPath",
       "type": "promptString",
       "description": "xtensa-esp32-elf-gdb executable path",
       "default": "C:/Users/gmanw/AppData/Local/Arduino15/packages/esp32/tools/xtensa-esp-elf-gdb/11.2_20220823/bin/xtensa-esp32-elf-gdb.exe"
     },
+    // Baudrate options for the serial monitor configuration. 
+    // Make sure to select the baudrate that matches the one used in your Arduino sketch for Serial.begin()
     {
       "id": "monitorBaudLaunch",
       "type": "pickString",
@@ -14,17 +18,22 @@
       "options": [
         "115200",
         "74880",
+        "38400",
         "9600"
       ],
       "default": "115200"
     }
   ],
   "configurations": [
+    // This configuration is for JTAG debugging an ESP32 using an ESP-Prog and OpenOCD. 
+    // It assumes that you have OpenOCD set up to interface with the ESP-Prog and that it's configured to connect to your ESP32 board. 
+    // The preLaunchTask starts the OpenOCD server, and the postDebugTask stops it after debugging is finished. 
+    // Make sure to adjust the paths and commands as needed for your specific setup.
     {
       "name": "JTAG Debug (ESP32 + ESP-Prog + OpenOCD)",
       "type": "cppdbg",
       "request": "launch",
-      "program": "${workspaceFolder}/.build/esp32-thing-debug/PropaneScale.ino.elf",
+      "program": "${workspaceFolder}/.build/esp32-thing-debug/${fileBasename}.elf",
       "cwd": "${workspaceFolder}/PropaneScale",
       "MIMode": "gdb",
       "miDebuggerPath": "${input:gdbPath}",
@@ -46,6 +55,8 @@
         }
       ]
     },
+    // This configuration is for launching a serial monitor using a PowerShell script that wraps the arduino-cli monitor command. 
+    // It allows you to view the serial output from your ESP32 board while debugging.
     {
       "name": "Serial Monitor (ESP-Prog)",
       "type": "node-terminal",
@@ -55,6 +66,7 @@
     }
   ],
   "compounds": [
+    // This compound configuration allows you to start both the JTAG debug session and the serial monitor simultaneously.
     {
       "name": "JTAG + Serial Monitor (ESP-Prog)",
       "configurations": [
