@@ -51,10 +51,21 @@ float calibration_factor = DEF_CALIBRATION_FACTOR;
 char temp = '\0';
 long zero_factor = 0;
 
+/**
+ * @brief Initializes serial output and the HX711 scale interface.
+ *
+ * @details Starts the serial port, prints the available runtime commands, initializes
+ * the HX711 using the configured pins, verifies the amplifier is responding, and
+ * applies the current calibration factor before normal readings begin.
+ *
+ * @return {void} No value is returned.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
 void setup() {
   Serial.begin(BAUD);
 
-  Serial.println("HX711 calibration sketch");
+  Serial.println("Propane Level Scale");
   Serial.println("Remove all weight from scale");
   Serial.println("After readings begin, place known weight on scale");
   Serial.println("Press + or a to increase calibration factor");
