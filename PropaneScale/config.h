@@ -28,7 +28,7 @@ constexpr float DEF_CALIBRATION_FACTOR = -10822.67f;    // wire spool @ 18.6 lbs
 constexpr float DEF_TWENTY_TANK_TARE = 17.0f;
 
 // maximum legal propane weight (lbs) of 20 lb tank is 80% of tank capacity = 16.0 lbs
-constexpr float MAX_TWENTY_WEIGHT_LBS = 16.0f;
+constexpr float MAX_TWENTY_PROPANE_LBS = 16.0f;
 
 // Weight of the always-present platen in pounds.
 constexpr float  PLATEN_TARE = 0.33125f;

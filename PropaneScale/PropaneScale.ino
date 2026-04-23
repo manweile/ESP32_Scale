@@ -169,7 +169,7 @@ void loop() {
   }
 
   // calculate the fill level percentage based on the weight of the propane and the maximum legal propane weight of the tank
-  level = (propaneLbs / MAX_TWENTY_WEIGHT_LBS) * 100.0f; 
+  level = (propaneLbs / MAX_TWENTY_PROPANE_LBS) * 100.0f; 
   
   Serial.print("Raw weight: ");
   Serial.print(rawLbs, 1);
