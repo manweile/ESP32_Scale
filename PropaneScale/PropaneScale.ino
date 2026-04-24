@@ -50,10 +50,108 @@ HX711 scale;
 float calibration_factor = DEF_CALIBRATION_FACTOR;
 char temp = '\0';
 long zero_factor = 0;
-float level = 0.0f;
+float propaneLevel = 0.0f;
 float propaneLbs = 0.0f;
 float rawLbs = 0.0f;
 float tankTare = DEF_TWENTY_TANK_TARE;
+
+/**
+ * @brief Runs automatic calibration using a known reference weight.
+ *
+ * @details Clears any prior scale factor, tares the empty scale, asks the user to
+ * place the configured known weight on the platform, computes an initial calibration
+ * factor from the measured reading, then allows small manual adjustments until the
+ * reported weight is accurate.
+ *
+ * @return {void} No value is returned.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+void automaticCalibration() {
+  float measuredUnits = 0.0f;
+  float adjustmentStep = 0.0f;
+  float minStep = 0.0f;
+  int lastDirection = 0;   // +1 = last press increased, -1 = last press decreased, 0 = none
+
+  Serial.println("Automatic calibration mode");
+  Serial.println("Remove all weight from scale, then press any key to continue.");
+
+  while (!Serial.available()) {
+  }
+
+  while (Serial.available()) {
+    Serial.read();
+  }
+
+  scale.set_scale();
+  scale.tare();
+
+  Serial.print("Place the known weight on the scale: ");
+  Serial.print(CAL_KNOWN_WEIGHT_LBS, 2);
+  Serial.println(" lbs");
+  Serial.println("Press any key when the weight is stable.");
+
+  while (!Serial.available()) {
+  }
+
+  while (Serial.available()) {
+    Serial.read();
+  }
+
+  measuredUnits = scale.get_units(LIVE_SAMPLES);
+
+  if (CAL_KNOWN_WEIGHT_LBS == 0.0f || measuredUnits == 0.0f) {
+    Serial.println("Automatic calibration failed: invalid known weight or reading.");
+    return;
+  }
+
+  calibration_factor = measuredUnits / CAL_KNOWN_WEIGHT_LBS;
+
+  // Start with 1% of the initial estimate; floor at 0.01% to prevent stall.
+  adjustmentStep = fabsf(calibration_factor) * 0.01f;
+  minStep = fabsf(calibration_factor) * 0.0001f;
+  if (adjustmentStep == 0.0f) adjustmentStep = 1.0f;
+  if (minStep == 0.0f) minStep = 0.001f;
+
+  Serial.print("Initial calibration_factor estimate: ");
+  Serial.println(calibration_factor, 2);
+  Serial.println("Press + or a to increase calibration factor");
+  Serial.println("Press - or z to decrease calibration factor");
+  Serial.println("Press q to keep the current value and exit");
+  Serial.println("(step halves on direction reversal)");
+
+  while (true) {
+    scale.set_scale(calibration_factor);
+
+    Serial.print("Reading: ");
+    Serial.print(scale.get_units(LIVE_SAMPLES), 2);
+    Serial.print(" lbs  factor: ");
+    Serial.print(calibration_factor, 2);
+    Serial.print("  step: ");
+    Serial.println(adjustmentStep, 4);
+
+    if (Serial.available()) {
+      temp = Serial.read();
+      if (temp == '+' || temp == 'a') {
+        // Reversed from last direction — halve the step to zoom in.
+        if (lastDirection == -1) {
+          adjustmentStep = max(adjustmentStep * 0.5f, minStep);
+        }
+        calibration_factor += adjustmentStep;
+        lastDirection = 1;
+      } else if (temp == '-' || temp == 'z') {
+        if (lastDirection == 1) {
+          adjustmentStep = max(adjustmentStep * 0.5f, minStep);
+        }
+        calibration_factor -= adjustmentStep;
+        lastDirection = -1;
+      } else if (temp == 'q' || temp == 'Q') {
+        Serial.println("Exiting automatic calibration mode");
+        return;
+      }
+    }
+  }
+}
 
 /**
  * @brief Enters manual calibration mode for the scale.
@@ -127,6 +225,7 @@ void setup() {
 
   Serial.println("Propane Level Scale");
   Serial.println("Remove all weight from scale");
+  Serial.println("Send 'a' to enter automatic calibration mode");
   Serial.println("Send 'm' to enter manual calibration mode");
 
   scale.begin(DOUT_PIN, CLK_PIN);
@@ -152,11 +251,13 @@ void loop() {
   if(Serial.available())
   {
     temp = Serial.read();
+    if(temp == 'a' || temp == 'A')
+      automaticCalibration();
     if(temp == 'm' || temp == 'M')
       manualCalibration();
   }
 
-  // apply the current calibration factor to convert raw readings to weight in pounds
+   // apply the current calibration factor to convert raw readings to weight in pounds
   scale.set_scale(calibration_factor);
 
   rawLbs = scale.get_units();
@@ -169,7 +270,7 @@ void loop() {
   }
 
   // calculate the fill level percentage based on the weight of the propane and the maximum legal propane weight of the tank
-  level = (propaneLbs / MAX_TWENTY_PROPANE_LBS) * 100.0f; 
+  propaneLevel = (propaneLbs / MAX_TWENTY_PROPANE_LBS) * 100.0f; 
   
   Serial.print("Raw weight: ");
   Serial.print(rawLbs, 1);
@@ -178,6 +279,6 @@ void loop() {
   Serial.print(propaneLbs, 1);
   Serial.print(" lbs, "); 
   Serial.print("Level: ");
-  Serial.print(level, 1);
+  Serial.print(propaneLevel, 1);
   Serial.println("%");
 }
