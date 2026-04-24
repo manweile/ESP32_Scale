@@ -21,7 +21,7 @@ constexpr float CAL_KNOWN_WEIGHT_LBS = 18.6f;   // wire spool
 
 // Calibration value used by HX711 conversion. Adjustable at runtime by automatic or manual calibration mode.
 // constexpr float DEF_CALIBRATION_FACTOR = -10651.67f;    // litter jug of water @ 36.6 lbs
-constexpr float DEF_CALIBRATION_FACTOR = -10822.67f;    // wire spool @ 18.6 lbs
+constexpr float DEF_CALIBRATION_FACTOR = -10811.24f;    // wire spool @ 18.6 lbs
 // constexpr float DEF_CALIBRATION_FACTOR = -10651.67f;    // distilled jug of water @ 10.0 lbs
 
 // Tare weight of the empty twenty lb tank in pounds, used to subtract from readings to report only the weight of the propane.
