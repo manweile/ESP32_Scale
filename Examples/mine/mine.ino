@@ -305,7 +305,7 @@ void manualCalibrate() {
 void computePropaneLevel() {
   totalWeight = scale.get_units(LIVE_SAMPLES);
   propaneWeight = totalWeight - tankTare;
-  propaneLevel = propaneWeight / MAX_TWENTY_WEIGHT_LBS * 100.0f;
+  propaneLevel = propaneWeight / MAX_TWENTY_PROPANE_LBS * 100.0f;
   Serial.println();
   Serial.print("Reading: ");
   Serial.print(propaneLevel, 1);
