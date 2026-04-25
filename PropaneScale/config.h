@@ -42,4 +42,17 @@ constexpr float MAX_TWENTY_PROPANE_LBS = 16.0f;
 // Weight of the always-present platen in pounds.
 constexpr float  PLATEN_TARE = 0.33125f;
 
+// EEPROM addresses and magic number for calibration persistence.
+constexpr uint32_t CAL_EEPROM_MAGIC = 0x43414C31;  // "CAL1"
+
+// EEPROM addresses for calibration data. Magic number is stored at CAL_EEPROM_MAGIC_ADDR, and the calibration factor is stored at CAL_EEPROM_VALUE_ADDR.
+constexpr int CAL_EEPROM_MAGIC_ADDR = 0;
+
+// HX711 instance for interacting with the load cell amplifier.
+constexpr int CAL_EEPROM_VALUE_ADDR = 4;
+
+// EEPROM size in bytes. Must be sufficient to store the calibration magic number and value.
+constexpr int EEPROM_SIZE_BYTES = 64;
+
+
 #endif // CONFIG_H

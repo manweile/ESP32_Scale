@@ -1,14 +1,18 @@
 /**
  * @file PropaneScale.ino
  * @author Gerald Manweiler
+ * 
  * @brief Main application file for ESP32-based propane level scale using HX711 amplifier.
+ * 
  * @details Implements serial command interface for calibration and weight reporting, 
  * manages HX711 interactions, and applies calibration factors to convert raw readings to weight in pounds.
+ * 
  * @version 0.1
  * @date 2024-06-01
  */
 
 #include "HX711.h"
+#include <EEPROM.h>
 #include "config.h"
 
 HX711 scale;
@@ -20,6 +24,41 @@ float propaneLevel = 0.0f;
 float propaneLbs = 0.0f;
 float rawLbs = 0.0f;
 float tankTare = DEF_TWENTY_TANK_TARE;
+
+/**
+ * @brief  
+ * 
+ * @details This function saves the given calibration factor to EEPROM with a magic number for validation.
+ * 
+ * @param {float} factor The calibration factor to save.
+ * @return {bool} True if the calibration factor was successfully saved, false otherwise.
+ * 
+ * @throws {none} This function does not throw exceptions.
+ */
+bool saveCalibrationToEeprom(float factor) {
+  EEPROM.put(CAL_EEPROM_MAGIC_ADDR, CAL_EEPROM_MAGIC);
+  EEPROM.put(CAL_EEPROM_VALUE_ADDR, factor);
+  return EEPROM.commit();
+}
+
+/**
+ * @brief Loads the calibration factor from EEPROM if the magic number is valid.
+ * 
+ * @param {float&} factor Reference to a float variable where the loaded calibration factor will be stored.
+ * @return {bool} True if the calibration factor was successfully loaded, false if the magic number was invalid.
+ * 
+ * @throws {none} This function does not throw exceptions.
+ */
+bool loadCalibrationFromEeprom(float& factor) {
+  uint32_t magic = 0;
+  EEPROM.get(CAL_EEPROM_MAGIC_ADDR, magic);
+  if (magic != CAL_EEPROM_MAGIC) {
+    return false;
+  }
+
+  EEPROM.get(CAL_EEPROM_VALUE_ADDR, factor);
+  return true;
+}
 
 
 /**
@@ -45,8 +84,10 @@ float readAveragedUnits(int readings, int samplesPerReading) {
 }
 
 /**
- * @brief Blocks until the user sends 'y' to confirm or 'q' to cancel.
+ * @brief Blocks until the user confirms or cancels.
  *
+ * @details This function blocks until user confirms an action by sending 'y' over serial, or to cancel by sending 'q'.
+ * 
  * @param cancelMessage Text to print when the user cancels.
  * @return true if the user confirmed, false if the user cancelled.
  * 
@@ -90,7 +131,15 @@ void automaticCalibration() {
 
   Serial.println("Automatic calibration mode");
 
-  if (!waitForUserConfirmation("Automatic calibration cancelled")) return;
+  if (!waitForUserConfirmation("Automatic calibration cancelled")) {
+    calibration_factor = DEF_CALIBRATION_FACTOR;
+    if (!saveCalibrationToEeprom(calibration_factor)) {
+      Serial.println("Failed to save default calibration to EEPROM.");
+    } else {
+      Serial.println("Default calibration saved to EEPROM.");
+    }
+    return;
+  }
 
   Serial.println("Empty scale confirmed. Taring now...");
 
@@ -134,6 +183,12 @@ void automaticCalibration() {
   Serial.println(" lbs");
   Serial.print("Automatic calibration complete, computed calibration_factor: ");
   Serial.println(calibration_factor, 2);
+
+  if (!saveCalibrationToEeprom(calibration_factor)) {
+    Serial.println("Failed to save calibration to EEPROM.");
+  } else {
+    Serial.println("Calibration saved to EEPROM.");
+  }
 }
 
 /**
@@ -160,7 +215,15 @@ void manualCalibration() {
   
   Serial.print("Manual calibration mode");
 
-  if (!waitForUserConfirmation("Manual calibration cancelled")) return;
+  if (!waitForUserConfirmation("Manual calibration cancelled")) {
+    calibration_factor = DEF_CALIBRATION_FACTOR;
+    if (!saveCalibrationToEeprom(calibration_factor)) {
+      Serial.println("Failed to save default calibration to EEPROM.");
+    } else {
+      Serial.println("Default calibration saved to EEPROM.");
+    }
+    return;
+  }
 
   Serial.println("Empty scale confirmed. Taring now...");
 
@@ -215,6 +278,12 @@ void manualCalibration() {
       } else if (temp == 'q' || temp == 'Q') {
         Serial.print("Manual calibration complete, computed calibration_factor: ");
         Serial.println(calibration_factor, 2);
+
+        if (!saveCalibrationToEeprom(calibration_factor)) {
+          Serial.println("Failed to save calibration to EEPROM.");
+        } else {
+          Serial.println("Calibration saved to EEPROM.");
+        }
         return;
       }
     }
@@ -236,15 +305,40 @@ void setup() {
   Serial.begin(BAUD);
 
   Serial.println("Propane Level Scale");
-  Serial.println("Remove all weight from scale");
-  Serial.println("Send 'a' to enter automatic calibration mode");
-  Serial.println("Send 'm' to enter manual calibration mode");
+
+  if (!EEPROM.begin(EEPROM_SIZE_BYTES)) {
+    Serial.println("EEPROM init failed. Using default calibration factor.");
+    calibration_factor = DEF_CALIBRATION_FACTOR;
+  } else {
+    float storedCalibration = DEF_CALIBRATION_FACTOR;
+    if (loadCalibrationFromEeprom(storedCalibration)) {
+      calibration_factor = storedCalibration;
+      Serial.print("Loaded calibration_factor from EEPROM: ");
+      Serial.println(calibration_factor, 2);
+    } else {
+      calibration_factor = DEF_CALIBRATION_FACTOR;
+      if (!saveCalibrationToEeprom(calibration_factor)) {
+        Serial.println("Failed to initialize default calibration in EEPROM.");
+      } else {
+        Serial.println("Initialized default calibration in EEPROM.");
+      }
+    }
+  }
 
   scale.begin(DOUT_PIN, CLK_PIN);
+
+  Serial.println("Setup requires an empty scale before initial tare.");
+  while (!waitForUserConfirmation("Setup confirmation cancelled.")) {
+    Serial.println("Cannot continue setup tare until all weight is removed.");
+  }
 
   // clear all calibration and tare settings to start fresh
   scale.set_scale();
   scale.tare();
+
+  Serial.println("Scale is tared and ready.");
+  Serial.println("Send 'a' to enter automatic calibration mode");
+  Serial.println("Send 'm' to enter manual calibration mode");
 }
 
 /**
@@ -274,7 +368,7 @@ void loop() {
 
   rawLbs = scale.get_units();
 
-  propaneLbs = rawLbs - tankTare;
+  propaneLbs = rawLbs - tankTare - PLATEN_TARE;
 
   // if the calculated propane weight is negative, set it to zero to avoid reporting negative weight
   if (propaneLbs < 0) {
