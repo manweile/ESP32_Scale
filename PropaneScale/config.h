@@ -33,11 +33,15 @@ constexpr float MINIMUM_LOAD_THRESHOLD = 1000.0f;
 // Multiplier for noise level to set load detection threshold during automatic/manual calibration.
 constexpr int UNLOAD_CHECK_COUNT = 3;
 
-// Tare weight of the empty twenty lb tank in pounds, used to subtract from readings to report only the weight of the propane.
-constexpr float DEF_TWENTY_TANK_TARE = 17.0f;
+// Tare weight of the empty, used to subtract from readings to report only the weight of the propane
+// Tare weight of the empty twenty lb tank in pounds is approximately 17.0 lb
+// Tare weight of the empty thirty lb tank in pounds is approximately 24.0 lb
+constexpr float DEF_TANK_TARE = 17.0f;
 
-// maximum legal propane weight (lbs) of 20 lb tank is 80% of tank capacity = 16.0 lbs
-constexpr float MAX_TWENTY_PROPANE_LBS = 16.0f;
+// Maximum legal propane weight for a tank is 80% of the tank's total capacity
+// maximum legal propane weight of 20 lb tank is 80% of tank capacity = 16.0 lbs
+// maximum legal propane weight of 30 lb tank is 80% of tank capacity = 24.0 lbs
+constexpr float MAX_PROPANE_LBS = 16.0f;
 
 // Weight of the always-present platen in pounds.
 constexpr float  PLATEN_TARE = 0.33125f;

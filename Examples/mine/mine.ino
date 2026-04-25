@@ -305,7 +305,7 @@ void manualCalibrate() {
 void computePropaneLevel() {
   totalWeight = scale.get_units(LIVE_SAMPLES);
   propaneWeight = totalWeight - tankTare;
-  propaneLevel = propaneWeight / MAX_TWENTY_PROPANE_LBS * 100.0f;
+  propaneLevel = propaneWeight / MAX_PROPANE_LBS * 100.0f;
   Serial.println();
   Serial.print("Reading: ");
   Serial.print(propaneLevel, 1);
@@ -438,7 +438,7 @@ void setup() {
 
   // @todo if there is a persisted propane tank tare weight, retrieve & use persisted 
   // propane tank tare weight is used to calculate tank fill percentage
-  tankTare = DEF_TWENTY_TANK_TARE;
+  tankTare = DEF_TANK_TARE;
 
   // tare & zero offset to the known weight of the platen so that readings reflect only the weight of the propane and tank
   Serial.println("Taring & setting scale offset with platen weight");

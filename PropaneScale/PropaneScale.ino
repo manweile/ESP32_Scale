@@ -23,7 +23,7 @@ long zero_factor = 0;
 float propaneLevel = 0.0f;
 float propaneLbs = 0.0f;
 float rawLbs = 0.0f;
-float tankTare = DEF_TWENTY_TANK_TARE;
+float tankTare = DEF_TANK_TARE;
 
 /**
  * @brief  
@@ -361,6 +361,12 @@ void loop() {
       automaticCalibration();
     if(temp == 'm' || temp == 'M')
       manualCalibration();
+    if(temp == 'p' || temp == 'P') {
+      // @todo get propane tank tare from user input and save propane tank tare to EEPROM
+    }
+    if(temp == 'w' || temp == 'W') {
+      // @todo get maximum legal propane weight from user input and save maximum legal propane weight to EEPROM
+    }
   }
 
   // apply the current calibration factor to convert raw readings to weight in pounds
@@ -376,7 +382,7 @@ void loop() {
   }
 
   // calculate the fill level percentage based on the weight of the propane and the maximum legal propane weight of the tank
-  propaneLevel = (propaneLbs / MAX_TWENTY_PROPANE_LBS) * 100.0f; 
+  propaneLevel = (propaneLbs / MAX_PROPANE_LBS) * 100.0f; 
   
   Serial.print("Raw weight: ");
   Serial.print(rawLbs, 1);
