@@ -11,38 +11,91 @@
  * @date 2024-06-01
  */
 
-#include "HX711.h"
-#include <EEPROM.h>
-#include "config.h"
+// Standard library headers
+#include <EEPROM.h>               // EEPROM library for persistent storage of calibration and tare values.
+#include <stdlib.h>               // Standard library for functions like strtof for parsing floats from strings.  
 
-HX711 scale;
+// Third party library headers
+#include "HX711.h"                // HX711 library for interfacing with the load cell amplifier to read weight data.
 
-float calibration_factor = DEF_CALIBRATION_FACTOR;
-char temp = '\0';
-long zero_factor = 0;
-float propaneLevel = 0.0f;
-float propaneLbs = 0.0f;
-float rawLbs = 0.0f;
-float tankTare = DEF_TANK_TARE;
+// Local library headers
+#include "config.h"               // Local configuration header defining pin assignments, calibration constants, and EEPROM addresses.
+
+// Global class variables
+HX711 scale;                      // HX711 instance for interacting with the load cell amplifier.
+
+// Global state variables
+float calibration_factor = 0.0f;  // Calibration factor for converting raw HX711 readings to weight in pounds, loaded from EEPROM or set to default.
+bool eepromReady = false;         // Flag to track if EEPROM was successfully initialized
+float maxPropaneLbs = 0.0f;       // Maximum legal propane weight in pounds, loaded from EEPROM or set to default.
+float propaneLevel = 0.0f;        // Current propane level as a percentage of maximum weight.
+float propaneLbs = 0.0f;          // Current propane weight in pounds.
+float rawLbs = 0.0f;              // Raw weight reading from HX711 in pounds.
+float tankTare = 0.0f;            // Tare weight of the empty propane tank in pounds.
+char temp = '\0';                 // Temporary variable for serial input.
+bool liveReadingsEnabled = false; // True when continuous live reading mode is active.
+unsigned long lastLiveReadingMs = 0; // Last timestamp when a live reading was printed.
+long zero_factor = 0;             // Zero factor for HX711 calibration.
+
+// Helper functions for EEPROM workflows
+// Displaying saved EEPROM values, loading/saving calibration, tare, and maximum propane weight values to EEPROM.
 
 /**
- * @brief  
- * 
- * @details This function saves the given calibration factor to EEPROM with a magic number for validation.
- * 
- * @param {float} factor The calibration factor to save.
- * @return {bool} True if the calibration factor was successfully saved, false otherwise.
- * 
+ * @brief Displays all saved EEPROM values with validity status.
+ *
+ * @details Reads each persisted record (calibration factor, tank tare, and maximum
+ * legal propane weight), verifies its magic marker, and prints the stored value.
+ *
+ * @return {void} No value is returned.
+ *
  * @throws {none} This function does not throw exceptions.
  */
-bool saveCalibrationToEeprom(float factor) {
-  EEPROM.put(CAL_EEPROM_MAGIC_ADDR, CAL_EEPROM_MAGIC);
-  EEPROM.put(CAL_EEPROM_VALUE_ADDR, factor);
-  return EEPROM.commit();
+void displaySavedEepromValues() {
+  if (!eepromReady) {
+    Serial.println("EEPROM is not initialized; no saved values can be read.");
+    return;
+  }
+
+  uint32_t magic = 0;
+  float storedValue = 0.0f;
+
+  Serial.println("EEPROM Saved Values");
+
+  EEPROM.get(CAL_EEPROM_MAGIC_ADDR, magic);
+  if (magic == CAL_EEPROM_MAGIC) {
+    EEPROM.get(CAL_EEPROM_VALUE_ADDR, storedValue);
+    Serial.print("Calibration factor: ");
+    Serial.println(storedValue, 2);
+  } else {
+    Serial.println("Calibration factor: <invalid or not set>");
+  }
+
+  EEPROM.get(TARE_EEPROM_MAGIC_ADDR, magic);
+  if (magic == TARE_EEPROM_MAGIC) {
+    EEPROM.get(TARE_EEPROM_VALUE_ADDR, storedValue);
+    Serial.print("Tank tare: ");
+    Serial.print(storedValue, 2);
+    Serial.println(" lbs");
+  } else {
+    Serial.println("Tank tare: <invalid or not set>");
+  }
+
+  EEPROM.get(MAX_PROPANE_EEPROM_MAGIC_ADDR, magic);
+  if (magic == MAX_PROPANE_EEPROM_MAGIC) {
+    EEPROM.get(MAX_PROPANE_EEPROM_VALUE_ADDR, storedValue);
+    Serial.print("Max propane weight: ");
+    Serial.print(storedValue, 2);
+    Serial.println(" lbs");
+  } else {
+    Serial.println("Max propane weight: <invalid or not set>");
+  }
 }
 
 /**
  * @brief Loads the calibration factor from EEPROM if the magic number is valid.
+ * 
+ * @details This function reads the magic number from EEPROM to verify that a calibration factor has been saved.
+ *  If the magic number is valid, it loads the calibration factor into the provided reference variable.
  * 
  * @param {float&} factor Reference to a float variable where the loaded calibration factor will be stored.
  * @return {bool} True if the calibration factor was successfully loaded, false if the magic number was invalid.
@@ -60,6 +113,148 @@ bool loadCalibrationFromEeprom(float& factor) {
   return true;
 }
 
+/**
+ * @brief Loads the maximum legal propane weight value from EEPROM if magic is valid.
+ *
+ * @details This function checks for the maximum propane weight magic number in EEPROM.
+ *  If the magic number is valid, it loads the maximum propane weight value into the provided reference variable. 
+ * 
+ * @param {float&} maxPropaneLbs Reference where loaded value is stored.
+ * @return {bool} True if value was loaded successfully, false otherwise.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+bool loadMaxPropaneWeightFromEeprom(float& maxPropaneLbs) {
+  uint32_t magic = 0;
+  EEPROM.get(MAX_PROPANE_EEPROM_MAGIC_ADDR, magic);
+  if (magic != MAX_PROPANE_EEPROM_MAGIC) {
+    return false;
+  }
+
+  EEPROM.get(MAX_PROPANE_EEPROM_VALUE_ADDR, maxPropaneLbs);
+  return true;
+}
+
+/**
+ * @brief Loads the propane tank tare value from EEPROM if tare magic is valid.
+ *
+ * @details This function checks for the tare magic number in EEPROM.
+ *  If the magic number is valid, it loads the tare value into the provided reference variable.
+ * 
+ * @param {float&} tareLbs Reference where loaded tare value is stored.
+ * @return {bool} True if tare value was loaded successfully, false otherwise.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+bool loadTankTareFromEeprom(float& tareLbs) {
+  uint32_t magic = 0;
+  EEPROM.get(TARE_EEPROM_MAGIC_ADDR, magic);
+  if (magic != TARE_EEPROM_MAGIC) {
+    return false;
+  }
+
+  EEPROM.get(TARE_EEPROM_VALUE_ADDR, tareLbs);
+  return true;
+}
+
+/**
+ * @brief Saves the given calibration factor to EEPROM with a magic number for validation.
+ * 
+ * @details This function writes the calibration magic number and calibration factor to EEPROM, and commits the changes.
+ * 
+ * @param {float} factor The calibration factor to save.
+ * @return {bool} True if the calibration factor was successfully saved, false otherwise.
+ * 
+ * @throws {none} This function does not throw exceptions.
+ */
+bool saveCalibrationToEeprom(float factor) {
+  EEPROM.put(CAL_EEPROM_MAGIC_ADDR, CAL_EEPROM_MAGIC);
+  EEPROM.put(CAL_EEPROM_VALUE_ADDR, factor);
+  return EEPROM.commit();
+}
+
+/**
+ * @brief Loads the maximum legal propane weight value from EEPROM if magic is valid.
+ *
+ * @details This function checks for the maximum propane weight magic number in EEPROM.
+ *  If the magic number is valid, it loads the maximum propane weight value into the provided reference variable.
+ * 
+ * @param {float&} maxPropaneLbs Reference where loaded value is stored.
+ * @return {bool} True if value was loaded successfully, false otherwise.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+bool saveMaxPropaneWeightToEeprom(float maxPropaneLbs) {
+  EEPROM.put(MAX_PROPANE_EEPROM_MAGIC_ADDR, MAX_PROPANE_EEPROM_MAGIC);
+  EEPROM.put(MAX_PROPANE_EEPROM_VALUE_ADDR, maxPropaneLbs);
+  return EEPROM.commit();
+}
+
+/**
+ * @brief Saves the propane tank tare value to EEPROM with a tare-specific magic number.
+ *
+ * @details This function writes the tare magic number and tare value to EEPROM, and commits the changes.
+ * 
+ * @param {float} tareLbs Tank tare in pounds to save.
+ * @return {bool} True if the tare value was successfully saved, false otherwise.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+bool saveTankTareToEeprom(float tareLbs) {
+  EEPROM.put(TARE_EEPROM_MAGIC_ADDR, TARE_EEPROM_MAGIC);
+  EEPROM.put(TARE_EEPROM_VALUE_ADDR, tareLbs);
+  return EEPROM.commit();
+}
+
+// Helper functions for user initiated workflows
+// Flushing serial input, parsing non-negative floats, reading averaged units from the scale, and handling user confirmation during calibration.
+
+/**
+ * @brief Flushes any buffered serial input.
+ *
+ * @details This function reads and discards any available serial input to ensure that subsequent serial reads start with fresh input from the user.
+ * 
+ * @return {void} No value is returned.
+ * 
+ * @throws {none} This function does not throw exceptions.
+ */
+void flushSerialInput() {
+  while (Serial.available()) {
+    Serial.read();
+  }
+}
+
+/**
+ * @brief Parses a non-negative float from a null-terminated C string.
+ *
+ * @details This function attempts to parse a float value from the input string. 
+ * It validates that the entire string is a valid float representation and that the parsed value is non-negative.
+ * 
+ * @param {const char*} text Input text to parse.
+ * @param {float&} value Parsed output value on success.
+ * @return {bool} True if parsing succeeds and the value is non-negative.
+ * 
+ * @throws {none} This function does not throw exceptions.
+ */
+bool parseNonNegativeFloat(const char* text, float& value) {
+  char* parseEnd = nullptr;
+  float parsed = strtof(text, &parseEnd);
+
+  if (parseEnd == text) {
+    return false;
+  }
+
+  while (*parseEnd == ' ' || *parseEnd == '\t') {
+    ++parseEnd;
+  }
+
+  if (*parseEnd != '\0' || parsed < 0.0f) {
+    return false;
+  }
+
+  value = parsed;
+  return true;
+}
 
 /**
  * @brief Reads the average weight from the scale over multiple readings.
@@ -67,20 +262,22 @@ bool loadCalibrationFromEeprom(float& factor) {
  * @details This function takes multiple readings from the scale, averages them, and returns the result in pounds.
  * This is useful for smoothing out noise in the scale readings and getting a more stable weight measurement.
  * 
- * @param {int} [in] readings Number of readings to average.
- * @param {int} [in] samplesPerReading Number of samples per reading.
- * @return {float} The average weight in pounds. 
+ * @param {int} readings Number of readings to average.
+ * @param {int} samplesPerReading Number of samples per reading.
+ * @return {float} avgWeight The average weight in pounds. 
  * 
  * @throws {none} This function does not throw exceptions.
  */
 float readAveragedUnits(int readings, int samplesPerReading) {
+  float avgWeight = 0.0f;
   float totalUnits = 0.0f;
 
   for (int readingIndex = 0; readingIndex < readings; ++readingIndex) {
     totalUnits += scale.get_units(samplesPerReading);
   }
 
-  return totalUnits / readings;
+  avgWeight = totalUnits / readings;
+  return avgWeight;
 }
 
 /**
@@ -88,8 +285,8 @@ float readAveragedUnits(int readings, int samplesPerReading) {
  *
  * @details This function blocks until user confirms an action by sending 'y' over serial, or to cancel by sending 'q'.
  * 
- * @param cancelMessage Text to print when the user cancels.
- * @return true if the user confirmed, false if the user cancelled.
+ * @param {const char*} cancelMessage Text to print when the user cancels.
+ * @return {bool} True if the user confirmed, false if the user cancelled.
  * 
  * @throws {none} This function does not throw exceptions.
  */
@@ -109,9 +306,15 @@ bool waitForUserConfirmation(const char* cancelMessage) {
         Serial.println(cancelMessage);
         return false;
       }
+    } else {
+      delay(10);
     }
   }
 }
+
+// User initiated functions
+// These functions are called in response to user commands over serial.
+// Perform automatic & manual calibration, updating of tank tare, maximum propane weight values, and re-zero scale.
 
 /**
  * @brief Runs automatic calibration using a known reference weight.
@@ -162,6 +365,7 @@ void automaticCalibration() {
     if (fabsf(measuredUnits) >= loadDetectThreshold) {
       break;
     }
+    delay(100);
   }
 
   Serial.println("Weight detected. Measuring stable reading...");
@@ -174,14 +378,14 @@ void automaticCalibration() {
 
   calibration_factor = measuredUnits / CAL_KNOWN_WEIGHT_LBS;
 
-  Serial.print("Initial calibration_factor estimate: ");
+  Serial.print("Initial calibration factor estimate: ");
   Serial.println(calibration_factor, 2);
 
   scale.set_scale(calibration_factor);
   Serial.print("Verified reading: ");
   Serial.print(readAveragedUnits(LOADED_CHECK_COUNT, LIVE_SAMPLES), 2);
   Serial.println(" lbs");
-  Serial.print("Automatic calibration complete, computed calibration_factor: ");
+  Serial.print("Automatic calibration complete, computed calibration factor: ");
   Serial.println(calibration_factor, 2);
 
   if (!saveCalibrationToEeprom(calibration_factor)) {
@@ -189,6 +393,43 @@ void automaticCalibration() {
   } else {
     Serial.println("Calibration saved to EEPROM.");
   }
+}
+
+/**
+ * @brief Displays the current propane weight and fill level readings.
+ *
+ * @details Reads the scale, applies calibration, subtracts tares, and displays
+ * the raw weight, propane weight, and current fill level percentage.
+ *
+ * @return {void} No value is returned.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+void displayCurrentPropaneReadings() {
+  // apply the current calibration factor to convert raw readings to weight in pounds
+  scale.set_scale(calibration_factor);
+
+  rawLbs = scale.get_units(LIVE_SAMPLES);
+
+  propaneLbs = rawLbs - tankTare - PLATEN_TARE;
+
+  // if the calculated propane weight is negative, set it to zero to avoid reporting negative weight
+  if (propaneLbs < 0) {
+    propaneLbs = 0.0f; 
+  }
+
+  // calculate the fill level percentage based on the weight of the propane and the maximum legal propane weight of the tank
+  propaneLevel = (propaneLbs / maxPropaneLbs) * 100.0f; 
+  
+  Serial.print("Scale load: ");
+  Serial.print(rawLbs, 1);
+  Serial.print(" lbs, ");
+  Serial.print("Estimated propane: ");
+  Serial.print(propaneLbs, 1);
+  Serial.print(" lbs, "); 
+  Serial.print("Level: ");
+  Serial.print(propaneLevel, 1);
+  Serial.println("%");
 }
 
 /**
@@ -245,6 +486,7 @@ void manualCalibration() {
     if (fabsf(measuredUnits) >= loadDetectThreshold) {
       break;
     }
+    delay(100);
   }
 
   Serial.println("Weight detected. Adjust calibration until the reading matches the known weight.");
@@ -276,7 +518,7 @@ void manualCalibration() {
         calibration_factor -= adjustmentStep;
         lastDirection = -1;
       } else if (temp == 'q' || temp == 'Q') {
-        Serial.print("Manual calibration complete, computed calibration_factor: ");
+        Serial.print("Manual calibration complete, computed calibration factor: ");
         Serial.println(calibration_factor, 2);
 
         if (!saveCalibrationToEeprom(calibration_factor)) {
@@ -286,9 +528,227 @@ void manualCalibration() {
         }
         return;
       }
+    } else {
+      delay(50);
     }
   }
 };
+
+/**
+ * @brief Re-zeros (tares) the scale during runtime.
+ *
+ * @details Prompts the user to remove all weight, confirms over serial,
+ * and then runs HX711 tare so subsequent readings start from zero load.
+ *
+ * @return {void} No value is returned.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+void reZeroScale() {
+  Serial.println("Runtime re-zero requested.");
+  if (!waitForUserConfirmation("Runtime re-zero cancelled.")) {
+    return;
+  }
+
+  scale.set_scale();
+  scale.tare();
+  scale.set_scale(calibration_factor);
+
+  Serial.println("Scale re-zero complete.");
+}
+
+/**
+ * @brief Prompts the user for max propane weight and saves it to EEPROM.
+ *
+ * @details This function interacts with the user over serial to get a new multi-digit maximum legal propane weight.
+ * It validates the input to ensure it's a positive float, and allows the user to cancel the update by sending 'q'.
+ * 
+ * @return {void} No value is returned.
+ * 
+ * @throws {none} This function does not throw exceptions.
+ */
+void updateMaxPropaneWeight() {
+  char inputBuffer[24] = {0};
+  int inputIndex = 0;
+
+  flushSerialInput();
+  Serial.print("Current max propane weight: ");
+  Serial.print(maxPropaneLbs, 2);
+  Serial.println(" lbs");
+  Serial.println("Enter new max propane weight in lbs (> 0). Send 'q' to cancel.");
+
+  while (true) {
+    if (!Serial.available()) {
+      delay(10);
+      continue;
+    }
+
+    char incoming = Serial.read();
+
+    if (incoming == '\r') {
+      continue;
+    }
+
+    if (incoming == '\n') {
+      inputBuffer[inputIndex] = '\0';
+
+      if (inputIndex == 1 && (inputBuffer[0] == 'q' || inputBuffer[0] == 'Q')) {
+        Serial.println("Max propane weight update cancelled.");
+        return;
+      }
+
+      float parsedValue = 0.0f;
+      if (parseNonNegativeFloat(inputBuffer, parsedValue) && parsedValue > 0.0f) {
+        maxPropaneLbs = parsedValue;
+        if (!saveMaxPropaneWeightToEeprom(maxPropaneLbs)) {
+          Serial.println("Failed to save max propane weight to EEPROM.");
+        } else {
+          Serial.print("Max propane weight updated: ");
+          Serial.print(maxPropaneLbs, 2);
+          Serial.println(" lbs");
+        }
+        return;
+      }
+
+      Serial.println("Invalid max propane weight. Enter a number > 0, or 'q' to cancel.");
+      inputIndex = 0;
+      inputBuffer[0] = '\0';
+      continue;
+    }
+
+    if (inputIndex < static_cast<int>(sizeof(inputBuffer) - 1)) {
+      inputBuffer[inputIndex++] = incoming;
+    }
+  }
+}
+
+/**
+ * @brief Prompts the user for a tare value and saves it to EEPROM.
+ *
+ * @details This function interacts with the user over serial to get a new multi-digit tare weight for the propane tank.
+ * It validates the input to ensure it's a non-negative float, and allows the user to cancel the update by sending 'q'.
+ * 
+ * @return {void} No value is returned.
+ * 
+ * @throws {none} This function does not throw exceptions.
+ */
+void updateTankTare() {
+  char inputBuffer[24] = {0};
+  float parsedValue = 0.0f;
+  int inputIndex = 0;
+  bool waitingForSave = false;
+
+  flushSerialInput();
+  Serial.print("Current tank tare: ");
+  Serial.print(tankTare, 2);
+  Serial.println(" lbs");
+  Serial.println("Enter new tank tare in lbs (>= 0), then press Enter.");
+  Serial.println("After entry, send 's' to save or 'q' to cancel.");
+
+  while (true) {
+    if (!Serial.available()) {
+      delay(10);
+      continue;
+    }
+
+    char incoming = Serial.read();
+
+    if (incoming == '\r') {
+      continue;
+    }
+
+    if (!waitingForSave && (incoming == 'q' || incoming == 'Q') && inputIndex == 0) {
+      Serial.println("Tank tare update cancelled.");
+      return;
+    }
+
+    if (waitingForSave) {
+      if (incoming == '\n') {
+        continue;
+      }
+
+      if (incoming == 'q' || incoming == 'Q') {
+        Serial.println("Tank tare update cancelled.");
+        return;
+      }
+
+      if (incoming == 's' || incoming == 'S') {
+        tankTare = parsedValue;
+        if (!saveTankTareToEeprom(tankTare)) {
+          Serial.println("Failed to save tank tare to EEPROM.");
+        } else {
+          Serial.print("Tank tare saved successfully: ");
+          Serial.print(tankTare, 2);
+          Serial.println(" lbs");
+        }
+        return;
+      }
+
+      Serial.println("Invalid response. Send 's' to save, or 'q' to cancel.");
+      continue;
+    }
+
+    if (incoming == '\n') {
+      inputBuffer[inputIndex] = '\0';
+
+      if (inputIndex == 1 && (inputBuffer[0] == 'q' || inputBuffer[0] == 'Q')) {
+        Serial.println("Tank tare update cancelled.");
+        return;
+      }
+
+      if (parseNonNegativeFloat(inputBuffer, parsedValue)) {
+        Serial.print("New tank tare entered: ");
+        Serial.print(parsedValue, 2);
+        Serial.println(" lbs");
+        Serial.println("Send 's' to save this value to EEPROM, or 'q' to cancel.");
+        waitingForSave = true;
+        inputIndex = 0;
+        inputBuffer[0] = '\0';
+        continue;
+      }
+
+      Serial.println("Invalid tank tare. Enter a number >= 0, or 'q' to cancel.");
+      inputIndex = 0;
+      inputBuffer[0] = '\0';
+      continue;
+    }
+
+    if (incoming == 's' || incoming == 'S') {
+      if (inputIndex == 0) {
+        Serial.println("Enter a tare value first, then send 's' to save.");
+        continue;
+      }
+
+      inputBuffer[inputIndex] = '\0';
+      if (!parseNonNegativeFloat(inputBuffer, parsedValue)) {
+        Serial.println("Invalid tank tare. Enter a number >= 0, or 'q' to cancel.");
+        inputIndex = 0;
+        inputBuffer[0] = '\0';
+        continue;
+      }
+
+      tankTare = parsedValue;
+      if (!saveTankTareToEeprom(tankTare)) {
+        Serial.println("Failed to save tank tare to EEPROM.");
+      } else {
+        Serial.print("Tank tare saved successfully: ");
+        Serial.print(tankTare, 2);
+        Serial.println(" lbs");
+      }
+      return;
+    }
+
+    if (inputIndex < static_cast<int>(sizeof(inputBuffer) - 1)) {
+      inputBuffer[inputIndex++] = incoming;
+    } else {
+      Serial.println("Input too long. Enter a shorter number, or 'q' to cancel.");
+      inputIndex = 0;
+      inputBuffer[0] = '\0';
+    }
+  }
+}
+
+// Main setup and loop functions for initializing the scale, handling serial commands, and reporting weight readings.
 
 /**
  * @brief Initializes serial output and the HX711 scale interface.
@@ -304,16 +764,24 @@ void manualCalibration() {
 void setup() {
   Serial.begin(BAUD);
 
-  Serial.println("Propane Level Scale");
+  Serial.println();
+  Serial.println("Propane Level Scale\n");
 
-  if (!EEPROM.begin(EEPROM_SIZE_BYTES)) {
-    Serial.println("EEPROM init failed. Using default calibration factor.");
+  // If EEPROM initialization fails, we will continue with default values.
+  // If EEPROM initializes succeeds, we will attempt to load saved values.
+  // If load fails, we fall back to defaults and attempt to save those defaults to EEPROM for future use.
+  eepromReady = EEPROM.begin(EEPROM_SIZE_BYTES);
+
+  if (!eepromReady) {
+    Serial.println("EEPROM init failed. Using default calibration factor, tank tare, and max propane weight.");
     calibration_factor = DEF_CALIBRATION_FACTOR;
+    tankTare = DEF_TANK_TARE;
+    maxPropaneLbs = MAX_PROPANE_LBS;
   } else {
     float storedCalibration = DEF_CALIBRATION_FACTOR;
     if (loadCalibrationFromEeprom(storedCalibration)) {
       calibration_factor = storedCalibration;
-      Serial.print("Loaded calibration_factor from EEPROM: ");
+      Serial.print("Loaded calibration factor from EEPROM: ");
       Serial.println(calibration_factor, 2);
     } else {
       calibration_factor = DEF_CALIBRATION_FACTOR;
@@ -323,22 +791,60 @@ void setup() {
         Serial.println("Initialized default calibration in EEPROM.");
       }
     }
+
+    float storedTankTare = DEF_TANK_TARE;
+    if (loadTankTareFromEeprom(storedTankTare)) {
+      tankTare = storedTankTare;
+      Serial.print("Loaded tank tare from EEPROM: ");
+      Serial.print(tankTare, 2);
+      Serial.println(" lbs");
+    } else {
+      tankTare = DEF_TANK_TARE;
+      if (!saveTankTareToEeprom(tankTare)) {
+        Serial.println("Failed to initialize default tank tare in EEPROM.");
+      } else {
+        Serial.println("Initialized default tank tare in EEPROM.");
+      }
+    }
+
+    float storedMaxPropane = MAX_PROPANE_LBS;
+    if (loadMaxPropaneWeightFromEeprom(storedMaxPropane)) {
+      maxPropaneLbs = storedMaxPropane;
+      Serial.print("Loaded max propane weight from EEPROM: ");
+      Serial.print(maxPropaneLbs, 2);
+      Serial.println(" lbs");
+    } else {
+      maxPropaneLbs = MAX_PROPANE_LBS;
+      if (!saveMaxPropaneWeightToEeprom(maxPropaneLbs)) {
+        Serial.println("Failed to initialize default max propane weight in EEPROM.");
+      } else {
+        Serial.println("Initialized default max propane weight in EEPROM.");
+      }
+    }
   }
 
   scale.begin(DOUT_PIN, CLK_PIN);
 
+  // project not intended for continuous operation
+  // always starting fresh avoids issues with long term stability issues
+  Serial.println();
   Serial.println("Setup requires an empty scale before initial tare.");
+
   while (!waitForUserConfirmation("Setup confirmation cancelled.")) {
     Serial.println("Cannot continue setup tare until all weight is removed.");
   }
 
-  // clear all calibration and tare settings to start fresh
   scale.set_scale();
   scale.tare();
 
-  Serial.println("Scale is tared and ready.");
+  Serial.println("Scale is tared and ready.\n");
   Serial.println("Send 'a' to enter automatic calibration mode");
+  Serial.println("Send 'e' to display saved EEPROM values");
+  Serial.println("Send 'l' to start live propane readings (any command stops live mode)");
   Serial.println("Send 'm' to enter manual calibration mode");
+  Serial.println("Send 'p' to set propane tank tare");
+  Serial.println("Send 'w' to set maximum legal propane weight");
+  Serial.println("Send 'z' to re-zero scale with no weight on it");
 }
 
 /**
@@ -353,44 +859,45 @@ void setup() {
  * @throws {none} This function does not throw exceptions. 
  */
 void loop() {
-
-  if(Serial.available())
-  {
+  if (Serial.available()) {
     temp = Serial.read();
-    if(temp == 'a' || temp == 'A')
+    if (temp == '\r' || temp == '\n') {
+      return;
+    }
+
+    liveReadingsEnabled = false;
+
+    if(temp == 'a' || temp == 'A') {
       automaticCalibration();
-    if(temp == 'm' || temp == 'M')
+    }
+    if(temp == 'e' || temp == 'E') {
+      displaySavedEepromValues();
+    }    
+    if(temp == 'l' || temp == 'L') {
+      liveReadingsEnabled = true;
+      lastLiveReadingMs = 0;
+      Serial.println("Live propane readings enabled.");
+      displayCurrentPropaneReadings();
+    }
+    if(temp == 'm' || temp == 'M') {
       manualCalibration();
+    }
     if(temp == 'p' || temp == 'P') {
-      // @todo get propane tank tare from user input and save propane tank tare to EEPROM
+      updateTankTare();
     }
     if(temp == 'w' || temp == 'W') {
-      // @todo get maximum legal propane weight from user input and save maximum legal propane weight to EEPROM
+      updateMaxPropaneWeight();
+    }
+    if(temp == 'z' || temp == 'Z') {
+      reZeroScale();
     }
   }
 
-  // apply the current calibration factor to convert raw readings to weight in pounds
-  scale.set_scale(calibration_factor);
-
-  rawLbs = scale.get_units();
-
-  propaneLbs = rawLbs - tankTare - PLATEN_TARE;
-
-  // if the calculated propane weight is negative, set it to zero to avoid reporting negative weight
-  if (propaneLbs < 0) {
-    propaneLbs = 0.0f; 
+  if (liveReadingsEnabled) {
+    unsigned long now = millis();
+    if (now - lastLiveReadingMs >= 500UL) {
+      displayCurrentPropaneReadings();
+      lastLiveReadingMs = now;
+    }
   }
-
-  // calculate the fill level percentage based on the weight of the propane and the maximum legal propane weight of the tank
-  propaneLevel = (propaneLbs / MAX_PROPANE_LBS) * 100.0f; 
-  
-  Serial.print("Raw weight: ");
-  Serial.print(rawLbs, 1);
-  Serial.print(" lbs total, ");
-  Serial.print("Propane weight: ");
-  Serial.print(propaneLbs, 1);
-  Serial.print(" lbs, "); 
-  Serial.print("Level: ");
-  Serial.print(propaneLevel, 1);
-  Serial.println("%");
 }

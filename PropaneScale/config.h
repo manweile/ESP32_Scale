@@ -15,14 +15,14 @@ constexpr int CAL_SAMPLES = 5;
 constexpr int LIVE_SAMPLES = 10;
 
 // Known reference weight used during automatic calibration mode (pounds).
-// constexpr float CAL_KNOWN_WEIGHT_LBS = 31.6f;   // kitty litter jug of water 
-constexpr float CAL_KNOWN_WEIGHT_LBS = 18.6f;   // wire spool 
-// constexpr float CAL_KNOWN_WEIGHT_LBS = 7.20f;   // distilled jug of water
+// constexpr float CAL_KNOWN_WEIGHT_LBS = 19.2f;   // wire spool good for 20 lb tanks
+constexpr float CAL_KNOWN_WEIGHT_LBS = 36.8f;   // kitty litter jug of water good for 30 lb tanks
+// constexpr float CAL_KNOWN_WEIGHT_LBS = 50.11f;   // 5 gallon camping water container
 
 // Calibration value used by HX711 conversion. Adjustable at runtime by automatic or manual calibration mode.
-// constexpr float DEF_CALIBRATION_FACTOR = -10651.67f;    // litter jug of water @ 36.6 lbs
-constexpr float DEF_CALIBRATION_FACTOR = -10811.24f;    // wire spool @ 18.6 lbs
-// constexpr float DEF_CALIBRATION_FACTOR = -10651.67f;    // distilled jug of water @ 10.0 lbs
+// constexpr float DEF_CALIBRATION_FACTOR = -11551.08f;    // wire spool @ 17.4 lbs
+constexpr float DEF_CALIBRATION_FACTOR = -10422.95f;    // litter jug of water @ 36.8 lbs
+// constexpr float DEF_CALIBRATION_FACTOR = -10651.67f;    // 5 gallon camping water @ 50.11
 
 // Number of readings to average when checking for stable load placement during automatic calibration.
 constexpr int LOADED_CHECK_COUNT = 5;
@@ -34,29 +34,36 @@ constexpr float MINIMUM_LOAD_THRESHOLD = 1000.0f;
 constexpr int UNLOAD_CHECK_COUNT = 3;
 
 // Tare weight of the empty, used to subtract from readings to report only the weight of the propane
-// Tare weight of the empty twenty lb tank in pounds is approximately 17.0 lb
-// Tare weight of the empty thirty lb tank in pounds is approximately 24.0 lb
-constexpr float DEF_TANK_TARE = 17.0f;
+// Tare weight of the empty twenty lb tank in pounds is approximately 16-18 lbs
+// Tare weight of the empty thirty lb tank in pounds is typically 23-26 lbs
+// constexpr float DEF_TANK_TARE = 17.0f;
+constexpr float DEF_TANK_TARE = 23.5f;
 
 // Maximum legal propane weight for a tank is 80% of the tank's total capacity
 // maximum legal propane weight of 20 lb tank is 80% of tank capacity = 16.0 lbs
 // maximum legal propane weight of 30 lb tank is 80% of tank capacity = 24.0 lbs
-constexpr float MAX_PROPANE_LBS = 16.0f;
+// constexpr float MAX_PROPANE_LBS = 16.0f;
+constexpr float MAX_PROPANE_LBS = 24.0f;
 
 // Weight of the always-present platen in pounds.
 constexpr float  PLATEN_TARE = 0.33125f;
 
 // EEPROM addresses and magic number for calibration persistence.
 constexpr uint32_t CAL_EEPROM_MAGIC = 0x43414C31;  // "CAL1"
-
-// EEPROM addresses for calibration data. Magic number is stored at CAL_EEPROM_MAGIC_ADDR, and the calibration factor is stored at CAL_EEPROM_VALUE_ADDR.
 constexpr int CAL_EEPROM_MAGIC_ADDR = 0;
-
-// HX711 instance for interacting with the load cell amplifier.
 constexpr int CAL_EEPROM_VALUE_ADDR = 4;
 
-// EEPROM size in bytes. Must be sufficient to store the calibration magic number and value.
-constexpr int EEPROM_SIZE_BYTES = 64;
+// EEPROM addresses and magic number for propane tank tare persistence.
+constexpr uint32_t TARE_EEPROM_MAGIC = 0x54415245;  // "TARE"
+constexpr int TARE_EEPROM_MAGIC_ADDR = 8;
+constexpr int TARE_EEPROM_VALUE_ADDR = 12;
 
+// EEPROM addresses and magic number for maximum legal propane weight persistence.
+constexpr uint32_t MAX_PROPANE_EEPROM_MAGIC = 0x4D415850;  // "MAXP"
+constexpr int MAX_PROPANE_EEPROM_MAGIC_ADDR = 16;
+constexpr int MAX_PROPANE_EEPROM_VALUE_ADDR = 20;
+
+// EEPROM size in bytes. Must be sufficient to store all calibration and tare values with their magic numbers.
+constexpr int EEPROM_SIZE_BYTES = 64;
 
 #endif // CONFIG_H
