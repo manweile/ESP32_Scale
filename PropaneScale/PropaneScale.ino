@@ -12,36 +12,31 @@
  */
 
 // Standard library headers
-#include <EEPROM.h>               // EEPROM library for persistent storage of calibration and tare values.
-#include <math.h>                 // Math helpers for fabsf and isfinite during value validation.
-#include <stdlib.h>               // Standard library for functions like strtof for parsing floats from strings.  
+#include <EEPROM.h>                     // EEPROM library for persistent storage of calibration and tare values
+#include <math.h>                       // Math helpers for fabsf and isfinite during value validation
+#include <stdlib.h>                     // Standard library for functions like strtof for parsing floats from strings 
 
 // Third party library headers
-#include "HX711.h"                // HX711 library for interfacing with the load cell amplifier to read weight data.
+#include "HX711.h"                      // HX711 library for interfacing with the load cell amplifier to read weight data
 
 // Local library headers
-#include "config.h"               // Local configuration header defining pin assignments, calibration constants, and EEPROM addresses.
+#include "config.h"                     // Local configuration header defining pin assignments, calibration constants, and EEPROM addresses
 
 // Global class variables
-HX711 scale;                      // HX711 instance for interacting with the load cell amplifier.
+HX711 scale;                            // HX711 instance for interacting with the load cell amplifier
 
 // Global state variables
-float calibration_factor = 0.0f;  // Calibration factor for converting raw HX711 readings to weight in pounds, loaded from EEPROM or set to default.
-bool eepromReady = false;         // Flag to track if EEPROM was successfully initialized
-float maxPropaneLbs = 0.0f;       // Maximum legal propane weight in pounds, loaded from EEPROM or set to default.
-float propaneLevel = 0.0f;        // Current propane level as a percentage of maximum weight.
-float propaneLbs = 0.0f;          // Current propane weight in pounds.
-float rawLbs = 0.0f;              // Raw weight reading from HX711 in pounds.
-float tankTare = 0.0f;            // Tare weight of the empty propane tank in pounds.
-char temp = '\0';                 // Temporary variable for serial input.
+float calibration_factor = 0.0f;        // Calibration factor for converting raw HX711 readings to weight in pounds
+bool eepromReady = false;               // Flag to track if EEPROM was successfully initialized
+float maxPropaneLbs = 0.0f;             // Maximum legal propane weight in pounds
+float tankTare = 0.0f;                  // Tare weight of the empty propane tank in pounds
 
 // EEPROM sanity limits for persisted values.
-constexpr float CAL_FACTOR_ABS_MIN = 100.0f;
-constexpr float CAL_FACTOR_ABS_MAX = 500000.0f;
-constexpr float TANK_TARE_MIN_LBS = 0.0f;
-constexpr float TANK_TARE_MAX_LBS = 200.0f;
-constexpr float MAX_PROPANE_MIN_LBS = 0.1f;
-constexpr float MAX_PROPANE_MAX_LBS = 200.0f;
+constexpr float CAL_FACTOR_ABS_MIN = 100.0f;                // Minimum absolute value for valid calibration factor 
+constexpr float CAL_FACTOR_ABS_MAX = 500000.0f;             // Maximum absolute value for valid calibration factor 
+constexpr float MAX_PROJECT_WEIGHT_LBS = 60.0f;             // Project will never measure a propane tank above nominal 60 lbs
+constexpr float TANK_TARE_MIN_LBS = 0.0f;                   // Minimum plausible tare weight for empty propane tank
+constexpr float MAX_PROPANE_MIN_LBS = 0.1f;                 // Minimum plausible maximum propane weight for tank
 
 // Helper functions for EEPROM workflows
 // validating workflows, and loading/initializing from EEPROM.
@@ -70,7 +65,7 @@ bool isValidCalibrationFactor(float value) {
  * @brief Validates that an EEPROM max propane weight is finite and positive.
  *
  * @details Checks that the maximum propane weight value is a finite number and falls within configured bounds for plausible maximum propane weights.
- * This helps to catch EEPROM corruption or invalid values that could lead to incorrect percentage calculations or unrealistic readings.
+ * Catches EEPROM corruption or invalid values that could lead to incorrect percentage calculations or unrealistic readings.
  * 
  * @param {float} value Maximum propane pounds value to validate.
  * @return {bool} True when value is finite and within configured propane bounds.
@@ -82,14 +77,14 @@ bool isValidMaxPropaneLbs(float value) {
     return false;
   }
 
-  return (value >= MAX_PROPANE_MIN_LBS) && (value <= MAX_PROPANE_MAX_LBS);
+  return (value >= MAX_PROPANE_MIN_LBS) && (value <= MAX_PROJECT_WEIGHT_LBS);
 }
 
 /**
  * @brief Validates that an EEPROM tank tare value is finite and non-negative.
  *
  * @details Checks that the tank tare value is a finite number and falls within configured bounds for plausible tank tare weights.
- * This helps to catch EEPROM corruption or invalid values that could lead to incorrect net weight calculations.
+ * Catches EEPROM corruption or invalid values that could lead to incorrect net weight calculations.
  * 
  * @param {float} value Tank tare in pounds to validate.
  * @return {bool} True when value is finite and within configured tare bounds.
@@ -101,7 +96,7 @@ bool isValidTankTare(float value) {
     return false;
   }
 
-  return (value >= TANK_TARE_MIN_LBS) && (value <= TANK_TARE_MAX_LBS);
+  return (value >= TANK_TARE_MIN_LBS) && (value <= MAX_PROJECT_WEIGHT_LBS);
 }
 
 /**
@@ -193,7 +188,7 @@ void loadOrInitializeEepromValue(
  * @throws {none} This function does not throw exceptions.
  */
 bool loadCalibrationFromEeprom(float& factor) {
-  uint32_t magic = 0;
+  uint32_t magic = 0;                                       // Magic number read from EEPROM for validation
 
   EEPROM.get(CAL_EEPROM_MAGIC_ADDR, magic);
   if (magic != CAL_EEPROM_MAGIC) {
@@ -216,7 +211,7 @@ bool loadCalibrationFromEeprom(float& factor) {
  * @throws {none} This function does not throw exceptions.
  */
 bool loadMaxPropaneWeightFromEeprom(float& maxPropaneLbs) {
-  uint32_t magic = 0;
+  uint32_t magic = 0;                                         // Magic number read from EEPROM for validation
   EEPROM.get(MAX_PROPANE_EEPROM_MAGIC_ADDR, magic);
   if (magic != MAX_PROPANE_EEPROM_MAGIC) {
     return false;
@@ -238,7 +233,7 @@ bool loadMaxPropaneWeightFromEeprom(float& maxPropaneLbs) {
  * @throws {none} This function does not throw exceptions.
  */
 bool loadTankTareFromEeprom(float& tareLbs) {
-  uint32_t magic = 0;
+  uint32_t magic = 0;                                           // Magic number read from EEPROM for validation
   EEPROM.get(TARE_EEPROM_MAGIC_ADDR, magic);
   if (magic != TARE_EEPROM_MAGIC) {
     return false;
@@ -300,7 +295,6 @@ bool saveTankTareToEeprom(float tareLbs) {
 // Helper functions for user initiated workflows
 // Flushing serial input, parsing non-negative floats, reading averaged units from the scale, and handling user confirmation during calibration.
 
-
 /**
  * @brief Ensures the HX711 is ready before attempting reads or tare.
  *
@@ -346,17 +340,20 @@ void flushSerialInput() {
  * @brief Parses a non-negative float from a null-terminated C string.
  *
  * @details Attempts to parse a float value from the input string. 
- * It validates that the entire string is a valid float representation and that the parsed value is non-negative.
+ * Validates that the entire string is a valid float representation and that the parsed value is non-negative.
  * 
  * @param {const char*} text Input text to parse.
- * @param {float&} value Parsed output value on success.
+ * @param {float&} outValue Parsed output value on success.
  * @return {bool} True if parsing succeeds and the value is non-negative.
  * 
  * @throws {none} This function does not throw exceptions.
  */
-bool parseNonNegativeFloat(const char* text, float& value) {
-  char* parseEnd = nullptr;
-  float parsed = strtof(text, &parseEnd);
+bool parseNonNegativeFloat(const char* text, float& outValue) {
+  char* parseEnd = nullptr;                                 // Pointer used by strtof to indicate where parsing stopped
+  float parsed;                                             // Parsed float value from the input text
+  
+  // strtof will set parseEnd to point to the first character after the parsed float.
+  parsed = strtof(text, &parseEnd);                   
 
   if (parseEnd == text) {
     return false;
@@ -370,7 +367,7 @@ bool parseNonNegativeFloat(const char* text, float& value) {
     return false;
   }
 
-  value = parsed;
+  outValue = parsed;
   return true;
 }
 
@@ -388,8 +385,8 @@ bool parseNonNegativeFloat(const char* text, float& value) {
  * @throws {none} This function does not throw exceptions.
  */
 float readAveragedUnits(int readings, int samplesPerReading) {
-  float avgWeight = 0.0f;
-  float totalUnits = 0.0f;
+  float avgWeight = 0.0f;               // Computed average weight in pounds to return at the end of the function.
+  float totalUnits = 0.0f;              // Accumulator summing weight readings across all iterations for averaging 
 
   for (int readingIndex = 0; readingIndex < readings; ++readingIndex) {
     totalUnits += scale.get_units(samplesPerReading);
@@ -410,9 +407,10 @@ float readAveragedUnits(int readings, int samplesPerReading) {
  * @throws {none} This function does not throw exceptions.
  */
 bool waitForStartupEmptyScale() {
-  float measuredUnits = 0.0f;
-  int stableEmptyChecks = 0;
-  unsigned long startTimeMs = millis();
+  float measuredUnits = 0.0f;           // Current measured weight in pounds
+  int stableEmptyChecks = 0;            // Consecutive stable empty readings to determine when scale is stable and empty during startup
+  unsigned long startTimeMs = millis(); // Timestamp marking start of waiting period to enforce maximum wait time for startup tare
+  char temp = '\0';                     // Temporary variable to hold user input from the serial interface
 
   if (!ensureScaleReady("startup tare")) {
     return false;
@@ -483,6 +481,8 @@ bool waitForStartupEmptyScale() {
  * @throws {none} This function does not throw exceptions.
  */
 bool waitForUserConfirmation(const char* cancelMessage) {
+  char temp = '\0';                     // Temporary variable to hold user input from the serial interface
+
   Serial.println();
   Serial.println("Remove all weight from scale.");
   Serial.println("Send 'y' when the scale is empty.");
@@ -521,9 +521,9 @@ bool waitForUserConfirmation(const char* cancelMessage) {
  * @throws {none} This function does not throw exceptions.
  */
 void automaticCalibration() {
-  float loadDetectThreshold = 0.0f;
-  float measuredUnits = 0.0f;
-  float unloadedNoise = 0.0f;
+  float loadDetectThreshold = 0.0f;     // Threshold to detect when the known weight has been placed on the scale
+  float measuredUnits = 0.0f;           // Current measured weight in pounds during the calibration process
+  float unloadedNoise = 0.0f;           // Measured noise level of the scale when it is unloaded
 
   Serial.println();
   Serial.println("Automatic calibration mode");
@@ -609,8 +609,8 @@ void displayEepromValues() {
     return;
   }
 
-  uint32_t magic = 0;
-  float storedValue = 0.0f;
+  uint32_t magic = 0;                   // Temporary variable for reading magic numbers from EEPROM
+  float storedValue = 0.0f;             // Temporary variable for reading stored float values from EEPROM
 
   Serial.println();
   Serial.println("EEPROM Saved Values");
@@ -656,9 +656,12 @@ void displayEepromValues() {
  * @throws {none} This function does not throw exceptions.
  */
 void displayLevel() {
-  float loadDetectThreshold = 0.0f;
-  float measuredUnits = 0.0f;
-  float unloadedNoise = 0.0f;
+  float loadDetectThreshold = 0.0f;     // Threshold to detect when a load is present on the scale, based on noise measurements
+  float measuredUnits = 0.0f;           // Current averaged reading from the scale in pounds
+  float propaneLbs = 0.0f;              // Calculated weight of the propane in pounds after subtracting tank tare and platen tare
+  float propaneLevel = 0.0f;            // Calculated fill level percentage based on propane weight and maximum legal propane weight for the tank
+  float rawLbs = 0.0f;                  // Raw weight reading from the scale in pounds before subtracting tares
+  float unloadedNoise = 0.0f;           // Measured noise level on the scale with no load
 
   if (!ensureScaleReady("level read")) {
     return;
@@ -721,13 +724,13 @@ void displayLevel() {
  * @throws {none} This function does not throw exceptions.
  */
 void manualCalibration() {
-  // Start step at 1% of current factor magnitude; floor at 0.01% to prevent stall.
-  float adjustmentStep = fabsf(calibration_factor) * 0.01f;
-  int lastDirection = 0;   // +1 = last press increased, -1 = last press decreased, 0 = none
-  float loadDetectThreshold = 0.0f;
-  float measuredUnits = 0.0f;
-  float minStep = fabsf(calibration_factor) * 0.0001f;
-  float unloadedNoise = 0.0f;
+  float adjustmentStep = fabsf(calibration_factor) * 0.01f; // Start step at 1% of current factor magnitude; floor at 0.01% to prevent stall
+  int lastDirection = 0;                                    // +1 = last press increased, -1 = last press decreased, 0 = none
+  float loadDetectThreshold = 0.0f;                         // Threshold to detect when the known weight has been placed on the scale
+  float measuredUnits = 0.0f;                               // Current averaged reading from the scale in pounds during calibration adjustments
+  float minStep = fabsf(calibration_factor) * 0.0001f;      // Minimum adjustment step to prevent infinite halving and stalling during fine-tuning
+  char temp = '\0';                                         // Temporary variable to hold user input from serial for adjusting calibration factor
+  float unloadedNoise = 0.0f;                               // Measured noise level on the scale with no load
 
   if (adjustmentStep == 0.0f) adjustmentStep = 10.0f;
   if (minStep == 0.0f) minStep = 0.001f;
@@ -857,10 +860,10 @@ void reZeroScale() {
  * @throws {none} This function does not throw exceptions.
  */
 void tankTareUpdate() {
-  char inputBuffer[24] = {0};
-  float parsedValue = 0.0f;
-  int inputIndex = 0;
-  bool waitingForSave = false;
+  char inputBuffer[24] = {0};           // Buffer to hold user input for the new tank tare value as a string
+  float parsedValue = 0.0f;             // Variable to hold the parsed float value of the new tank tare after validating the input string
+  int inputIndex = 0;                   // Index to track the current position in the inputBuffer for storing incoming characters from serial input
+  bool waitingForSave = false;          // Flag to indicate whether the function is currently waiting for the user to confirm saving the new tare value
 
   flushSerialInput();
 
@@ -985,8 +988,9 @@ void tankTareUpdate() {
  * @throws {none} This function does not throw exceptions.
  */
 void weightUpdate() {
-  char inputBuffer[24] = {0};
-  int inputIndex = 0;
+  char inputBuffer[24] = {0};           // Buffer to hold user input for the new maximum propane weight as a string
+  float parsedValue = 0.0f;             // Variable to hold the parsed float value of the new maximum propane weight after validating the input string
+  int inputIndex = 0;                   // Index to track the current position in the inputBuffer for storing incoming characters from serial input
 
   flushSerialInput();
   
@@ -1062,9 +1066,9 @@ void setup() {
   Serial.println("Propane Level Scale");
   Serial.println();
 
-  // If EEPROM initialization fails, we will continue with default values.
-  // If EEPROM initializes succeeds, we will attempt to load saved values.
-  // If load fails, we fall back to defaults and attempt to save those defaults to EEPROM for future use.
+  // If EEPROM initialization fails, we will continue with default values
+  // If EEPROM initializes succeeds, we will attempt to load saved values
+  // If load fails, we fall back to defaults and attempt to save those defaults to EEPROM for future use
   eepromReady = EEPROM.begin(EEPROM_SIZE_BYTES);
 
   if (!eepromReady) {
@@ -1142,6 +1146,7 @@ void setup() {
  * @throws {none} This function does not throw exceptions. 
  */
 void loop() {
+  char temp = '\0';                     // Temporary variable to hold user input from the serial interface for command processing
   if (Serial.available()) {
     temp = Serial.read();
     
