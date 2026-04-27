@@ -30,6 +30,10 @@ constexpr int LOADED_CHECK_COUNT = 5;
 // Number of readings to average when checking for stable no-load condition during automatic/manual calibration.
 constexpr float MINIMUM_LOAD_THRESHOLD = 1000.0f;
 
+// Minimum load in pounds used to detect tank placement in displayCurrentPropaneReadings.
+// Calibrated readings are in pounds so MINIMUM_LOAD_THRESHOLD (raw ADC units) cannot be used here.
+constexpr float PLACED_LOAD_THRESHOLD_LBS = 1.0f;
+
 // Multiplier for noise level to set load detection threshold during automatic/manual calibration.
 constexpr int UNLOAD_CHECK_COUNT = 3;
 

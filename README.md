@@ -82,20 +82,20 @@ Connect at **115200 baud**. On startup the device prompts you to confirm the sca
 | ------- | ----------- |
 | `a` | Automatic calibration — tares empty scale, detects placed weight, computes factor |
 | `e` | Display all saved EEPROM values with validity status |
-| `l` | Start live propane readings (updates every 500 ms; any other command stops live mode) |
+| `l` | Display one propane reading |
 | `m` | Manual calibration — adjust factor with `+`/`-` keys, save with `q` |
 | `p` | Set propane tank tare weight (enter value + Enter, then `s` to save) |
 | `w` | Set maximum legal propane weight (enter value + Enter to save) |
 | `z` | Re-zero scale (prompts to remove all weight first) |
 
-### Live Reading Output Format
+### Propane Reading Output Format
 
 ```text
-Scale load: 39.5 lbs, Estimated propane: 15.7 lbs, Level: 65.4%
+Scale load: 39.5 lbs, Calculated propane: 15.7 lbs, Level: 65.4%
 ```
 
 - **Scale load** — raw weight reported by HX711 after calibration
-- **Estimated propane** — scale load minus tank tare and platen tare
+- **Calculated propane** — scale load minus tank tare and platen tare
 - **Level** — propane weight as a percentage of max legal fill
 
 ## Calibration Workflow

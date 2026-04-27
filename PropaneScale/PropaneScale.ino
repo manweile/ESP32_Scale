@@ -33,8 +33,6 @@ float propaneLbs = 0.0f;          // Current propane weight in pounds.
 float rawLbs = 0.0f;              // Raw weight reading from HX711 in pounds.
 float tankTare = 0.0f;            // Tare weight of the empty propane tank in pounds.
 char temp = '\0';                 // Temporary variable for serial input.
-bool liveReadingsEnabled = false; // True when continuous live reading mode is active.
-unsigned long lastLiveReadingMs = 0; // Last timestamp when a live reading was printed.
 long zero_factor = 0;             // Zero factor for HX711 calibration.
 
 // Helper functions for EEPROM workflows
@@ -59,6 +57,7 @@ void displaySavedEepromValues() {
   uint32_t magic = 0;
   float storedValue = 0.0f;
 
+  Serial.println();
   Serial.println("EEPROM Saved Values");
 
   EEPROM.get(CAL_EEPROM_MAGIC_ADDR, magic);
@@ -291,6 +290,7 @@ float readAveragedUnits(int readings, int samplesPerReading) {
  * @throws {none} This function does not throw exceptions.
  */
 bool waitForUserConfirmation(const char* cancelMessage) {
+  Serial.println();
   Serial.println("Remove all weight from scale.");
   Serial.println("Send 'y' when the scale is empty.");
   Serial.println("Send 'q' to cancel.");
@@ -332,6 +332,7 @@ void automaticCalibration() {
   float measuredUnits = 0.0f;
   float unloadedNoise = 0.0f;
 
+  Serial.println();
   Serial.println("Automatic calibration mode");
 
   if (!waitForUserConfirmation("Automatic calibration cancelled")) {
@@ -358,7 +359,7 @@ void automaticCalibration() {
   Serial.print("Place the known weight on the scale: ");
   Serial.print(CAL_KNOWN_WEIGHT_LBS, 2);
   Serial.println(" lbs");
-  Serial.println("Waiting for weight placement...");
+  Serial.println("Waiting for weight placement on scale...");
 
   while (true) {
     measuredUnits = readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES);
@@ -406,10 +407,34 @@ void automaticCalibration() {
  * @throws {none} This function does not throw exceptions.
  */
 void displayCurrentPropaneReadings() {
+  float loadDetectThreshold = 0.0f;
+  float measuredUnits = 0.0f;
+  float unloadedNoise = 0.0f;
+
   // apply the current calibration factor to convert raw readings to weight in pounds
   scale.set_scale(calibration_factor);
 
-  rawLbs = scale.get_units(LIVE_SAMPLES);
+  // measure baseline noise with no load to compute a detection threshold (readings are in pounds)
+  unloadedNoise = fabsf(readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES));
+  loadDetectThreshold = unloadedNoise * 20.0f;
+  if (loadDetectThreshold < PLACED_LOAD_THRESHOLD_LBS) {
+    loadDetectThreshold = PLACED_LOAD_THRESHOLD_LBS;
+  }
+
+  Serial.println();
+  Serial.println("Place propane tank on scale.");
+  Serial.println("Waiting for tank placement...");
+
+  while (true) {
+    measuredUnits = readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES);
+    if (fabsf(measuredUnits) >= loadDetectThreshold) {
+      break;
+    }
+    delay(100);
+  }
+
+  Serial.println("Tank detected. Reading weight...");
+  rawLbs = readAveragedUnits(LOADED_CHECK_COUNT, LIVE_SAMPLES);
 
   propaneLbs = rawLbs - tankTare - PLATEN_TARE;
 
@@ -419,15 +444,15 @@ void displayCurrentPropaneReadings() {
   }
 
   // calculate the fill level percentage based on the weight of the propane and the maximum legal propane weight of the tank
-  propaneLevel = (propaneLbs / maxPropaneLbs) * 100.0f; 
+  propaneLevel = (maxPropaneLbs > 0.0f) ? (propaneLbs / maxPropaneLbs) * 100.0f : 0.0f;
   
   Serial.print("Scale load: ");
   Serial.print(rawLbs, 1);
   Serial.print(" lbs, ");
-  Serial.print("Estimated propane: ");
+  Serial.print("Calculated propane: ");
   Serial.print(propaneLbs, 1);
   Serial.print(" lbs, "); 
-  Serial.print("Level: ");
+  Serial.print("Propane level: ");
   Serial.print(propaneLevel, 1);
   Serial.println("%");
 }
@@ -454,6 +479,7 @@ void manualCalibration() {
   if (adjustmentStep == 0.0f) adjustmentStep = 10.0f;
   if (minStep == 0.0f) minStep = 0.001f;
   
+  Serial.println();
   Serial.print("Manual calibration mode");
 
   if (!waitForUserConfirmation("Manual calibration cancelled")) {
@@ -479,7 +505,7 @@ void manualCalibration() {
   }
 
   Serial.println("After readings begin, place known weight on scale");
-  Serial.println("Waiting for weight placement...");
+  Serial.println("Waiting for weight placement on scale...");
 
   while (true) {
     measuredUnits = readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES);
@@ -545,6 +571,7 @@ void manualCalibration() {
  * @throws {none} This function does not throw exceptions.
  */
 void reZeroScale() {
+  Serial.println();
   Serial.println("Runtime re-zero requested.");
   if (!waitForUserConfirmation("Runtime re-zero cancelled.")) {
     return;
@@ -572,6 +599,8 @@ void updateMaxPropaneWeight() {
   int inputIndex = 0;
 
   flushSerialInput();
+  
+  Serial.println();
   Serial.print("Current max propane weight: ");
   Serial.print(maxPropaneLbs, 2);
   Serial.println(" lbs");
@@ -639,6 +668,8 @@ void updateTankTare() {
   bool waitingForSave = false;
 
   flushSerialInput();
+
+  Serial.println();
   Serial.print("Current tank tare: ");
   Serial.print(tankTare, 2);
   Serial.println(" lbs");
@@ -840,7 +871,7 @@ void setup() {
   Serial.println("Scale is tared and ready.\n");
   Serial.println("Send 'a' to enter automatic calibration mode");
   Serial.println("Send 'e' to display saved EEPROM values");
-  Serial.println("Send 'l' to start live propane readings (any command stops live mode)");
+  Serial.println("Send 'l' to display one propane reading");
   Serial.println("Send 'm' to enter manual calibration mode");
   Serial.println("Send 'p' to set propane tank tare");
   Serial.println("Send 'w' to set maximum legal propane weight");
@@ -851,8 +882,7 @@ void setup() {
  * @brief  Processes serial commands and prints the current scale reading.
  * 
  * @details Handles calibration, tare, and re-zero commands from the serial port,
- * verifies the HX711 is ready, and reports the current weight in pounds at a fixed
- * interval during normal operation.
+ * verifies the HX711 is ready, and reports a single propane reading when requested.
  * 
  * @return {void} No value is returned.
  * 
@@ -865,8 +895,6 @@ void loop() {
       return;
     }
 
-    liveReadingsEnabled = false;
-
     if(temp == 'a' || temp == 'A') {
       automaticCalibration();
     }
@@ -874,9 +902,6 @@ void loop() {
       displaySavedEepromValues();
     }    
     if(temp == 'l' || temp == 'L') {
-      liveReadingsEnabled = true;
-      lastLiveReadingMs = 0;
-      Serial.println("Live propane readings enabled.");
       displayCurrentPropaneReadings();
     }
     if(temp == 'm' || temp == 'M') {
@@ -890,14 +915,6 @@ void loop() {
     }
     if(temp == 'z' || temp == 'Z') {
       reZeroScale();
-    }
-  }
-
-  if (liveReadingsEnabled) {
-    unsigned long now = millis();
-    if (now - lastLiveReadingMs >= 500UL) {
-      displayCurrentPropaneReadings();
-      lastLiveReadingMs = now;
     }
   }
 }
