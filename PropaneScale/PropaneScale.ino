@@ -300,6 +300,33 @@ bool saveTankTareToEeprom(float tareLbs) {
 // Helper functions for user initiated workflows
 // Flushing serial input, parsing non-negative floats, reading averaged units from the scale, and handling user confirmation during calibration.
 
+
+/**
+ * @brief Ensures the HX711 is ready before attempting reads or tare.
+ *
+ * @details Checks the amplifier readiness and prints a field-diagnostic message when it is not ready so workflows can exit early instead of blocking.
+ *
+ * @param {const char*} operation Short workflow label used in the error message.
+ * @return {bool} True when HX711 is ready; false otherwise.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+bool ensureScaleReady(const char* operation) {
+  if (scale.is_ready()) {
+    return true;
+  }
+
+  Serial.print("HX711 not ready");
+  if (operation != nullptr && operation[0] != '\0') {
+    Serial.print(" during ");
+    Serial.print(operation);
+  }
+  Serial.println(".");
+  Serial.println("Check HX711 wiring, power, and data pins (DOUT/CLK).");
+  Serial.println();
+  return false;
+}
+
 /**
  * @brief Flushes any buffered serial input.
  *
@@ -347,6 +374,7 @@ bool parseNonNegativeFloat(const char* text, float& value) {
   return true;
 }
 
+
 /**
  * @brief Reads the average weight from the scale over multiple readings.
  * 
@@ -385,6 +413,10 @@ bool waitForStartupEmptyScale() {
   float measuredUnits = 0.0f;
   int stableEmptyChecks = 0;
   unsigned long startTimeMs = millis();
+
+  if (!ensureScaleReady("startup tare")) {
+    return false;
+  }
 
   Serial.println();
   Serial.println("Startup tare: waiting for stable scale...");
@@ -495,6 +527,10 @@ void automaticCalibration() {
 
   Serial.println();
   Serial.println("Automatic calibration mode");
+
+  if (!ensureScaleReady("automatic calibration")) {
+    return;
+  }
 
   if (!waitForUserConfirmation("Automatic calibration cancelled")) {
     calibration_factor = DEF_CALIBRATION_FACTOR;
@@ -624,6 +660,10 @@ void displayLevel() {
   float measuredUnits = 0.0f;
   float unloadedNoise = 0.0f;
 
+  if (!ensureScaleReady("level read")) {
+    return;
+  }
+
   // apply the current calibration factor to convert raw readings to weight in pounds
   scale.set_scale(calibration_factor);
 
@@ -694,6 +734,10 @@ void manualCalibration() {
   
   Serial.println();
   Serial.print("Manual calibration mode");
+
+  if (!ensureScaleReady("manual calibration")) {
+    return;
+  }
 
   if (!waitForUserConfirmation("Manual calibration cancelled")) {
     calibration_factor = DEF_CALIBRATION_FACTOR;
@@ -786,6 +830,11 @@ void manualCalibration() {
 void reZeroScale() {
   Serial.println();
   Serial.println("Runtime re-zero requested.");
+
+  if (!ensureScaleReady("re-zero")) {
+    return;
+  }
+
   if (!waitForUserConfirmation("Runtime re-zero cancelled.")) {
     return;
   }
