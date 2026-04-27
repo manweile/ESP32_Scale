@@ -1132,7 +1132,7 @@ void setup() {
 }
 
 /**
- * @brief  Processes serial commands and prints the current scale reading.
+ * @brief Processes serial commands and prints the current scale reading.
  * 
  * @details Handles calibration, tare, and re-zero commands from the serial port,
  * verifies the HX711 is ready, and reports a single propane reading when requested.
@@ -1144,29 +1144,51 @@ void setup() {
 void loop() {
   if (Serial.available()) {
     temp = Serial.read();
+    
+    // ignore newline characters that may be sent by the serial monitor after commands to avoid accidentally triggering multiple commands in a row
     if (temp == '\r' || temp == '\n') {
       return;
     }
-    if(temp == 'a' || temp == 'A') {
-      automaticCalibration();
+    bool handled = true;
+
+    // having empty lower case input cases allows not needing to call tolower() on the input
+    switch (temp) {
+      case 'a':
+      case 'A':
+        automaticCalibration();
+        break;
+      case 'e':
+      case 'E':
+        displayEepromValues();
+        break;
+      case 'l':
+      case 'L':
+        displayLevel();
+        break;
+      case 'm':
+      case 'M':
+        manualCalibration();
+        break;
+      case 'r':
+      case 'R':
+        reZeroScale();
+        break;
+      case 't':
+      case 'T':
+        tankTareUpdate();
+        break;
+      case 'w':
+      case 'W':
+        weightUpdate();
+        break;
+      default:
+        handled = false;
+        break;
     }
-    if(temp == 'e' || temp == 'E') {
-      displayEepromValues();
-    }    
-    if(temp == 'l' || temp == 'L') {
-      displayLevel();
-    }
-    if(temp == 'm' || temp == 'M') {
-      manualCalibration();
-    }
-    if(temp == 'r' || temp == 'R') {
-      reZeroScale();
-    }
-    if(temp == 't' || temp == 'T') {
-      tankTareUpdate();
-    }
-    if(temp == 'w' || temp == 'W') {
-      weightUpdate();
+
+    // flush any extra input after handling a command to prevent accidental multiple command triggers from a single line of input
+    if (handled) {
+      flushSerialInput();
     }
   }
 }
