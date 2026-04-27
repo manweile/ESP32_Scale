@@ -383,7 +383,6 @@ bool parseNonNegativeFloat(const char* text, float& outValue) {
   return true;
 }
 
-
 /**
  * @brief Reads the average weight from the scale over multiple readings.
  * 
@@ -409,6 +408,33 @@ float readAveragedUnits(int readings, int samplesPerReading) {
 }
 
 /**
+ * @brief Waits for a load to exceed a threshold within a timeout window.
+ *
+ * @details Samples the scale until the absolute reading meets or exceeds the provided threshold.
+ *
+ * @param {float} loadDetectThreshold Minimum absolute reading required to detect a load.
+ * @param {float&} measuredUnits Output receiving the last measured reading.
+ * @param {const char*} timeoutMessage Message printed if the wait times out.
+ * @return {bool} True when a load is detected before timeout, false otherwise.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+bool waitForLoadPlacement(float loadDetectThreshold, float& measuredUnits, const char* timeoutMessage) {
+  unsigned long startTimeMs = millis();                     // Timestamp marking the start of the waiting period
+
+  while ((millis() - startTimeMs) < SETUP_EMPTY_MAX_WAIT_MS) {
+    measuredUnits = readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES);
+    if (fabsf(measuredUnits) >= loadDetectThreshold) {
+      return true;
+    }
+    delay(100);
+  }
+
+  Serial.println(timeoutMessage);
+  return false;
+}
+
+/**
  * @brief Waits for startup empty-scale condition with optional user override.
  *
  * @details Checks repeated raw HX711 readings during setup and auto-confirms when the scale appears empty.
@@ -419,10 +445,12 @@ float readAveragedUnits(int readings, int samplesPerReading) {
  * @throws {none} This function does not throw exceptions.
  */
 bool waitForStartupEmptyScale() {
+  float baseline = 0.0f;                // Initial baseline reading used to check for stability during startup
   float measuredUnits = 0.0f;           // Current measured weight in pounds
-  int stableEmptyChecks = 0;            // Consecutive stable empty readings to determine when scale is stable and empty during startup
-  unsigned long startTimeMs = millis(); // Timestamp marking start of waiting period to enforce maximum wait time for startup tare
-  char temp = '\0';                     // Temporary variable to hold user input from the serial interface
+  int stableEmptyChecks = 0;            // Consecutive readings considered empty
+  unsigned long startTimeMs = millis(); // Start of waiting period
+  char temp = '\0';                     // User input from the serial interface
+
 
   if (!ensureScaleReady("startup tare")) {
     return false;
@@ -443,9 +471,10 @@ bool waitForStartupEmptyScale() {
   scale.set_scale(calibration_factor);
 
   // Establish baseline before tare; stability is checked relative to this reading.
-  float baseline = readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES);
+  baseline = readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES);
   measuredUnits = baseline;
 
+  // Check for stable readings near the initial baseline to auto-confirm empty scale, but allow user to cancel with 'q'.
   while ((millis() - startTimeMs) < SETUP_EMPTY_MAX_WAIT_MS) {
     measuredUnits = readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES);
 
@@ -483,38 +512,77 @@ bool waitForStartupEmptyScale() {
 }
 
 /**
- * @brief Blocks until the user confirms or cancels.
+ * @brief Waits for an empty-scale condition or user cancel.
  *
- * @details Blocks until user confirms an action by sending 'y' over serial, or to cancel by sending 'q'.
- * 
+ * @details Uses calibrated readings to auto-detect empty scale with a timeout, so workflows do not block.
+ * User can still send 'q' to cancel immediately.
+ *
  * @param {const char*} cancelMessage Text to print when the user cancels.
- * @return {bool} True if the user confirmed, false if the user cancelled.
- * 
+ * @return {bool} True when empty scale is detected, false when cancelled or timeout with non-empty scale.
+ *
  * @throws {none} This function does not throw exceptions.
  */
-bool waitForUserConfirmation(const char* cancelMessage) {
-  char temp = '\0';                     // Temporary variable to hold user input from the serial interface
+bool waitForCalibrationEmptyScale(const char* cancelMessage) {
+  float measuredUnits = 0.0f;           // Current measured weight in pounds
+  int stableEmptyChecks = 0;            // Consecutive readings considered empty
+  unsigned long startTimeMs = millis(); // Start of the waiting period
+  char temp = '\0';                     // User input from the serial interface
+
+  if (!ensureScaleReady("empty scale confirmation")) {
+    return false;
+  }
+
+  // Use calibrated readings and treat near-zero as empty (no propane weight present).
+  scale.set_scale(calibration_factor);
 
   Serial.println();
   Serial.println("Remove all weight from scale.");
-  Serial.println("Send 'y' when the scale is empty.");
+  Serial.println("Auto-detect is active.");
+  Serial.print("Empty threshold: +/- ");
+  Serial.print(PLACED_LOAD_THRESHOLD_LBS, 2);
+  Serial.println(" lbs.");
   Serial.println("Send 'q' to cancel.");
+  Serial.print("Confirmation timeout: ");
+  Serial.print(USER_CONFIRMATION_TIMEOUT_MS / 1000UL);
+  Serial.println(" seconds.");
 
-  while (true) {
-    if (Serial.available()) {
-      temp = Serial.read();
-      if (temp == 'y' || temp == 'Y') {
-        while (Serial.available()) { Serial.read(); }  // flush remaining input
+  // Check for stable readings near zero to auto-confirm empty scale, but allow user to cancel with 'q'.
+  while ((millis() - startTimeMs) < USER_CONFIRMATION_TIMEOUT_MS) {
+    measuredUnits = readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES);
+
+    if (fabsf(measuredUnits) <= PLACED_LOAD_THRESHOLD_LBS) {
+      stableEmptyChecks++;
+      if (stableEmptyChecks >= SETUP_EMPTY_REQUIRED_STABLE_CHECKS) {
+        Serial.println("Empty scale auto-detected, continuing with calibration");
+        Serial.println();
         return true;
       }
+    } else {
+      stableEmptyChecks = 0;
+    }
+
+    if (Serial.available()) {
+      temp = Serial.read();
       if (temp == 'q' || temp == 'Q') {
         Serial.println(cancelMessage);
+        Serial.println();
         return false;
       }
-    } else {
-      delay(10);
     }
+
+    delay(100);
   }
+
+  // Timeout: auto-confirm if the reading remained near zero, otherwise cancel.
+  if (fabsf(measuredUnits) <= PLACED_LOAD_THRESHOLD_LBS) {
+    Serial.println("Empty scale auto-confirmed at timeout (stable scale).");
+    Serial.println();
+    return true;
+  }
+
+  Serial.println("Confirmation timed out: scale not empty; cancelled.");
+  Serial.println();
+  return false;
 }
 
 // User initiated functions
@@ -544,7 +612,7 @@ void automaticCalibration() {
     return;
   }
 
-  if (!waitForUserConfirmation("Automatic calibration cancelled")) {
+  if (!waitForCalibrationEmptyScale("Automatic calibration cancelled")) {
     calibration_factor = DEF_CALIBRATION_FACTOR;
     if (!saveCalibrationToEeprom(calibration_factor)) {
       Serial.println(DEFAULT_CALIBRATION_SAVE_FAILED_MSG);
@@ -569,13 +637,12 @@ void automaticCalibration() {
   Serial.print(CAL_KNOWN_WEIGHT_LBS, 2);
   Serial.println(" lbs");
   Serial.println("Waiting for weight placement on scale...");
+  Serial.print("Load placement timeout: ");
+  Serial.print(SETUP_EMPTY_MAX_WAIT_MS / 1000UL);
+  Serial.println(" seconds.");
 
-  while (true) {
-    measuredUnits = readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES);
-    if (fabsf(measuredUnits) >= loadDetectThreshold) {
-      break;
-    }
-    delay(100);
+  if (!waitForLoadPlacement(loadDetectThreshold, measuredUnits, "Weight placement timed out; calibration cancelled.")) {
+    return;
   }
 
   Serial.println("Weight detected. Measuring stable reading...");
@@ -692,13 +759,12 @@ void displayLevel() {
   Serial.println();
   Serial.println("Place propane tank on scale.");
   Serial.println("Waiting for tank placement...");
+  Serial.print("Load placement timeout: ");
+  Serial.print(SETUP_EMPTY_MAX_WAIT_MS / 1000UL);
+  Serial.println(" seconds.");
 
-  while (true) {
-    measuredUnits = readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES);
-    if (fabsf(measuredUnits) >= loadDetectThreshold) {
-      break;
-    }
-    delay(100);
+  if (!waitForLoadPlacement(loadDetectThreshold, measuredUnits, "Tank placement timed out; cancelled.")) {
+    return;
   }
 
   Serial.println("Tank detected. Reading weight...");
@@ -754,7 +820,7 @@ void manualCalibration() {
     return;
   }
 
-  if (!waitForUserConfirmation("Manual calibration cancelled")) {
+  if (!waitForCalibrationEmptyScale("Manual calibration cancelled")) {
     calibration_factor = DEF_CALIBRATION_FACTOR;
     if (!saveCalibrationToEeprom(calibration_factor)) {
       Serial.println(DEFAULT_CALIBRATION_SAVE_FAILED_MSG);
@@ -778,13 +844,12 @@ void manualCalibration() {
 
   Serial.println("After readings begin, place known weight on scale");
   Serial.println("Waiting for weight placement on scale...");
+  Serial.print("Load placement timeout: ");
+  Serial.print(SETUP_EMPTY_MAX_WAIT_MS / 1000UL);
+  Serial.println(" seconds.");
 
-  while (true) {
-    measuredUnits = readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES);
-    if (fabsf(measuredUnits) >= loadDetectThreshold) {
-      break;
-    }
-    delay(100);
+  if (!waitForLoadPlacement(loadDetectThreshold, measuredUnits, "Weight placement timed out; calibration cancelled.")) {
+    return;
   }
 
   Serial.println("Weight detected. Adjust calibration until the reading matches the known weight.");
@@ -850,7 +915,7 @@ void reZeroScale() {
     return;
   }
 
-  if (!waitForUserConfirmation("Runtime re-zero cancelled.")) {
+  if (!waitForCalibrationEmptyScale("Runtime re-zero cancelled.")) {
     return;
   }
 

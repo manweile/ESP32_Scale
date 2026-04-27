@@ -39,6 +39,9 @@ constexpr unsigned long SETUP_EMPTY_MAX_WAIT_MS = 15000UL;
 constexpr int SETUP_EMPTY_REQUIRED_STABLE_CHECKS = 3;
 constexpr float SETUP_EMPTY_TOLERANCE_LBS = 1.5f;
 
+// User interaction timeouts for blocking workflows.
+constexpr unsigned long USER_CONFIRMATION_TIMEOUT_MS = 30000UL;
+
 // Tare weight of the empty, used to subtract from readings to report only the weight of the propane
 // Tare weight of the empty twenty lb tank in pounds is approximately 16-18 lbs
 // Tare weight of the empty thirty lb tank in pounds is typically 23-26 lbs
