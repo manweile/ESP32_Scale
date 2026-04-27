@@ -204,6 +204,57 @@ bool saveTankTareToEeprom(float tareLbs) {
   return EEPROM.commit();
 }
 
+/**
+ * @brief Loads a float from EEPROM or falls back to a default and saves it.
+ *
+ * @details Attempts to load a persisted value using @p loadFn. If loading fails,
+ * it applies @p defaultValue, then attempts to save that default using @p saveFn.
+ * Prints status messages for both load and initialization paths.
+ *
+ * @param {const char*} valueName Human-readable value label for status messages.
+ * @param {float} defaultValue Default value to use when no valid EEPROM value exists.
+ * @param {float&} targetValue Output variable receiving loaded or default value.
+ * @param {bool (*)(float&)} loadFn Function used to load from EEPROM.
+ * @param {bool (*)(float)} saveFn Function used to save to EEPROM.
+ * @param {int} decimals Decimal precision for printed values.
+ * @param {const char*} units Optional units suffix (for example " lbs"); can be nullptr.
+ * @return {void} No value is returned.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+void loadOrInitializeEepromValue(
+  const char* valueName,
+  float defaultValue,
+  float& targetValue,
+  bool (*loadFn)(float&),
+  bool (*saveFn)(float),
+  int decimals,
+  const char* units
+) {
+  if (loadFn(targetValue)) {
+    Serial.print("Loaded ");
+    Serial.print(valueName);
+    Serial.print(" from EEPROM: ");
+    Serial.print(targetValue, decimals);
+    if (units != nullptr) {
+      Serial.print(units);
+    }
+    Serial.println();
+    return;
+  }
+
+  targetValue = defaultValue;
+  if (!saveFn(targetValue)) {
+    Serial.print("Failed to initialize default ");
+    Serial.print(valueName);
+    Serial.println(" in EEPROM.");
+  } else {
+    Serial.print("Initialized default ");
+    Serial.print(valueName);
+    Serial.println(" in EEPROM.");
+  }
+}
+
 // Helper functions for user initiated workflows
 // Flushing serial input, parsing non-negative floats, reading averaged units from the scale, and handling user confirmation during calibration.
 
@@ -876,49 +927,35 @@ void setup() {
     tankTare = DEF_TANK_TARE;
     maxPropaneLbs = MAX_PROPANE_LBS;
   } else {
-    float storedCalibration = DEF_CALIBRATION_FACTOR;
-    if (loadCalibrationFromEeprom(storedCalibration)) {
-      calibration_factor = storedCalibration;
-      Serial.print("Loaded calibration factor from EEPROM: ");
-      Serial.println(calibration_factor, 2);
-    } else {
-      calibration_factor = DEF_CALIBRATION_FACTOR;
-      if (!saveCalibrationToEeprom(calibration_factor)) {
-        Serial.println("Failed to initialize default calibration in EEPROM.");
-      } else {
-        Serial.println("Initialized default calibration in EEPROM.");
-      }
-    }
+    loadOrInitializeEepromValue(
+      "calibration factor",
+      DEF_CALIBRATION_FACTOR,
+      calibration_factor,
+      loadCalibrationFromEeprom,
+      saveCalibrationToEeprom,
+      2,
+      nullptr
+    );
 
-    float storedTankTare = DEF_TANK_TARE;
-    if (loadTankTareFromEeprom(storedTankTare)) {
-      tankTare = storedTankTare;
-      Serial.print("Loaded tank tare from EEPROM: ");
-      Serial.print(tankTare, 2);
-      Serial.println(" lbs");
-    } else {
-      tankTare = DEF_TANK_TARE;
-      if (!saveTankTareToEeprom(tankTare)) {
-        Serial.println("Failed to initialize default tank tare in EEPROM.");
-      } else {
-        Serial.println("Initialized default tank tare in EEPROM.");
-      }
-    }
+    loadOrInitializeEepromValue(
+      "tank tare",
+      DEF_TANK_TARE,
+      tankTare,
+      loadTankTareFromEeprom,
+      saveTankTareToEeprom,
+      2,
+      " lbs"
+    );
 
-    float storedMaxPropane = MAX_PROPANE_LBS;
-    if (loadMaxPropaneWeightFromEeprom(storedMaxPropane)) {
-      maxPropaneLbs = storedMaxPropane;
-      Serial.print("Loaded max propane weight from EEPROM: ");
-      Serial.print(maxPropaneLbs, 2);
-      Serial.println(" lbs");
-    } else {
-      maxPropaneLbs = MAX_PROPANE_LBS;
-      if (!saveMaxPropaneWeightToEeprom(maxPropaneLbs)) {
-        Serial.println("Failed to initialize default max propane weight in EEPROM.");
-      } else {
-        Serial.println("Initialized default max propane weight in EEPROM.");
-      }
-    }
+    loadOrInitializeEepromValue(
+      "max propane weight",
+      MAX_PROPANE_LBS,
+      maxPropaneLbs,
+      loadMaxPropaneWeightFromEeprom,
+      saveMaxPropaneWeightToEeprom,
+      2,
+      " lbs"
+    );
   }
 
   scale.begin(DOUT_PIN, CLK_PIN);
