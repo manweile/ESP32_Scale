@@ -31,12 +31,24 @@ bool eepromReady = false;               // Flag to track if EEPROM was successfu
 float maxPropaneLbs = 0.0f;             // Maximum legal propane weight in pounds
 float tankTare = 0.0f;                  // Tare weight of the empty propane tank in pounds
 
-// EEPROM sanity limits for persisted values.
+// EEPROM sanity limits for persisted values
 constexpr float CAL_FACTOR_ABS_MIN = 100.0f;                // Minimum absolute value for valid calibration factor 
 constexpr float CAL_FACTOR_ABS_MAX = 500000.0f;             // Maximum absolute value for valid calibration factor 
 constexpr float MAX_PROJECT_WEIGHT_LBS = 60.0f;             // Project will never measure a propane tank above nominal 60 lbs
 constexpr float TANK_TARE_MIN_LBS = 0.0f;                   // Minimum plausible tare weight for empty propane tank
 constexpr float MAX_PROPANE_MIN_LBS = 0.1f;                 // Minimum plausible maximum propane weight for tank
+
+// UI strings
+constexpr char APP_TITLE[] = "Propane Level Scale";
+constexpr char CMD_AUTO_CAL_MSG[] = "Send 'a' to enter automatic calibration mode";
+constexpr char CMD_SHOW_EEPROM_MSG[] = "Send 'e' to display saved EEPROM values";
+constexpr char CMD_SHOW_LEVEL_MSG[] = "Send 'l' to display one propane reading";
+constexpr char CMD_MANUAL_CAL_MSG[] = "Send 'm' to enter manual calibration mode";
+constexpr char CMD_REZERO_MSG[] = "Send 'r' to re-zero scale with no propane weight on it";
+constexpr char CMD_TANK_TARE_MSG[] = "Send 't' to set propane tank tare";
+constexpr char CMD_MAX_PROPANE_MSG[] = "Send 'w' to set maximum legal propane weight";
+constexpr char DEFAULT_CALIBRATION_SAVE_FAILED_MSG[] = "Failed to save default calibration to EEPROM.";
+constexpr char DEFAULT_CALIBRATION_SAVED_MSG[] = "Default calibration saved to EEPROM.";
 
 // Helper functions for EEPROM workflows
 // validating workflows, and loading/initializing from EEPROM.
@@ -310,13 +322,13 @@ bool ensureScaleReady(const char* operation) {
     return true;
   }
 
-  Serial.print("HX711 not ready");
+  Serial.print(F("HX711 not ready"));
   if (operation != nullptr && operation[0] != '\0') {
-    Serial.print(" during ");
+    Serial.print(F(" during "));
     Serial.print(operation);
   }
-  Serial.println(".");
-  Serial.println("Check HX711 wiring, power, and data pins (DOUT/CLK).");
+  Serial.println('.');
+  Serial.println(F("Check HX711 wiring, power, and data pins (DOUT/CLK)."));
   Serial.println();
   return false;
 }
@@ -417,16 +429,16 @@ bool waitForStartupEmptyScale() {
   }
 
   Serial.println();
-  Serial.println("Startup tare: waiting for stable scale...");
-  Serial.println("Auto-detect is active.");
-  Serial.print("Auto-detect timeout: ");
+  Serial.println(F("Startup tare: waiting for stable scale..."));
+  Serial.println(F("Auto-detect is active."));
+  Serial.print(F("Auto-detect timeout: "));
   Serial.print(SETUP_EMPTY_MAX_WAIT_MS / 1000UL);
-  Serial.println(" seconds.");
-  Serial.print("Stability tolerance: +/- ");
+  Serial.println(F(" seconds."));
+  Serial.print(F("Stability tolerance: +/- "));
   Serial.print(SETUP_EMPTY_TOLERANCE_LBS, 2);
-  Serial.println(" lbs.");
-  Serial.println("Timeout expiry with stable scale values auto-confirms taring workflow.");
-  Serial.println("Send 'q' to skip startup tare.");
+  Serial.println(F(" lbs."));
+  Serial.println(F("Timeout expiry with stable scale values auto-confirms taring workflow."));
+  Serial.println(F("Send 'q' to skip startup tare."));
   
   scale.set_scale(calibration_factor);
 
@@ -535,9 +547,9 @@ void automaticCalibration() {
   if (!waitForUserConfirmation("Automatic calibration cancelled")) {
     calibration_factor = DEF_CALIBRATION_FACTOR;
     if (!saveCalibrationToEeprom(calibration_factor)) {
-      Serial.println("Failed to save default calibration to EEPROM.");
+      Serial.println(DEFAULT_CALIBRATION_SAVE_FAILED_MSG);
     } else {
-      Serial.println("Default calibration saved to EEPROM.");
+      Serial.println(DEFAULT_CALIBRATION_SAVED_MSG);
     }
     return;
   }
@@ -745,9 +757,9 @@ void manualCalibration() {
   if (!waitForUserConfirmation("Manual calibration cancelled")) {
     calibration_factor = DEF_CALIBRATION_FACTOR;
     if (!saveCalibrationToEeprom(calibration_factor)) {
-      Serial.println("Failed to save default calibration to EEPROM.");
+      Serial.println(DEFAULT_CALIBRATION_SAVE_FAILED_MSG);
     } else {
-      Serial.println("Default calibration saved to EEPROM.");
+      Serial.println(DEFAULT_CALIBRATION_SAVED_MSG);
     }
     return;
   }
@@ -1063,7 +1075,7 @@ void setup() {
   Serial.begin(BAUD);
 
   Serial.println();
-  Serial.println("Propane Level Scale");
+  Serial.println(APP_TITLE);
   Serial.println();
 
   // If EEPROM initialization fails, we will continue with default values
@@ -1126,13 +1138,13 @@ void setup() {
   }
   Serial.println();
 
-  Serial.println("Send 'a' to enter automatic calibration mode");
-  Serial.println("Send 'e' to display saved EEPROM values");
-  Serial.println("Send 'l' to display one propane reading");
-  Serial.println("Send 'm' to enter manual calibration mode");
-  Serial.println("Send 'r' to re-zero scale with no propane weight on it");
-  Serial.println("Send 't' to set propane tank tare");
-  Serial.println("Send 'w' to set maximum legal propane weight");
+  Serial.println(CMD_AUTO_CAL_MSG);
+  Serial.println(CMD_SHOW_EEPROM_MSG);
+  Serial.println(CMD_SHOW_LEVEL_MSG);
+  Serial.println(CMD_MANUAL_CAL_MSG);
+  Serial.println(CMD_REZERO_MSG);
+  Serial.println(CMD_TANK_TARE_MSG);
+  Serial.println(CMD_MAX_PROPANE_MSG);
 }
 
 /**
