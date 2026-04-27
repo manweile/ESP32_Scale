@@ -311,6 +311,74 @@ bool waitForUserConfirmation(const char* cancelMessage) {
   }
 }
 
+/**
+ * @brief Waits for startup empty-scale condition with optional user override.
+ *
+ * @details During setup, this function checks repeated raw HX711 readings and
+ * auto-confirms when the scale appears empty for multiple consecutive checks.
+ * The user can also send 'y' to force tare or 'q' to skip startup tare.
+ *
+ * @return {bool} True if startup tare should run; false to skip startup tare.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+bool waitForStartupEmptyScale() {
+  int stableEmptyChecks = 0;
+  float measuredUnits = 0.0f;
+  unsigned long startTimeMs = millis();
+
+  Serial.println();
+  Serial.println("Startup tare: waiting for stable scale...");
+  Serial.println("Auto-detect is active.");
+  Serial.print("Auto-detect timeout: ");
+  Serial.print(SETUP_EMPTY_MAX_WAIT_MS / 1000UL);
+  Serial.println(" seconds.");
+  Serial.print("Stability tolerance: +/- ");
+  Serial.print(SETUP_EMPTY_TOLERANCE_LBS, 2);
+  Serial.println(" lbs.");
+  Serial.println("Timeout with stable scale auto-confirms tare.");
+  Serial.println("Send 'q' to skip startup tare.");
+
+  scale.set_scale(calibration_factor);
+
+  // Establish baseline before tare; stability is checked relative to this reading.
+  float baseline = readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES);
+  measuredUnits = baseline;
+
+  while ((millis() - startTimeMs) < SETUP_EMPTY_MAX_WAIT_MS) {
+    measuredUnits = readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES);
+
+    if (fabsf(measuredUnits - baseline) <= SETUP_EMPTY_TOLERANCE_LBS) {
+      stableEmptyChecks++;
+      if (stableEmptyChecks >= SETUP_EMPTY_REQUIRED_STABLE_CHECKS) {
+        Serial.println("Stable scale detected, proceeding with tare.");
+        return true;
+      }
+    } else {
+      stableEmptyChecks = 0;
+    }
+
+    if (Serial.available()) {
+      temp = Serial.read();
+      if (temp == 'q' || temp == 'Q') {
+        Serial.println("Startup tare skipped by user.");
+        return false;
+      }
+    }
+
+    delay(100);
+  }
+
+  // Timeout: auto-confirm if the reading remained near the initial baseline.
+  if (fabsf(measuredUnits - baseline) <= SETUP_EMPTY_TOLERANCE_LBS) {
+    Serial.println("Startup tare auto-confirmed at timeout (stable scale).");
+    return true;
+  }
+
+  Serial.println("Startup tare timeout: scale unstable, skipping tare.");
+  return false;
+}
+
 // User initiated functions
 // These functions are called in response to user commands over serial.
 // Perform automatic & manual calibration, updating of tank tare, maximum propane weight values, and re-zero scale.
@@ -369,7 +437,7 @@ void automaticCalibration() {
   }
 
   Serial.println("Weight detected. Measuring stable reading...");
-  measuredUnits = readAveragedUnits(LOADED_CHECK_COUNT, LIVE_SAMPLES);
+  measuredUnits = readAveragedUnits(CAL_SAMPLES, LIVE_SAMPLES);
 
   if (CAL_KNOWN_WEIGHT_LBS == 0.0f || measuredUnits == 0.0f) {
     Serial.println("Automatic calibration failed: invalid known weight or reading.");
@@ -383,7 +451,7 @@ void automaticCalibration() {
 
   scale.set_scale(calibration_factor);
   Serial.print("Verified reading: ");
-  Serial.print(readAveragedUnits(LOADED_CHECK_COUNT, LIVE_SAMPLES), 2);
+  Serial.print(readAveragedUnits(CAL_SAMPLES, LIVE_SAMPLES), 2);
   Serial.println(" lbs");
   Serial.print("Automatic calibration complete, computed calibration factor: ");
   Serial.println(calibration_factor, 2);
@@ -433,7 +501,7 @@ void displayCurrentPropaneReadings() {
   }
 
   Serial.println("Tank detected. Reading weight...");
-  rawLbs = readAveragedUnits(LOADED_CHECK_COUNT, LIVE_SAMPLES);
+  rawLbs = readAveragedUnits(CAL_SAMPLES, LIVE_SAMPLES);
 
   propaneLbs = rawLbs - tankTare - PLATEN_TARE;
 
@@ -857,24 +925,21 @@ void setup() {
 
   // project not intended for continuous operation
   // always starting fresh avoids issues with long term stability issues
-  Serial.println();
-  Serial.println("Setup requires an empty scale before initial tare.");
-
-  while (!waitForUserConfirmation("Setup confirmation cancelled.")) {
-    Serial.println("Cannot continue setup tare until all weight is removed.");
+  if (waitForStartupEmptyScale()) {
+    scale.tare();
+    Serial.println("Scale is tared and ready.\n");
+  } else {
+    Serial.println("Continuing without startup tare.");
+    Serial.println("Remove propane weight and send 'r' to re-zero when ready.\n");
   }
 
-  scale.set_scale();
-  scale.tare();
-
-  Serial.println("Scale is tared and ready.\n");
   Serial.println("Send 'a' to enter automatic calibration mode");
   Serial.println("Send 'e' to display saved EEPROM values");
   Serial.println("Send 'l' to display one propane reading");
   Serial.println("Send 'm' to enter manual calibration mode");
   Serial.println("Send 'p' to set propane tank tare");
+  Serial.println("Send 'r' to re-zero scale with no propane weight on it");
   Serial.println("Send 'w' to set maximum legal propane weight");
-  Serial.println("Send 'z' to re-zero scale with no weight on it");
 }
 
 /**
@@ -909,11 +974,11 @@ void loop() {
     if(temp == 'p' || temp == 'P') {
       updateTankTare();
     }
+    if(temp == 'r' || temp == 'R') {
+      reZeroScale();
+    }
     if(temp == 'w' || temp == 'W') {
       updateMaxPropaneWeight();
-    }
-    if(temp == 'z' || temp == 'Z') {
-      reZeroScale();
     }
   }
 }
