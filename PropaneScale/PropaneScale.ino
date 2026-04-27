@@ -33,7 +33,6 @@ float propaneLbs = 0.0f;          // Current propane weight in pounds.
 float rawLbs = 0.0f;              // Raw weight reading from HX711 in pounds.
 float tankTare = 0.0f;            // Tare weight of the empty propane tank in pounds.
 char temp = '\0';                 // Temporary variable for serial input.
-long zero_factor = 0;             // Zero factor for HX711 calibration.
 
 // Helper functions for EEPROM workflows
 // Displaying saved EEPROM values, loading/saving calibration, tare, and maximum propane weight values to EEPROM.
