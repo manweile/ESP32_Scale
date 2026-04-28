@@ -1,6 +1,10 @@
 # ESP32 Propane Scale
 
-An ESP32-based scale for measuring propane tank fill level. Weighs the tank, subtracts the known empty-tank tare, and reports the estimated propane weight and fill percentage over USB serial.
+An ESP32-based scale for measuring propane tank fill level.
+
+- Weighs the tank
+- subtracts the known empty-tank tare
+- reports the calculated propane weight and fill percentage
 
 ## Hardware
 
@@ -10,15 +14,35 @@ An ESP32-based scale for measuring propane tank fill level. Weighs the tank, sub
 | Load cell amplifier | [SparkFun HX711 (BOB-13879)](https://www.sparkfun.com/sparkfun-load-cell-amplifier-hx711.html) | 1 |
 | Load cell | [Sparkfun 50 kg (SEN-10245)](https://www.sparkfun.com/load-sensor-50kg-generic.html) | 4 |
 
-### Wiring
+### HX711 Wiring
 
-| HX711 Pin | ESP32 Pin |
-| --------- | ------- |
-| CLK | GPIO 4 |
-| DOUT | GPIO 16 |
-| VDD | 5V |
-| VCC | 3V3 |
-| GND | GND |
+| HX711 Pin | ESP32 Pin | Purpose |
+| --------- | --------- | ------- |
+| CLK | GPIO 4 | Clock Input |
+| DOUT | GPIO 16 | Data Output |
+| VDD | 5V | Load Cell Analog Voltage |
+| VCC | 3V3 | Logic Level Voltage |
+| GND | GND | Common Ground |
+
+### Load Cell Combination Wiring
+
+For the [Sparkfun 50 kg (SEN-10245)](https://www.sparkfun.com/load-sensor-50kg-generic.html), per the [SparkFun HX711 (BOB-13879)](https://www.sparkfun.com/sparkfun-load-cell-amplifier-hx711.html) schematic, the center tap is red, the positive lead is white, and the negative lead is black.
+
+This is confirmed by resistance measurement:
+
+| Wire Pair | Resistance |
+| --------- | ---------- |
+| White to Red | 870 ohms |
+| White to Black | 1500 ohms |
+| Red to Black | 870 ohms |
+
+The high resistance pair is the excitation pair. This is the white (+) to black (-) pair.
+
+The remaining wire is the center tap. This the red wire.
+
+While you can use the [Sparkfun Load Cell Combinator (BOB-13878)](https://www.sparkfun.com/sparkfun-load-sensor-combinator.html).
+
+If you refer to the [SparkFun HX711 (BOB-13879)](https://www.sparkfun.com/sparkfun-load-cell-amplifier-hx711.html) schematic, you can directly solder up the 4 load cells and not use the combinator breakout.
 
 ## Software Dependencies
 
@@ -33,14 +57,22 @@ arduino-cli lib install "SparkFun HX711"
 
 ## Building
 
+Currently this project is using arduino-cli for building.
+
+Eventually, will switch to complete ESP-IDF toolchain.
+
 ```bash
-arduino-cli compile -v --fqbn esp32:esp32:esp32thing PropaneScale/
+arduino-cli compile -v --fqbn "${input:FQBN}" "${workspaceFolder}/PropaneScale"
+arduino-cli compile -v --clean --fqbn "${input:FQBN}" "${workspaceFolder}/PropaneScale"
+arduino-cli compile -v --clean --fqbn "${input:FQBN}" --build-property 'build.extra_flags=-Og -g3' "${workspaceFolder}/PropaneScale"
 ```
 
 Upload:
 
 ```bash
-arduino-cli upload -v -p <COMPort> --fqbn esp32:esp32:esp32thing PropaneScale/
+arduino-cli upload -v -p "${input:COMPort}" --fqbn "${input:FQBN}" --input-dir "${workspaceFolder}/PropaneScale/build/${input:FQBNDIR}" "${workspaceFolder}/PropaneScale"
+
+esptool.exe --verbose --chip esp32 --port "${input:COMPort}" --baud "${input:uploadSpeed}" write-flash -z 0x0 "${input:openMergedBinDialog}"
 ```
 
 VS Code tasks for compile, clean rebuild, upload, and serial monitor are provided in `.vscode/tasks.json`.
