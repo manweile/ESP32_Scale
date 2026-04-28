@@ -259,6 +259,7 @@ bool loadTankTareFromEeprom(float& tareLbs) {
  * @brief Saves the given calibration factor to EEPROM with a magic number for validation.
  * 
  * @details Writes the calibration magic number and calibration factor to EEPROM, and commits the changes.
+ * Returns false immediately if EEPROM was not successfully initialized.
  * 
  * @param {float} factor The calibration factor to save.
  * @return {bool} True if the calibration factor was successfully saved, false otherwise.
@@ -266,23 +267,31 @@ bool loadTankTareFromEeprom(float& tareLbs) {
  * @throws {none} This function does not throw exceptions.
  */
 bool saveCalibrationToEeprom(float factor) {
+  if (!eepromReady) {
+    return false;
+  }
+
   EEPROM.put(CAL_EEPROM_MAGIC_ADDR, CAL_EEPROM_MAGIC);
   EEPROM.put(CAL_EEPROM_VALUE_ADDR, factor);
   return EEPROM.commit();
 }
 
 /**
- * @brief Loads the maximum legal propane weight value from EEPROM if magic is valid.
+ * @brief Saves the maximum legal propane weight value to EEPROM with a magic number for validation.
  *
- * @details Checks for the maximum propane weight magic number in EEPROM.
- * If the magic number is valid, it loads the maximum propane weight value into the provided reference variable.
+ * @details Writes the maximum propane weight magic number and value to EEPROM, and commits the changes.
+ * Returns false immediately if EEPROM was not successfully initialized.
  * 
- * @param {float&} maxPropaneLbs Reference where loaded value is stored.
- * @return {bool} True if value was loaded successfully, false otherwise.
+ * @param {float} maxPropaneLbs The maximum propane weight value to save.
+ * @return {bool} True if the value was successfully saved, false otherwise.
  *
  * @throws {none} This function does not throw exceptions.
  */
 bool saveMaxPropaneWeightToEeprom(float maxPropaneLbs) {
+  if (!eepromReady) {
+    return false;
+  }
+
   EEPROM.put(MAX_PROPANE_EEPROM_MAGIC_ADDR, MAX_PROPANE_EEPROM_MAGIC);
   EEPROM.put(MAX_PROPANE_EEPROM_VALUE_ADDR, maxPropaneLbs);
   return EEPROM.commit();
@@ -292,6 +301,7 @@ bool saveMaxPropaneWeightToEeprom(float maxPropaneLbs) {
  * @brief Saves the propane tank tare value to EEPROM with a tare-specific magic number.
  *
  * @details Writes the tare magic number and tare value to EEPROM, and commits the changes.
+ * Returns false immediately if EEPROM was not successfully initialized.
  * 
  * @param {float} tareLbs Tank tare in pounds to save.
  * @return {bool} True if the tare value was successfully saved, false otherwise.
@@ -299,6 +309,10 @@ bool saveMaxPropaneWeightToEeprom(float maxPropaneLbs) {
  * @throws {none} This function does not throw exceptions.
  */
 bool saveTankTareToEeprom(float tareLbs) {
+  if (!eepromReady) {
+    return false;
+  }
+
   EEPROM.put(TARE_EEPROM_MAGIC_ADDR, TARE_EEPROM_MAGIC);
   EEPROM.put(TARE_EEPROM_VALUE_ADDR, tareLbs);
   return EEPROM.commit();
@@ -1097,7 +1111,7 @@ void weightUpdate() {
         return;
       }
 
-      float parsedValue = 0.0f;
+      parsedValue = 0.0f;
       if (parseNonNegativeFloat(inputBuffer, parsedValue) && parsedValue > 0.0f) {
         maxPropaneLbs = parsedValue;
         if (!saveMaxPropaneWeightToEeprom(maxPropaneLbs)) {
