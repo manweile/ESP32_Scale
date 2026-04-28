@@ -951,10 +951,10 @@ void reZeroScale() {
  * @throws {none} This function does not throw exceptions.
  */
 void tankTareUpdate() {
-  char inputBuffer[24] = {0};           // Buffer to hold user input for the new tank tare value as a string
-  float parsedValue = 0.0f;             // Variable to hold the parsed float value of the new tank tare after validating the input string
-  int inputIndex = 0;                   // Index to track the current position in the inputBuffer for storing incoming characters from serial input
-  bool waitingForSave = false;          // Flag to indicate whether the function is currently waiting for the user to confirm saving the new tare value
+  char inputBuffer[24] = {0};           // Hold user input for the new tank tare value
+  int inputIndex = 0;                   // Track the current position in inputBuffer for storing incoming characters
+  float parsedValue = 0.0f;             // Parsed value of the new tank tare after validating the input string
+  bool waitingForSave = false;          // Indicate currently waiting for the user to confirm save
 
   flushSerialInput();
 
@@ -962,7 +962,11 @@ void tankTareUpdate() {
   Serial.print("Current tank tare: ");
   Serial.print(tankTare, 2);
   Serial.println(" lbs");
-  Serial.println("Enter new tank tare in lbs (>= 0), then press Enter.");
+  Serial.print("Enter new tank tare in lbs (");
+  Serial.print(TANK_TARE_MIN_LBS, 2);
+  Serial.print(" to ");
+  Serial.print(MAX_PROJECT_WEIGHT_LBS, 2);
+  Serial.println("), then press Enter.");
   Serial.println("After entry, send 's' to save or 'q' to cancel.");
 
   while (true) {
@@ -1016,7 +1020,7 @@ void tankTareUpdate() {
         return;
       }
 
-      if (parseNonNegativeFloat(inputBuffer, parsedValue)) {
+      if (parseNonNegativeFloat(inputBuffer, parsedValue) && isValidTankTare(parsedValue)) {
         Serial.print("New tank tare entered: ");
         Serial.print(parsedValue, 2);
         Serial.println(" lbs");
@@ -1027,7 +1031,11 @@ void tankTareUpdate() {
         continue;
       }
 
-      Serial.println("Invalid tank tare. Enter a number >= 0, or 'q' to cancel.");
+      Serial.print("Invalid tank tare. Enter a number from ");
+      Serial.print(TANK_TARE_MIN_LBS, 2);
+      Serial.print(" to ");
+      Serial.print(MAX_PROJECT_WEIGHT_LBS, 2);
+      Serial.println(" lbs, or 'q' to cancel.");
       inputIndex = 0;
       inputBuffer[0] = '\0';
       continue;
@@ -1040,8 +1048,12 @@ void tankTareUpdate() {
       }
 
       inputBuffer[inputIndex] = '\0';
-      if (!parseNonNegativeFloat(inputBuffer, parsedValue)) {
-        Serial.println("Invalid tank tare. Enter a number >= 0, or 'q' to cancel.");
+      if (!parseNonNegativeFloat(inputBuffer, parsedValue) || !isValidTankTare(parsedValue)) {
+        Serial.print("Invalid tank tare. Enter a number from ");
+        Serial.print(TANK_TARE_MIN_LBS, 2);
+        Serial.print(" to ");
+        Serial.print(MAX_PROJECT_WEIGHT_LBS, 2);
+        Serial.println(" lbs, or 'q' to cancel.");
         inputIndex = 0;
         inputBuffer[0] = '\0';
         continue;
@@ -1082,6 +1094,7 @@ void weightUpdate() {
   char inputBuffer[24] = {0};           // Buffer to hold user input for the new maximum propane weight as a string
   float parsedValue = 0.0f;             // Variable to hold the parsed float value of the new maximum propane weight after validating the input string
   int inputIndex = 0;                   // Index to track the current position in the inputBuffer for storing incoming characters from serial input
+  bool waitingForSave = false;          // Indicate currently waiting for the user to confirm save
 
   flushSerialInput();
   
@@ -1089,7 +1102,12 @@ void weightUpdate() {
   Serial.print("Current max propane weight: ");
   Serial.print(maxPropaneLbs, 2);
   Serial.println(" lbs");
-  Serial.println("Enter new max propane weight in lbs (> 0). Send 'q' to cancel.");
+  Serial.print("Enter new max propane weight in lbs (");
+  Serial.print(MAX_PROPANE_MIN_LBS, 2);
+  Serial.print(" to ");
+  Serial.print(MAX_PROJECT_WEIGHT_LBS, 2);
+  Serial.println("), then press Enter.");
+  Serial.println("After entry, send 's' to save or 'q' to cancel.");
 
   while (true) {
     if (!Serial.available()) {
@@ -1103,16 +1121,22 @@ void weightUpdate() {
       continue;
     }
 
-    if (incoming == '\n') {
-      inputBuffer[inputIndex] = '\0';
+    if (!waitingForSave && (incoming == 'q' || incoming == 'Q') && inputIndex == 0) {
+      Serial.println("Max propane weight update cancelled.");
+      return;
+    }
 
-      if (inputIndex == 1 && (inputBuffer[0] == 'q' || inputBuffer[0] == 'Q')) {
+    if (waitingForSave) {
+      if (incoming == '\n') {
+        continue;
+      }
+
+      if (incoming == 'q' || incoming == 'Q') {
         Serial.println("Max propane weight update cancelled.");
         return;
       }
 
-      parsedValue = 0.0f;
-      if (parseNonNegativeFloat(inputBuffer, parsedValue) && parsedValue > 0.0f) {
+      if (incoming == 's' || incoming == 'S') {
         maxPropaneLbs = parsedValue;
         if (!saveMaxPropaneWeightToEeprom(maxPropaneLbs)) {
           Serial.println("Failed to save max propane weight to EEPROM.");
@@ -1124,14 +1148,75 @@ void weightUpdate() {
         return;
       }
 
-      Serial.println("Invalid max propane weight. Enter a number > 0, or 'q' to cancel.");
+      Serial.println("Invalid response. Send 's' to save, or 'q' to cancel.");
+      continue;
+    }
+
+    if (incoming == '\n') {
+      inputBuffer[inputIndex] = '\0';
+
+      if (inputIndex == 1 && (inputBuffer[0] == 'q' || inputBuffer[0] == 'Q')) {
+        Serial.println("Max propane weight update cancelled.");
+        return;
+      }
+
+      parsedValue = 0.0f;
+      if (parseNonNegativeFloat(inputBuffer, parsedValue) && isValidMaxPropaneLbs(parsedValue)) {
+        Serial.print("New max propane weight entered: ");
+        Serial.print(parsedValue, 2);
+        Serial.println(" lbs");
+        Serial.println("Send 's' to save this value to EEPROM, or 'q' to cancel.");
+        waitingForSave = true;
+        inputIndex = 0;
+        inputBuffer[0] = '\0';
+        continue;
+      }
+
+      Serial.print("Invalid max propane weight. Enter a number from ");
+      Serial.print(MAX_PROPANE_MIN_LBS, 2);
+      Serial.print(" to ");
+      Serial.print(MAX_PROJECT_WEIGHT_LBS, 2);
+      Serial.println(" lbs, or 'q' to cancel.");
       inputIndex = 0;
       inputBuffer[0] = '\0';
       continue;
     }
 
+    if (incoming == 's' || incoming == 'S') {
+      if (inputIndex == 0) {
+        Serial.println("Enter a max propane weight first, then send 's' to save.");
+        continue;
+      }
+
+      inputBuffer[inputIndex] = '\0';
+      if (!parseNonNegativeFloat(inputBuffer, parsedValue) || !isValidMaxPropaneLbs(parsedValue)) {
+        Serial.print("Invalid max propane weight. Enter a number from ");
+        Serial.print(MAX_PROPANE_MIN_LBS, 2);
+        Serial.print(" to ");
+        Serial.print(MAX_PROJECT_WEIGHT_LBS, 2);
+        Serial.println(" lbs, or 'q' to cancel.");
+        inputIndex = 0;
+        inputBuffer[0] = '\0';
+        continue;
+      }
+
+      maxPropaneLbs = parsedValue;
+      if (!saveMaxPropaneWeightToEeprom(maxPropaneLbs)) {
+        Serial.println("Failed to save max propane weight to EEPROM.");
+      } else {
+        Serial.print("Max propane weight updated: ");
+        Serial.print(maxPropaneLbs, 2);
+        Serial.println(" lbs");
+      }
+      return;
+    }
+
     if (inputIndex < static_cast<int>(sizeof(inputBuffer) - 1)) {
       inputBuffer[inputIndex++] = incoming;
+    } else {
+      Serial.println("Input too long. Enter a shorter number, or 'q' to cancel.");
+      inputIndex = 0;
+      inputBuffer[0] = '\0';
     }
   }
 }
