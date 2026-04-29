@@ -51,7 +51,7 @@ constexpr char CMD_DEFAULT_EEPROM_MSG[] = "Send 'd' to reset EEPROM to default v
 constexpr char CMD_EEPROM_MSG[] = "Send 'e' to display saved EEPROM values";
 constexpr char CMD_HELP_MSG[] = "Send 'h' to display this help menu";
 constexpr char CMD_KNOWN_WEIGHT_MSG[] = "Send 'k' to enter known weight value for calibration mode";
-constexpr char CMD_LEVEL_MSG[] = "Send 'l' to display one propane percent level reading";
+constexpr char CMD_LEVEL_MSG[] = "Send 'l' to display one liquid propane percent level reading";
 constexpr char CMD_MANUAL_CAL_MSG[] = "Send 'm' to enter manual calibration mode";
 constexpr char CMD_PRINT_CURRENT_MSG[] = "Send 'p' to print current runtime values";
 constexpr char CMD_REZERO_MSG[] = "Send 'r' to re-zero scale with no propane weight on it";
@@ -742,7 +742,7 @@ void automaticCalibration() {
  *
  * @throws {none} This function does not throw exceptions.
  */
-void displayEepromValues() {
+void eepromValues() {
   if (!eepromReady) {
     Serial.println("EEPROM is not initialized; no saved values can be read.");
     return;
@@ -794,7 +794,7 @@ void displayEepromValues() {
  *
  * @throws {none} This function does not throw exceptions.
  */
-void displayLevel() {
+void liquidLevel() {
   float loadDetectThreshold = 0.0f;     // Threshold to detect when a load is present on the scale, based on noise measurements
   float measuredUnits = 0.0f;           // Current averaged reading from the scale in pounds
   float propaneLbs = 0.0f;              // Calculated weight of the propane in pounds after subtracting tank tare and platen tare
@@ -844,6 +844,26 @@ void displayLevel() {
   Serial.print("Propane level: ");
   Serial.print(propaneLevel, 1);
   Serial.println("%");
+}
+
+/**
+ * @brief Prints the help menu with all available commands.
+ *
+ * @details Lists all the runtime commands that the user can send over serial to interact with the scale.
+ * 
+ * @return {void} No value is returned.
+ * 
+ * @throws {none} This function does not throw exceptions.
+ */
+void helpmenu() {
+  Serial.println();
+  Serial.println(CMD_AUTO_CAL_MSG);
+  Serial.println(CMD_EEPROM_MSG);
+  Serial.println(CMD_LEVEL_MSG);
+  Serial.println(CMD_MANUAL_CAL_MSG);
+  Serial.println(CMD_REZERO_MSG);
+  Serial.println(CMD_TANK_TARE_MSG);
+  Serial.println(CMD_WEIGHT_PROPANE);
 }
 
 /**
@@ -1280,7 +1300,6 @@ void weightUpdate() {
   }
 }
 
-
 // Main setup and loop functions for initializing the scale, handling serial commands, and reporting weight readings.
 
 /**
@@ -1363,13 +1382,7 @@ void setup() {
   }
   Serial.println();
 
-  Serial.println(CMD_AUTO_CAL_MSG);
-  Serial.println(CMD_EEPROM_MSG);
-  Serial.println(CMD_LEVEL_MSG);
-  Serial.println(CMD_MANUAL_CAL_MSG);
-  Serial.println(CMD_REZERO_MSG);
-  Serial.println(CMD_TANK_TARE_MSG);
-  Serial.println(CMD_WEIGHT_PROPANE);
+  helpmenu();
 }
 
 /**
@@ -1402,13 +1415,16 @@ void loop() {
       // @todo case 'd' for resetting EEPROM to default cal, known tank weight, propane tank tare, max legal propane values
       case 'e':
       case 'E':
-        displayEepromValues();
+        eepromValues();
         break;
-      // @todo case 'h' for displaying this help menu again on demand
+      case 'h':
+      case 'H':
+        helpmenu();
+        break;
       // @todo case'k' for entering known weight value for calibration mode
       case 'l':
       case 'L':
-        displayLevel();
+        liquidLevel();
         break;
       case 'm':
       case 'M':
