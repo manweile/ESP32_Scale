@@ -1,30 +1,25 @@
 {
   "version": "2.0.0",
   "inputs": [
-    // // path to openOCD executable, 
-    // // default to "openocd" which should work if it's in PATH, 
-    // // otherwise user can provide full path to openocd.exe
-    // {
-    //   "id": "openocdPath",
-    //   "type": "promptString",
-    //   "description": "OpenOCD executable path",
-    //   "default": "openocd"
-    // },
-    // // path to openOCD scripts directory, 
-    // // which contains interface/ and target/ subdirectories, 
-    // // default to the typical installation path for OpenOCD for ESP32 on Windows, 
-    // // but user can provide a different path if needed
-    // {
-    //   "id": "openocdScriptsDir",
-    //   "type": "promptString",
-    //   "description": "OpenOCD scripts directory (contains interface/ and target/)",
-    //   "default": "C:/Espressif/tools/openocd-esp32/share/openocd/scripts"
-    // },
+
+    // dynamic com port list from google search: vs code tasks.json input com ports extension "Command Variable"
+    // requires the Command Variable extension installed and lists.py script in the PropaneScale folder that uses pyserial to list available COM ports on Windows, 
+    {
+      "id": "COMPort",
+      "type": "command",
+      "command": "shellCommand.execute",
+      "args": {
+          // alternative windows only command: "powershell -Command \"[System.IO.Ports.SerialPort]::GetPortNames()\""
+          "command": "python ${workspaceFolder}/PropaneScale/list_ports.py",
+          "description": "Select the COM port for upload"
+      }
+    },
+
     // esptool.py upload baudrate, 
     // default to 921600 which is a common high speed for ESP32 uploads, 
     // but user can choose a different baudrate if they have stability issues at higher speeds
     {
-      "id": "uploadSpeed",
+      "id": "espUploadSpeed",
       "type": "pickString",
       "description": "Upload baudrate",
       "options": [
@@ -35,6 +30,33 @@
       ],
       "default": "921600"
     },
+
+    // list of FQBN for the boards I have and are installed in arduino-cli
+    // FQBN is colon separated string with format: "package:architecture:board",  
+    // used for arduino-cli compile and upload tasks to specify the target board configuration
+    {
+      "id": "FQBN",
+      "type": "pickString",
+      "description": "Fully Qualified Board Name (FQBN) to use",
+      "options": [
+          "esp32:esp32:esp32thing",
+          "esp8266:esp8266:thingdev"
+      ]
+    },
+
+    // list of build dirs for the FQBN of boards I have and are installed in arduino-cli
+    // FQBNDIR is dot separated string with format: "package.architecture.board",  
+    // used for constructing the path to the pre-built binary for arduino-cli upload task
+    {
+      "id": "FQBNDIR",
+      "type": "pickString",
+      "description": "Fully Qualified Board Name (FQBN) build directory to use",
+      "options": [
+          "esp32.esp32.esp32thing",
+          "esp8266.esp8266.thingdev"
+      ]
+    },
+
     // Serial monitor baudrate, 
     // default to 115200 which is the most common baudrate for ESP32 serial output, 
     // but user can choose a different baudrate if their board is configured differently
@@ -50,57 +72,45 @@
       ],
       "default": "115200"
     },
-    // list of FQBN for the boards I have and are installed in arduino-cli
-    // FQBN is colon separated string with format: "package:architecture:board",  
-    // used for arduino-cli compile and upload tasks to specify the target board configuration
-    {
-        "type": "pickString",
-        "id": "FQBN",
-        "description": "Fully Qualified Board Name (FQBN) to use",
-        "options": [
-            "esp32:esp32:esp32thing",
-            "esp8266:esp8266:thingdev"
-        ]
-    },
-    // list of build dirs for the FQBN of boards I have and are installed in arduino-cli
-    // FQBNDIR is dot separated string with format: "package.architecture.board",  
-    // used for constructing the path to the pre-built binary for arduino-cli upload task
-    {
-        "type": "pickString",
-        "id": "FQBNDIR",
-        "description": "Fully Qualified Board Name (FQBN) build directory to use",
-        "options": [
-            "esp32.esp32.esp32thing",
-            "esp8266.esp8266.thingdev"
-        ]
-    },
-    // dynamic com port list from google search: vs code tasks.json input com ports extension "Command Variable"
-    {
-        "id": "COMPort",
-        "type": "command",
-        "command": "shellCommand.execute",
-        "args": {
-            // alternative windows only command: "powershell -Command \"[System.IO.Ports.SerialPort]::GetPortNames()\""
-            "command": "python ${workspaceFolder}/PropaneScale/list_ports.py",
-            "description": "Select the COM port for upload"
-        }
-    },
+
     // open a file dialog to select a merged ESP32 binary for esptool upload
     // defaultUri ends in the selected FQBNDIR build folder
     {
-        "id": "openMergedBinDialog",
-        "type": "command",
-        "command": "extension.commandvariable.file.openDialog",
-        "args": {
-            "canSelect": "files",
-        "defaultUri": "${workspaceFolder}/PropaneScale/build/${input:FQBNDIR}/",
-        "include": "**/${fileBasename}.merged.bin",
-            "filters": {
-          "Merged BIN": ["merged.bin"]
-            }
-        }
-    }
+      "id": "openMergedBinDialog",
+      "type": "command",
+      "command": "extension.commandvariable.file.openDialog",
+      "args": {
+          "canSelect": "files",
+      "defaultUri": "${workspaceFolder}/PropaneScale/build/${input:FQBNDIR}/",
+      "include": "**/${fileBasename}.merged.bin",
+          "filters": {
+        "Merged BIN": ["merged.bin"]
+          }
+      }
+    },
+
+    // path to openOCD executable, 
+    // default to "openocd" which should work if it's in PATH, 
+    // otherwise user can provide full path to openocd.exe
+    // {
+    //   "id": "openocdPath",
+    //   "type": "promptString",
+    //   "description": "OpenOCD executable path",
+    //   "default": "openocd"
+    // },
+    // // path to openOCD scripts directory, 
+    // // which contains interface/ and target/ subdirectories, 
+    // // default to the typical installation path for OpenOCD for ESP32 on Windows, 
+    // // but user can provide a different path if needed
+    // {
+    //   "id": "openocdScriptsDir",
+    //   "type": "promptString",
+    //   "description": "OpenOCD scripts directory (contains interface/ and target/)",
+    //   "default": "C:/Espressif/tools/openocd-esp32/share/openocd/scripts"
+    // }
+
   ],
+
   "tasks": [
 
     /** 
@@ -134,6 +144,28 @@
       },
       "problemMatcher": []
     },
+
+    // quick compile task pinned to ESP32 Thing FQBN to avoid board selection prompts
+    // arduino-cli compile -v --fqbn esp32:esp32:esp32thing D:\MyArduino\Projects\ESP32_Scale/PropaneScale
+    {
+      "label": "ESP32 Thing Arduino-CLI Quick Compile",
+      "type": "shell",
+      "command": "arduino-cli",
+      "args": [
+        "compile",
+        "-v",
+        "--fqbn", "esp32:esp32:esp32thing",
+        "${workspaceFolder}/PropaneScale"
+      ],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+
     // Arduino CLI Production Clean Rebuild task compiles the sketch with the --clean flag, 
     // forces a full rebuild from scratch, but takes longer to complete
     // arduino-cli compile -v --clean --fqbn esp32:esp32:esp32thing D:\MyArduino\Projects\ESP32_Scale/PropaneScale
@@ -156,6 +188,7 @@
       },
       "problemMatcher": []
     },
+
     // Arduino CLI Debug File Compile task compiles the sketch with the --clean flag and extra debug flags, 
     // forces a full rebuild from scratch, includes debug symbols and disables optimizations,  results in much bigger file
     // arduino-cli compile -v --fqbn esp32:esp32:esp32thing --build-property 'build.extra_flags=-Og -g3' D:\MyArduino\Projects\ESP32_Scale/PropaneScale
@@ -173,6 +206,7 @@
       ],
       "problemMatcher": []
     },
+
     // task to upload the sketch using USB serial via arduino-cli directly,
     // using --input-dir to upload the pre-built binary from the build directory
     // arduino-cli upload -v -p COM4 --fqbn esp32:esp32:esp32thing --input-dir D:\MyArduino\Projects\ESP32_Scale/PropaneScale/build/esp32.esp32.esp32thing D:\MyArduino\Projects\ESP32_Scale/PropaneScale
@@ -190,6 +224,7 @@
       ],
       "problemMatcher": []
     },
+
     // task to open com port for monitoring using arduino-cli directly
     // runs in a dedicated terminal tab named "Arduino CLI USB Serial Monitor"
     // arduino-cli monitor -p COM4 --config baudrate=115200 --fqbn esp32:esp32:esp32thing
@@ -220,9 +255,10 @@
      */
 
     // helper task to prompt FQBNDIR before opening the file picker
-    // WARNING: the selected base filename .merged.bin file MUST already exist
+    // with warning that the selected base filename .merged.bin file MUST already exist
     {
-      "label": "ESPTool Select FQBNDIR",
+      "label": "ESPTool Select FQBNDIR with Bin Warning",
+      "hide": true,
       "type": "shell",
       "command": "echo",
       "args": [
@@ -237,11 +273,11 @@
       },
       "problemMatcher": []
     },
-    // task that uploads selected merged binary using esptool.exe
-    // WARNING: the selected base filename .merged.bin file MUST exist
+
+    // helper task that uploads selected merged binary using esptool.exe
     // esptool.exe --verbose --chip esp32 --port COM4 --baud 921600 write-flash -z 0x0 D:\MyArduino\Projects\ESP32_Scale/build/esp32.esp32.esp32thing/PropaneScale.ino.merged.bin
     {
-      "label": "ESPTool USB Upload (Select BIN)",
+      "label": "ESPTool USB Select Bin Upload",
       "hide": true,
       "type": "shell",
       "command": "${env:LOCALAPPDATA}/Arduino15/packages/esp32/tools/esptool_py/5.1.0/esptool.exe",
@@ -249,7 +285,7 @@
         "--verbose",
         "--chip", "esp32",
         "--port", "${input:COMPort}",
-        "--baud", "${input:uploadSpeed}",
+        "--baud", "${input:espUploadSpeed}",
         "write-flash",
         "-z",
         "0x0",
@@ -257,21 +293,148 @@
       ],
       "problemMatcher": []
     },
+
+    // direct ESP32 upload task using the default merged output file from compile
+    // esptool.exe --verbose --chip esp32 --port COM4 --baud 921600 write-flash -z 0x0 D:\MyArduino\Projects\ESP32_Scale/PropaneScale/build/esp32.esp32.esp32thing/PropaneScale.ino.merged.bin
+    {
+      "label": "ESPTool USB Merged Bin Upload",
+      "type": "shell",
+      "command": "${env:LOCALAPPDATA}/Arduino15/packages/esp32/tools/esptool_py/5.1.0/esptool.exe",
+      "args": [
+        "--verbose",
+        "--chip", "esp32",
+        "--port", "${input:COMPort}",
+        "--baud", "${input:espUploadSpeed}",
+        "write-flash",
+        "-z",
+        "0x0",
+        "${workspaceFolder}/PropaneScale/build/esp32.esp32.esp32thing/${fileBasename}.merged.bin"
+      ],
+      "problemMatcher": []
+    },
+
+    // erase entire flash for clean EEPROM/default-init logic tests
+    // esptool.exe --chip esp32 --port COM4 erase_flash
+    {
+      "label": "ESPTool Erase Flash (EEPROM Test)",
+      "type": "shell",
+      "command": "${env:LOCALAPPDATA}/Arduino15/packages/esp32/tools/esptool_py/5.1.0/esptool.exe",
+      "args": [
+        "--chip", "esp32",
+        "--port", "${input:COMPort}",
+        "erase_flash"
+      ],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+
     // wrapper task to ensure FQBNDIR prompt appears before the file dialog
     {
       "label": "ESPTool USB Upload",
       "dependsOrder": "sequence",
       "dependsOn": [
-        "ESPTool Select FQBNDIR",
-        "ESPTool USB Upload (Select BIN)"
+        "ESPTool Select FQBNDIR with Bin Warning",
+        "ESPTool USB Select Bin Upload"
       ],
       "problemMatcher": []
     },
-    // // task to generate a single production image using esptool.exe only
-    // // requires existing .bootloader.bin, .partitions.bin, and .bin artifacts
-    // // %LOCALAPPDATA%/Arduino15/packages/esp32/tools/esptool_py/5.1.0/esptool.exe 
-    // // --chip esp32 merge-bin -o PropaneScale.ino.merged.bin 
-    // // 0x1000 PropaneScale.ino.bootloader.bin 0x8000 PropaneScale.ino.partitions.bin 0x10000 PropaneScale.ino.bin
+
+    // one-click flow: compile for ESP32 Thing and upload the direct merged.bin artifact
+    {
+      "label": "ESP32 Thing Arduino-CLI Quick Compile + ESPTool Upload",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "ESP32 Thing Arduino-CLI Quick Compile",
+        "ESPTool USB Merged Bin Upload"
+      ],
+      "problemMatcher": []
+    },
+
+    // helper note for corruption-payload testing workflow
+    {
+      "label": "EEPROM Test Note: Enable Corrupt Payload Build",
+      "hide": true,
+      "type": "shell",
+      "command": "echo",
+      "args": [
+        "Enable your one-shot corruption flag in firmware (valid magic + invalid values), then run this workflow.",
+        "After first boot writes corrupt values, disable the flag and rerun normal upload to verify recovery logic."
+      ],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+
+    // workflow 1: bad EEPROM magic / missing record path
+    {
+      "label": "EEPROM Test 1 - Bad Magic (Erase + Compile + Upload + Monitor)",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "ESPTool Erase Flash (EEPROM Test)",
+        "Arduino-CLI Production Quick Compile",
+        "Arduino CLI USB Upload",
+        "Arduino CLI USB Serial Monitor"
+      ],
+      "problemMatcher": []
+    },
+
+    // workflow 2: valid magic + corrupt payload path (requires one-shot corruptor build)
+    {
+      "label": "EEPROM Test 2 - Valid Magic + Corrupt Value (Compile + Upload + Monitor)",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "EEPROM Test Note: Enable Corrupt Payload Build",
+        "Arduino-CLI Production Quick Compile",
+        "Arduino CLI USB Upload",
+        "Arduino CLI USB Serial Monitor"
+      ],
+      "problemMatcher": []
+    },
+
+    // workflow 3: valid magic + valid value path
+    {
+      "label": "EEPROM Test 3 - Valid Magic + Valid Value (Compile + Upload + Monitor)",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "Arduino-CLI Production Quick Compile",
+        "Arduino CLI USB Upload",
+        "Arduino CLI USB Serial Monitor"
+      ],
+      "problemMatcher": []
+    },
+
+    // host-side unit test for extracted EEPROM init logic using MSYS2 g++
+    {
+      "label": "Host Unit Test - EEPROM Init Logic (MSYS2)",
+      "type": "shell",
+      "command": "C:/msys64/usr/bin/bash.exe",
+      "args": [
+        "-lc",
+        "g++ -std=c++17 -O2 -Wall -Wextra -o /d/MyArduino/Projects/ESP32_Scale/PropaneScale/tests/eeprom_init_logic_test.exe /d/MyArduino/Projects/ESP32_Scale/PropaneScale/eeprom_init_logic.cpp /d/MyArduino/Projects/ESP32_Scale/PropaneScale/tests/eeprom_init_logic_test.cpp && /d/MyArduino/Projects/ESP32_Scale/PropaneScale/tests/eeprom_init_logic_test.exe"
+      ],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+
+    // task to generate a single production image using esptool.exe only
+    // requires existing .bootloader.bin, .partitions.bin, and .bin artifacts
+    // %LOCALAPPDATA%/Arduino15/packages/esp32/tools/esptool_py/5.1.0/esptool.exe 
+    // --chip esp32 merge-bin -o PropaneScale.ino.merged.bin 
+    // 0x1000 PropaneScale.ino.bootloader.bin 0x8000 PropaneScale.ino.partitions.bin 0x10000 PropaneScale.ino.bin
     // {
     //   "label": "ESPTool Production File Compile",
     //   "type": "shell",
@@ -294,7 +457,7 @@
      * and the arduino-cli-auto.ps1 script to handle uploads and serial monitoring via OpenOCD
      */
 
-    // // task to start OpenOCD with the ESP-Prog configuration for ESP32
+    // task to start OpenOCD with the ESP-Prog configuration for ESP32
     // {
     //   "label": "JTAG: Start OpenOCD (ESP-Prog)",
     //   "type": "shell",
@@ -318,7 +481,8 @@
     //     }
     //   }
     // },
-    // // task to stop OpenOCD by killing the openocd process
+
+    // task to stop OpenOCD by killing the openocd process
     // {
     //   "label": "JTAG: Stop OpenOCD",
     //   "type": "shell",
@@ -332,7 +496,8 @@
     //   ],
     //   "problemMatcher": []
     // },
-    // // task to build the sketch with debug flags and then start OpenOCD
+
+    // task to build the sketch with debug flags and then start OpenOCD
     // {
     //   "label": "JTAG: Build Debug + Start OpenOCD",
     //   "dependsOrder": "sequence",
@@ -342,7 +507,8 @@
     //   ],
     //   "problemMatcher": []
     // },
-    // // task to stop OpenOCD and then build the sketch without debug flags
+
+    // task to stop OpenOCD and then build the sketch without debug flags
     // {
     //   "label": "JTAG: Stop OpenOCD + Build Production",
     //   "dependsOrder": "sequence",
@@ -352,9 +518,10 @@
     //   ],
     //   "problemMatcher": []
     // },
-    // // task to upload the sketch using ESP-Prog
-    // // uses the arduino-cli-auto.ps1 script to handle the upload process,
-    // // and uploading the compiled sketch to the board
+
+    // task to upload the sketch using ESP-Prog
+    // uses the arduino-cli-auto.ps1 script to handle the upload process,
+    // and uploading the compiled sketch to the board
     // {
     //   "label": "Arduino: Upload (ESP-Prog)",
     //   "type": "shell",
@@ -371,11 +538,12 @@
     //     "-Fqbn",
     //     "esp32:esp32:esp32thing",
     //     "-UploadSpeed",
-    //     "${input:uploadSpeed}"
+    //     "${input:espUploadSpeed}"
     //   ],
     //   "problemMatcher": []
     // },
-    // // task to upload the sketch using USB serial via the arduino-cli-auto.ps1 script
+    
+    // task to upload the sketch using USB serial via the arduino-cli-auto.ps1 script
     // {
     //   "label": "Powershell USB Upload",
     //   "type": "shell",
@@ -391,11 +559,12 @@
     //     "${workspaceFolder}/PropaneScale",
     //     "-Fqbn", "${input:FQBN}",
     //     "-UploadSpeed",
-    //     "${input:uploadSpeed}"
+    //     "${input:espUploadSpeed}"
     //   ],
     //   "problemMatcher": []
     // },
-    // // task to start the serial monitor using the arduino-cli-auto.ps1 script
+    
+    // task to start the serial monitor using the arduino-cli-auto.ps1 script
     // {
     //   "label": "Arduino: Monitor (ESP-Prog)",
     //   "type": "shell",
@@ -413,7 +582,8 @@
     //   "isBackground": true,
     //   "problemMatcher": []
     // },
-    // // task to start the serial monitor using the arduino-cli-auto.ps1 script for USB serial
+    
+    // task to start the serial monitor using the arduino-cli-auto.ps1 script for USB serial
     // {
     //   "label": "USB Com Port Monitor",
     //   "type": "shell",
@@ -431,7 +601,8 @@
     //   "isBackground": true,
     //   "problemMatcher": []
     // },
-    // // task to upload the sketch using USB serial and then start the serial monitor, both via the arduino-cli-auto.ps1 script
+    
+    // task to upload the sketch using USB serial and then start the serial monitor, both via the arduino-cli-auto.ps1 script
     // {
     //   "label": "Arduino: Compile + Upload + Monitor (USB)",
     //   "dependsOrder": "sequence",
@@ -442,7 +613,8 @@
     //   ],
     //   "problemMatcher": []
     // },
-    // // task to detect the COM port of the board using the arduino-cli-auto.ps1 script
+    
+    // task to detect the COM port of the board using the arduino-cli-auto.ps1 script
     // {
     //   "label": "Arduino: Detect Port (ESP-Prog)",
     //   "type": "shell",
