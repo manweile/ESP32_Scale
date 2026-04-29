@@ -31,6 +31,7 @@ bool eepromReady = false;               // Flag to track if EEPROM was successfu
 float maxPropaneLbs = 0.0f;             // Maximum legal propane weight in pounds
 float tankTare = 0.0f;                  // Tare weight of the empty propane tank in pounds
 
+// @todo move to config.h
 // EEPROM sanity limits for persisted values
 constexpr float CAL_FACTOR_ABS_MIN = 100.0f;                // Minimum absolute value for valid calibration factor 
 constexpr float CAL_FACTOR_ABS_MAX = 500000.0f;             // Maximum absolute value for valid calibration factor 
@@ -38,6 +39,7 @@ constexpr float MAX_PROJECT_WEIGHT_LBS = 60.0f;             // Project will neve
 constexpr float TANK_TARE_MIN_LBS = 0.0f;                   // Minimum plausible tare weight for empty propane tank
 constexpr float MAX_PROPANE_MIN_LBS = 0.1f;                 // Minimum plausible maximum propane weight for tank
 
+// @todo move to config.h
 // UI strings
 constexpr char APP_TITLE[] = "Propane Level Scale";
 constexpr char CMD_AUTO_CAL_MSG[] = "Send 'a' to enter automatic calibration mode";
@@ -51,7 +53,6 @@ constexpr char DEFAULT_CALIBRATION_SAVE_FAILED_MSG[] = "Failed to save default c
 constexpr char DEFAULT_CALIBRATION_SAVED_MSG[] = "Default calibration saved to EEPROM.";
 
 // Helper functions for EEPROM workflows
-// validating workflows, and loading/initializing from EEPROM.
 
 /**
  * @brief Validates that an EEPROM calibration factor is finite and plausible.
@@ -186,7 +187,6 @@ void loadOrInitializeEepromValue(
 }
 
 // EEPROM workflows
-// Loading and saving calibration factor, tank tare, and maximum propane weight values to EEPROM.
 
 /**
  * @brief Loads the calibration factor from EEPROM if the magic number is valid.
@@ -319,7 +319,24 @@ bool saveTankTareToEeprom(float tareLbs) {
 }
 
 // Helper functions for user initiated workflows
-// Flushing serial input, parsing non-negative floats, reading averaged units from the scale, and handling user confirmation during calibration.
+
+/**
+ * @brief Computes the load-detection threshold from measured noise.
+ *
+ * @details Reads the current unloaded noise from the scale, multiplies it by 20
+ * as a signal-to-noise margin, then clamps to minimumThresholdLbs so a very
+ * quiet scale still responds to a real load.
+ *
+ * @param {float} minimumThresholdLbs Floor value for the returned threshold in pounds.
+ * @return {float} Computed threshold in pounds: max(noise * 20, minimumThresholdLbs).
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+float computeLoadDetectThreshold(float minimumThresholdLbs) {
+  float noise = fabsf(readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES));
+  float threshold = noise * 20.0f;
+  return (threshold >= minimumThresholdLbs) ? threshold : minimumThresholdLbs;
+}
 
 /**
  * @brief Ensures the HX711 is ready before attempting reads or tare.
@@ -419,6 +436,80 @@ float readAveragedUnits(int readings, int samplesPerReading) {
 
   avgWeight = totalUnits / readings;
   return avgWeight;
+}
+
+/**
+ * @brief Waits for an empty-scale condition or user cancel.
+ *
+ * @details Uses calibrated readings to auto-detect empty scale with a timeout, so workflows do not block.
+ * User can still send 'q' to cancel immediately.
+ *
+ * @param {const char*} cancelMessage Text to print when the user cancels.
+ * @return {bool} True when empty scale is detected, false when cancelled or timeout with non-empty scale.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+bool waitForCalibrationEmptyScale(const char* cancelMessage) {
+  float measuredUnits = 0.0f;           // Current measured weight in pounds
+  int stableEmptyChecks = 0;            // Consecutive readings considered empty
+  unsigned long startTimeMs = millis(); // Start of the waiting period
+  char temp = '\0';                     // User input from the serial interface
+
+  if (!ensureScaleReady("empty scale confirmation")) {
+    return false;
+  }
+
+  // Use calibrated readings and treat near-zero as empty (no propane weight present).
+  scale.set_scale(calibration_factor);
+
+  Serial.println();
+  Serial.println("Remove all weight from scale.");
+  Serial.println("Auto-detect is active.");
+  Serial.print("Empty threshold: +/- ");
+  Serial.print(PLACED_LOAD_THRESHOLD_LBS, 2);
+  Serial.println(" lbs.");
+  Serial.println("Send 'q' to cancel.");
+  Serial.print("Confirmation timeout: ");
+  Serial.print(USER_CONFIRMATION_TIMEOUT_MS / 1000UL);
+  Serial.println(" seconds.");
+
+  // Check for stable readings near zero to auto-confirm empty scale, but allow user to cancel with 'q'.
+  while ((millis() - startTimeMs) < USER_CONFIRMATION_TIMEOUT_MS) {
+    measuredUnits = readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES);
+
+    if (fabsf(measuredUnits) <= PLACED_LOAD_THRESHOLD_LBS) {
+      stableEmptyChecks++;
+      if (stableEmptyChecks >= SETUP_EMPTY_REQUIRED_STABLE_CHECKS) {
+        Serial.println("Empty scale auto-detected, continuing with calibration");
+        Serial.println();
+        return true;
+      }
+    } else {
+      stableEmptyChecks = 0;
+    }
+
+    if (Serial.available()) {
+      temp = Serial.read();
+      if (temp == 'q' || temp == 'Q') {
+        Serial.println(cancelMessage);
+        Serial.println();
+        return false;
+      }
+    }
+
+    delay(100);
+  }
+
+  // Timeout: auto-confirm if the reading remained near zero, otherwise cancel.
+  if (fabsf(measuredUnits) <= PLACED_LOAD_THRESHOLD_LBS) {
+    Serial.println("Empty scale auto-confirmed at timeout (stable scale).");
+    Serial.println();
+    return true;
+  }
+
+  Serial.println("Confirmation timed out: scale not empty; cancelled.");
+  Serial.println();
+  return false;
 }
 
 /**
@@ -525,84 +616,13 @@ bool waitForStartupEmptyScale() {
   return false;
 }
 
-/**
- * @brief Waits for an empty-scale condition or user cancel.
- *
- * @details Uses calibrated readings to auto-detect empty scale with a timeout, so workflows do not block.
- * User can still send 'q' to cancel immediately.
- *
- * @param {const char*} cancelMessage Text to print when the user cancels.
- * @return {bool} True when empty scale is detected, false when cancelled or timeout with non-empty scale.
- *
- * @throws {none} This function does not throw exceptions.
- */
-bool waitForCalibrationEmptyScale(const char* cancelMessage) {
-  float measuredUnits = 0.0f;           // Current measured weight in pounds
-  int stableEmptyChecks = 0;            // Consecutive readings considered empty
-  unsigned long startTimeMs = millis(); // Start of the waiting period
-  char temp = '\0';                     // User input from the serial interface
-
-  if (!ensureScaleReady("empty scale confirmation")) {
-    return false;
-  }
-
-  // Use calibrated readings and treat near-zero as empty (no propane weight present).
-  scale.set_scale(calibration_factor);
-
-  Serial.println();
-  Serial.println("Remove all weight from scale.");
-  Serial.println("Auto-detect is active.");
-  Serial.print("Empty threshold: +/- ");
-  Serial.print(PLACED_LOAD_THRESHOLD_LBS, 2);
-  Serial.println(" lbs.");
-  Serial.println("Send 'q' to cancel.");
-  Serial.print("Confirmation timeout: ");
-  Serial.print(USER_CONFIRMATION_TIMEOUT_MS / 1000UL);
-  Serial.println(" seconds.");
-
-  // Check for stable readings near zero to auto-confirm empty scale, but allow user to cancel with 'q'.
-  while ((millis() - startTimeMs) < USER_CONFIRMATION_TIMEOUT_MS) {
-    measuredUnits = readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES);
-
-    if (fabsf(measuredUnits) <= PLACED_LOAD_THRESHOLD_LBS) {
-      stableEmptyChecks++;
-      if (stableEmptyChecks >= SETUP_EMPTY_REQUIRED_STABLE_CHECKS) {
-        Serial.println("Empty scale auto-detected, continuing with calibration");
-        Serial.println();
-        return true;
-      }
-    } else {
-      stableEmptyChecks = 0;
-    }
-
-    if (Serial.available()) {
-      temp = Serial.read();
-      if (temp == 'q' || temp == 'Q') {
-        Serial.println(cancelMessage);
-        Serial.println();
-        return false;
-      }
-    }
-
-    delay(100);
-  }
-
-  // Timeout: auto-confirm if the reading remained near zero, otherwise cancel.
-  if (fabsf(measuredUnits) <= PLACED_LOAD_THRESHOLD_LBS) {
-    Serial.println("Empty scale auto-confirmed at timeout (stable scale).");
-    Serial.println();
-    return true;
-  }
-
-  Serial.println("Confirmation timed out: scale not empty; cancelled.");
-  Serial.println();
-  return false;
-}
-
 // User initiated functions
-// These functions are called in response to user commands over serial.
-// Perform automatic calibration, display EEPROM values, display current propane readings, manual calibration, re-zero scale, update maximum propane weight value, update tank tare
+// These functions are called in response to user commands over serial
 
+// @todo improve calibration logic clarity and reduce repeated threshold/noise logic between automatic and manual calibration workflows, 
+// since they are very similar except for the user prompts and waiting for user to place known weight vs already having it on at the start of the workflow. 
+// Maybe break out the common logic into helper functions and have the auto vs manual workflows just handle the user interaction 
+// and then call shared helper functions to do the actual calibration factor computation once the known weight is detected on the scale.
 /**
  * @brief Runs automatic calibration using a known reference weight.
  *
@@ -617,7 +637,6 @@ bool waitForCalibrationEmptyScale(const char* cancelMessage) {
 void automaticCalibration() {
   float loadDetectThreshold = 0.0f;     // Threshold to detect when the known weight has been placed on the scale
   float measuredUnits = 0.0f;           // Current measured weight in pounds during the calibration process
-  float unloadedNoise = 0.0f;           // Measured noise level of the scale when it is unloaded
 
   Serial.println();
   Serial.println("Automatic calibration mode");
@@ -641,11 +660,7 @@ void automaticCalibration() {
   scale.set_scale();
   scale.tare();
 
-  unloadedNoise = fabsf(readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES));
-  loadDetectThreshold = unloadedNoise * 20.0f;
-  if (loadDetectThreshold < MINIMUM_LOAD_THRESHOLD) {
-    loadDetectThreshold = MINIMUM_LOAD_THRESHOLD;
-  }
+  loadDetectThreshold = computeLoadDetectThreshold(MINIMUM_LOAD_THRESHOLD);
 
   Serial.print("Place the known weight on the scale: ");
   Serial.print(CAL_KNOWN_WEIGHT_LBS, 2);
@@ -754,7 +769,6 @@ void displayLevel() {
   float propaneLbs = 0.0f;              // Calculated weight of the propane in pounds after subtracting tank tare and platen tare
   float propaneLevel = 0.0f;            // Calculated fill level percentage based on propane weight and maximum legal propane weight for the tank
   float rawLbs = 0.0f;                  // Raw weight reading from the scale in pounds before subtracting tares
-  float unloadedNoise = 0.0f;           // Measured noise level on the scale with no load
 
   if (!ensureScaleReady("level read")) {
     return;
@@ -764,11 +778,7 @@ void displayLevel() {
   scale.set_scale(calibration_factor);
 
   // measure baseline noise with no load to compute a detection threshold (readings are in pounds)
-  unloadedNoise = fabsf(readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES));
-  loadDetectThreshold = unloadedNoise * 20.0f;
-  if (loadDetectThreshold < PLACED_LOAD_THRESHOLD_LBS) {
-    loadDetectThreshold = PLACED_LOAD_THRESHOLD_LBS;
-  }
+  loadDetectThreshold = computeLoadDetectThreshold(PLACED_LOAD_THRESHOLD_LBS);
 
   Serial.println();
   Serial.println("Place propane tank on scale.");
@@ -822,7 +832,6 @@ void manualCalibration() {
   float measuredUnits = 0.0f;                               // Current averaged reading from the scale in pounds during calibration adjustments
   float minStep = fabsf(calibration_factor) * 0.0001f;      // Minimum adjustment step to prevent infinite halving and stalling during fine-tuning
   char temp = '\0';                                         // Temporary variable to hold user input from serial for adjusting calibration factor
-  float unloadedNoise = 0.0f;                               // Measured noise level on the scale with no load
 
   if (adjustmentStep == 0.0f) adjustmentStep = 10.0f;
   if (minStep == 0.0f) minStep = 0.001f;
@@ -850,11 +859,7 @@ void manualCalibration() {
   scale.set_scale();
   scale.tare();
 
-  unloadedNoise = fabsf(readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES));
-  loadDetectThreshold = unloadedNoise * 20.0f;
-  if (loadDetectThreshold < MINIMUM_LOAD_THRESHOLD) {
-    loadDetectThreshold = MINIMUM_LOAD_THRESHOLD;
-  }
+  loadDetectThreshold = computeLoadDetectThreshold(MINIMUM_LOAD_THRESHOLD);
 
   Serial.println("After readings begin, place known weight on scale");
   Serial.println("Waiting for weight placement on scale...");
@@ -1338,10 +1343,12 @@ void loop() {
       case 'A':
         automaticCalibration();
         break;
+      // @todo case 'd' for resetting EEPROM to default cal, known tank weight, propane tank tare, max legal propane values
       case 'e':
       case 'E':
         displayEepromValues();
         break;
+      // @todo case 'h' for displaying this help menu again on demand
       case 'l':
       case 'L':
         displayLevel();
@@ -1350,6 +1357,7 @@ void loop() {
       case 'M':
         manualCalibration();
         break;
+      // @todo case 'p' print current runtime values (cal factor, tare, max, platen tare, etc) for debugging without needing to check EEPROM values
       case 'r':
       case 'R':
         reZeroScale();

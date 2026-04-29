@@ -30,6 +30,7 @@ constexpr int LIVE_SAMPLES = 10;
  * Calibration Constants
  */
 
+// @todo normalize name to DEF_KNOWN_WEIGHT_LBS
 // Known reference weight used during automatic & manual calibration mode (pounds).
 // constexpr float CAL_KNOWN_WEIGHT_LBS = 19.2f;   // wire spool good for 20 lb tanks
 constexpr float CAL_KNOWN_WEIGHT_LBS = 36.8f;   // kitty litter jug of water good for 30 lb tanks
@@ -75,6 +76,7 @@ constexpr unsigned long USER_CONFIRMATION_TIMEOUT_MS = 30000UL;
 // constexpr float DEF_TANK_TARE = 17.0f;
 constexpr float DEF_TANK_TARE = 23.5f;
 
+// @todo normalize name to DEF_MAX_PROPANE_LBS
 // Maximum legal propane weight for a tank is 80% of the tank's total capacity
 // maximum legal propane weight of 20 lb tank is 80% of tank capacity = 16.0 lbs
 // maximum legal propane weight of 30 lb tank is 80% of tank capacity = 24.0 lbs
