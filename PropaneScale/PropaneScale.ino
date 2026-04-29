@@ -21,6 +21,7 @@
 
 // Local library headers
 #include "config.h"                     // Local configuration header defining pin assignments, calibration constants, and EEPROM addresses
+#include "eeprom_init_logic.h"          // EEPROM load-or-default decision logic extracted for local unit testing
 
 // Global class variables
 HX711 scale;                            // HX711 instance for interacting with the load cell amplifier
@@ -58,6 +59,10 @@ constexpr char CMD_TANK_TARE_MSG[] = "Send 't' to set propane tank tare";
 constexpr char CMD_WEIGHT_PROPANE[] = "Send 'w' to set maximum legal propane weight";
 
 // Helper functions for EEPROM workflows
+
+// @todo turn these 3 into one function that takes parameters for the specific value being loaded/saved, 
+// to reduce code duplication between the similar load*FromEeprom and save*ToEeprom functions, 
+// since they all follow the same pattern of checking a magic number and then loading/saving a float value at specific EEPROM addresses.
 
 /**
  * @brief Validates that an EEPROM calibration factor is finite and plausible.
@@ -117,15 +122,10 @@ bool isValidTankTare(float value) {
   return (value >= TANK_TARE_MIN_LBS) && (value <= MAX_PROJECT_WEIGHT_LBS);
 }
 
-// @todo query agent if this function should be split into separate load function and initialize functions to reduce complexity and make it more single responsibility, 
-// since it is currently doing both loading and initializing of EEPROM values in one function, 
-// and it has multiple function pointer parameters which can make it a bit complex to understand and use correctly.
 /**
  * @brief Loads a float from EEPROM or falls back to a default and saves it.
  *
- * @details Attempts to load a persisted value.
- * If loading fails, apply default value, then attempts to save that default value.
- * Prints status messages for both load and initialization paths.
+ * @details Uses extracted load-or-default logic and preserves existing serial status messages.
  *
  * @param {const char*} valueName Human-readable value label for status messages.
  * @param {float} defaultValue Default value to use when no valid EEPROM value exists.
@@ -140,47 +140,39 @@ bool isValidTankTare(float value) {
  * @throws {none} This function does not throw exceptions.
  */
 void loadOrInitializeEepromValue(
-  const char* valueName, float defaultValue, float& targetValue, 
-  bool (*loadFn)(float&), bool (*saveFn)(float), bool (*validateFn)(float), 
-  int decimals, const char* units) 
-  {
-  /**
-   * *loadFn value is one of the "load*FromEeprom" functions: 
-   * which attempt to load the value from EEPROM and return true if successful.
-   * 
-   * *saveFn value is one of the "save*ToEeprom" functions:
-   * which attempt to save the value to EEPROM and return true if successful.
-   * 
-   * *validateFn value is one of the "isValid*>" functions:
-   * which return true if the value is valid. 
-   */
+  const char* valueName, float defaultValue, float& targetValue,
+  bool (*loadFn)(float&), bool (*saveFn)(float), bool (*validateFn)(float),
+  int decimals, const char* units)
+{
+  EepromLoadInitResult initResult = loadOrInitializeFloatValue(
+    defaultValue,
+    targetValue,
+    loadFn,
+    saveFn,
+    validateFn
+  );
 
-  // attempt to load the value from EEPROM with the input load*FromEeprom function pointer
-  if (loadFn(targetValue)) {
-
-    // attempt to validate the loaded value with the input isValid* function pointer
-    if (!validateFn(targetValue)) {
-      Serial.print("Loaded ");
-      Serial.print(valueName);
-      Serial.println(" from EEPROM is invalid. Reverting to default.");
-    } else {
+  if (initResult.status == EEPROM_VALUE_LOADED_VALID) {
     Serial.print("Loaded ");
-      Serial.print(valueName);
-      Serial.print(" from EEPROM: ");
-      Serial.print(targetValue, decimals);
+    Serial.print(valueName);
+    Serial.print(" from EEPROM: ");
+    Serial.print(targetValue, decimals);
 
-      if (units != nullptr) {
-        Serial.println(units);
-      } else {
-        Serial.println();
-      }
-      return;
+    if (units != nullptr) {
+      Serial.println(units);
+    } else {
+      Serial.println();
     }
+    return;
   }
 
-  // Attempt to save the default value with the input save*ToEeprom function pointer
-  targetValue = defaultValue;
-  if (!saveFn(targetValue)) {
+  if (initResult.status == EEPROM_VALUE_INITIALIZED_AFTER_INVALID_LOAD) {
+    Serial.print("Loaded ");
+    Serial.print(valueName);
+    Serial.println(" from EEPROM is invalid. Reverting to default.");
+  }
+
+  if (!initResult.saveSucceeded) {
     Serial.print("Failed to initialize default ");
     Serial.print(valueName);
     Serial.println(" in EEPROM.");
@@ -711,22 +703,21 @@ void automaticCalibration() {
     return;
   }
 
+  // smooth out noise and get a stable measurement for failure check
   Serial.println("Weight detected. Measuring stable reading...");
-
-  // smooth out noise and get a stable measurement for the calibration factor computation
   measuredUnits = readAveragedUnits(CAL_SAMPLES, LIVE_SAMPLES);
-
   if (DEF_KNOWN_WEIGHT_LBS == 0.0f || measuredUnits == 0.0f) {
     Serial.println("Automatic calibration failed: invalid known weight or reading.");
     return;
   }
 
+  // compute the calibration factor and apply it to the scale for verification
   calibration_factor = measuredUnits / DEF_KNOWN_WEIGHT_LBS;
+  scale.set_scale(calibration_factor);
+  measuredUnits = readAveragedUnits(CAL_SAMPLES, LIVE_SAMPLES);
 
   Serial.print("Initial calibration factor estimate: ");
   Serial.println(calibration_factor, 2);
-
-  scale.set_scale(calibration_factor);
   Serial.print("Verified reading: ");
   Serial.print(measuredUnits, 2);
   Serial.println(" lbs");
