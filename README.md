@@ -87,9 +87,9 @@ Edit `PropaneScale/config.h` to change defaults before flashing:
 | `DOUT_PIN` | 16 | HX711 data pin |
 | `BAUD` | 115200 | Serial baud rate |
 | `DEF_CALIBRATION_FACTOR` | -10422.95 | Initial HX711 scale factor |
-| `CAL_KNOWN_WEIGHT_LBS` | 36.8 | Reference weight for automatic calibration (lbs) |
+| `DEF_KNOWN_WEIGHT_LBS` | 36.8 | Reference weight for automatic calibration (lbs) |
 | `DEF_TANK_TARE` | 23.5 | Empty tank tare weight (lbs) — 30 lb tank default |
-| `MAX_PROPANE_LBS` | 24.0 | Maximum legal propane fill (lbs) — 80% of 30 lb tank capacity |
+| `DEF_MAX_PROPANE_LBS` | 24.0 | Maximum legal propane fill (lbs) — 80% of 30 lb tank capacity |
 | `PLATEN_TARE` | 0.33125 | Platform platen tare weight (lbs) |
 
 Commented-out presets for 20 lb and 50 lb reference weights are also provided.
@@ -136,7 +136,7 @@ Scale load: 39.5 lbs, Calculated propane: 15.7 lbs, Level: 65.4%
 
 1. Send `a`
 2. Confirm scale is empty (`y`)
-3. Place the known reference weight defined by `CAL_KNOWN_WEIGHT_LBS`
+3. Place the known reference weight defined by `DEF_KNOWN_WEIGHT_LBS`
 4. Factor is computed and saved automatically
 
 ### Manual
