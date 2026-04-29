@@ -28,29 +28,34 @@ HX711 scale;                            // HX711 instance for interacting with t
 // Global state variables
 float calibration_factor = 0.0f;        // Calibration factor for converting raw HX711 readings to weight in pounds
 bool eepromReady = false;               // Flag to track if EEPROM was successfully initialized
+float knownWeightLbs = 0.0f;            // Known weight for calibration
 float maxPropaneLbs = 0.0f;             // Maximum legal propane weight in pounds
 float tankTare = 0.0f;                  // Tare weight of the empty propane tank in pounds
 
 // @todo move to config.h
 // EEPROM sanity limits for persisted values
-constexpr float CAL_FACTOR_ABS_MIN = 100.0f;                // Minimum absolute value for valid calibration factor 
 constexpr float CAL_FACTOR_ABS_MAX = 500000.0f;             // Maximum absolute value for valid calibration factor 
+constexpr float CAL_FACTOR_ABS_MIN = 100.0f;                // Minimum absolute value for valid calibration factor 
 constexpr float MAX_PROJECT_WEIGHT_LBS = 60.0f;             // Project will never measure a propane tank above nominal 60 lbs
-constexpr float TANK_TARE_MIN_LBS = 0.0f;                   // Minimum plausible tare weight for empty propane tank
 constexpr float MAX_PROPANE_MIN_LBS = 0.1f;                 // Minimum plausible maximum propane weight for tank
+constexpr float TANK_TARE_MIN_LBS = 0.0f;                   // Minimum plausible tare weight for empty propane tank
 
 // @todo move to config.h
 // UI strings
 constexpr char APP_TITLE[] = "Propane Level Scale";
+constexpr char CALIBRATION_SAVE_FAILURE_MSG[] = "Failed to save default calibration to EEPROM.";
+constexpr char CALIBRATION_SAVE_SUCCESS_MSG[] = "Default calibration saved to EEPROM.";
 constexpr char CMD_AUTO_CAL_MSG[] = "Send 'a' to enter automatic calibration mode";
-constexpr char CMD_SHOW_EEPROM_MSG[] = "Send 'e' to display saved EEPROM values";
-constexpr char CMD_SHOW_LEVEL_MSG[] = "Send 'l' to display one propane reading";
+constexpr char CMD_DEFAULT_EEPROM_MSG[] = "Send 'd' to reset EEPROM to default values";
+constexpr char CMD_EEPROM_MSG[] = "Send 'e' to display saved EEPROM values";
+constexpr char CMD_HELP_MSG[] = "Send 'h' to display this help menu";
+constexpr char CMD_KNOWN_WEIGHT_MSG[] = "Send 'k' to enter known weight value for calibration mode";
+constexpr char CMD_LEVEL_MSG[] = "Send 'l' to display one propane percent level reading";
 constexpr char CMD_MANUAL_CAL_MSG[] = "Send 'm' to enter manual calibration mode";
+constexpr char CMD_PRINT_CURRENT_MSG[] = "Send 'p' to print current runtime values";
 constexpr char CMD_REZERO_MSG[] = "Send 'r' to re-zero scale with no propane weight on it";
 constexpr char CMD_TANK_TARE_MSG[] = "Send 't' to set propane tank tare";
-constexpr char CMD_MAX_PROPANE_MSG[] = "Send 'w' to set maximum legal propane weight";
-constexpr char DEFAULT_CALIBRATION_SAVE_FAILED_MSG[] = "Failed to save default calibration to EEPROM.";
-constexpr char DEFAULT_CALIBRATION_SAVED_MSG[] = "Default calibration saved to EEPROM.";
+constexpr char CMD_WEIGHT_PROPANE[] = "Send 'w' to set maximum legal propane weight";
 
 // Helper functions for EEPROM workflows
 
@@ -112,6 +117,9 @@ bool isValidTankTare(float value) {
   return (value >= TANK_TARE_MIN_LBS) && (value <= MAX_PROJECT_WEIGHT_LBS);
 }
 
+// @todo query agent if this function should be split into separate load function and initialize functions to reduce complexity and make it more single responsibility, 
+// since it is currently doing both loading and initializing of EEPROM values in one function, 
+// and it has multiple function pointer parameters which can make it a bit complex to understand and use correctly.
 /**
  * @brief Loads a float from EEPROM or falls back to a default and saves it.
  *
@@ -137,23 +145,20 @@ void loadOrInitializeEepromValue(
   int decimals, const char* units) 
   {
   /**
-   * *loadFn value is one of the "load<workflow>FromEeprom" functions: 
-   * loadCalibrationFromEeprom, loadTankTareFromEeprom, or loadMaxPropaneWeightFromEeprom
+   * *loadFn value is one of the "load*FromEeprom" functions: 
    * which attempt to load the value from EEPROM and return true if successful.
    * 
-   * *saveFn value is one of the "save<workflow>ToEeprom" functions:
-   * saveCalibrationToEeprom, saveTankTareToEeprom, or saveMaxPropaneWeightToEeprom
+   * *saveFn value is one of the "save*ToEeprom" functions:
    * which attempt to save the value to EEPROM and return true if successful.
    * 
-   * *validateFn value is one of the "isValid<workflow>" functions:
-   * isValidCalibrationFactor, isValidTankTare, or isValidMaxPropaneLbs
+   * *validateFn value is one of the "isValid*>" functions:
    * which return true if the value is valid. 
    */
 
-  // attempt to load the value from EEPROM with the input load<workflow>FromEeprom function pointer
+  // attempt to load the value from EEPROM with the input load*FromEeprom function pointer
   if (loadFn(targetValue)) {
 
-    // attempt to validate the loaded value with the input isValid<workflow> function pointer
+    // attempt to validate the loaded value with the input isValid* function pointer
     if (!validateFn(targetValue)) {
       Serial.print("Loaded ");
       Serial.print(valueName);
@@ -173,7 +178,7 @@ void loadOrInitializeEepromValue(
     }
   }
 
-  // Attempt to save the default value with the input save<workflow>ToEeprom function pointer
+  // Attempt to save the default value with the input save*ToEeprom function pointer
   targetValue = defaultValue;
   if (!saveFn(targetValue)) {
     Serial.print("Failed to initialize default ");
@@ -255,6 +260,13 @@ bool loadTankTareFromEeprom(float& tareLbs) {
   return true;
 }
 
+//@todo ask agent if it is possible to write a function that do all of the save*ToEeprom operations with the magic number and value together, 
+// to reduce repeated code between the different save*ToEeprom functions, 
+// since they are very similar except for the specific magic number and EEPROM addresses they use. 
+// For example, we could have a generic function like "saveFloatWithMagicToEeprom(float value, uint32_t magic, int magicAddr, int valueAddr)" 
+// that handles writing both the magic and value to EEPROM and committing, 
+// and then the specific save*ToEeprom functions would just call this generic function with the appropriate parameters for their specific value. 
+// This would reduce code duplication and centralize the logic for saving values with magic numbers to EEPROM.
 /**
  * @brief Saves the given calibration factor to EEPROM with a magic number for validation.
  * 
@@ -497,6 +509,9 @@ bool waitForCalibrationEmptyScale(const char* cancelMessage) {
       }
     }
 
+    // @todo query agent if this should be removed 
+    // or if it is necessary to have some delay here to avoid hammering the HX711 with continuous reads in a tight loop,  
+    // since the HX711 may have a limited sample rate and continuous reads without delay could cause issues 
     delay(100);
   }
 
@@ -532,6 +547,10 @@ bool waitForLoadPlacement(float loadDetectThreshold, float& measuredUnits, const
     if (fabsf(measuredUnits) >= loadDetectThreshold) {
       return true;
     }
+  
+    // @todo query agent if this should be removed 
+    // or if it is necessary to have some delay here to avoid hammering the HX711 with continuous reads in a tight loop,  
+    // since the HX711 may have a limited sample rate and continuous reads without delay could cause issues 
     delay(100);
   }
 
@@ -603,6 +622,9 @@ bool waitForStartupEmptyScale() {
       }
     }
 
+    // @todo query agent if this should be removed 
+    // or if it is necessary to have some delay here to avoid hammering the HX711 with continuous reads in a tight loop,  
+    // since the HX711 may have a limited sample rate and continuous reads without delay could cause issues
     delay(100);
   }
 
@@ -619,10 +641,6 @@ bool waitForStartupEmptyScale() {
 // User initiated functions
 // These functions are called in response to user commands over serial
 
-// @todo improve calibration logic clarity and reduce repeated threshold/noise logic between automatic and manual calibration workflows, 
-// since they are very similar except for the user prompts and waiting for user to place known weight vs already having it on at the start of the workflow. 
-// Maybe break out the common logic into helper functions and have the auto vs manual workflows just handle the user interaction 
-// and then call shared helper functions to do the actual calibration factor computation once the known weight is detected on the scale.
 /**
  * @brief Runs automatic calibration using a known reference weight.
  *
@@ -635,23 +653,33 @@ bool waitForStartupEmptyScale() {
  * @throws {none} This function does not throw exceptions.
  */
 void automaticCalibration() {
-  float loadDetectThreshold = 0.0f;     // Threshold to detect when the known weight has been placed on the scale
-  float measuredUnits = 0.0f;           // Current measured weight in pounds during the calibration process
+  float loadDetectThreshold = 0.0f;     // Threshold of known weight placement
+  float measuredUnits = 0.0f;           // Current measured weight in pounds
 
   Serial.println();
   Serial.println("Automatic calibration mode");
 
+  // non-modal check to ensure the scale is responding before prompting the user to interact with it, 
+  // so we don't get stuck waiting for them to place weight on a non-responsive scale
   if (!ensureScaleReady("automatic calibration")) {
     return;
   }
 
+  // non-modal wait for empty scale condition with user override
   if (!waitForCalibrationEmptyScale("Automatic calibration cancelled")) {
+
+    // fall back to default calibration factor if we can't confirm an empty scale
+    // if eeprom save fails, we still have the default calibration factor from setup in memory, 
+    // but it will not be persisted across power cycles
     calibration_factor = DEF_CALIBRATION_FACTOR;
-    if (!saveCalibrationToEeprom(calibration_factor)) {
-      Serial.println(DEFAULT_CALIBRATION_SAVE_FAILED_MSG);
+    bool defCalibrationSaved = saveCalibrationToEeprom(calibration_factor);
+
+    if (!defCalibrationSaved) {
+      Serial.println(CALIBRATION_SAVE_FAILURE_MSG);
     } else {
-      Serial.println(DEFAULT_CALIBRATION_SAVED_MSG);
+      Serial.println(CALIBRATION_SAVE_SUCCESS_MSG);
     }
+
     return;
   }
 
@@ -660,41 +688,53 @@ void automaticCalibration() {
   scale.set_scale();
   scale.tare();
 
+  // measure noise to compute a load detection threshold, 
+  // for non-modal auto-detect when the known weight is placed on the scale
   loadDetectThreshold = computeLoadDetectThreshold(MINIMUM_LOAD_THRESHOLD);
 
+  // @todo need to tell user the specific known weight value that was saved in eeprom for calibration, 
+  // so they place correct weight to place on the scale for calibration, 
+  // instead of just a generic prompt to place a known weight,
+  // since the specific value matters for the calibration factor computation
+
   Serial.print("Place the known weight on the scale: ");
-  Serial.print(CAL_KNOWN_WEIGHT_LBS, 2);
+  Serial.print(DEF_KNOWN_WEIGHT_LBS, 2);
   Serial.println(" lbs");
   Serial.println("Waiting for weight placement on scale...");
   Serial.print("Load placement timeout: ");
   Serial.print(SETUP_EMPTY_MAX_WAIT_MS / 1000UL);
   Serial.println(" seconds.");
 
-  if (!waitForLoadPlacement(loadDetectThreshold, measuredUnits, "Weight placement timed out; calibration cancelled.")) {
+  // non-modal timed wait for load placement
+  bool loadPlaced = waitForLoadPlacement(loadDetectThreshold, measuredUnits, "Weight placement timed out; calibration cancelled.");
+  if (!loadPlaced) {
     return;
   }
 
   Serial.println("Weight detected. Measuring stable reading...");
+
+  // smooth out noise and get a stable measurement for the calibration factor computation
   measuredUnits = readAveragedUnits(CAL_SAMPLES, LIVE_SAMPLES);
 
-  if (CAL_KNOWN_WEIGHT_LBS == 0.0f || measuredUnits == 0.0f) {
+  if (DEF_KNOWN_WEIGHT_LBS == 0.0f || measuredUnits == 0.0f) {
     Serial.println("Automatic calibration failed: invalid known weight or reading.");
     return;
   }
 
-  calibration_factor = measuredUnits / CAL_KNOWN_WEIGHT_LBS;
+  calibration_factor = measuredUnits / DEF_KNOWN_WEIGHT_LBS;
 
   Serial.print("Initial calibration factor estimate: ");
   Serial.println(calibration_factor, 2);
 
   scale.set_scale(calibration_factor);
   Serial.print("Verified reading: ");
-  Serial.print(readAveragedUnits(CAL_SAMPLES, LIVE_SAMPLES), 2);
+  Serial.print(measuredUnits, 2);
   Serial.println(" lbs");
   Serial.print("Automatic calibration complete, computed calibration factor: ");
   Serial.println(calibration_factor, 2);
 
-  if (!saveCalibrationToEeprom(calibration_factor)) {
+  bool autoCalSaved = saveCalibrationToEeprom(calibration_factor); 
+  if (!autoCalSaved) {
     Serial.println("Failed to save calibration to EEPROM.");
   } else {
     Serial.println("Calibration saved to EEPROM.");
@@ -833,23 +873,35 @@ void manualCalibration() {
   float minStep = fabsf(calibration_factor) * 0.0001f;      // Minimum adjustment step to prevent infinite halving and stalling during fine-tuning
   char temp = '\0';                                         // Temporary variable to hold user input from serial for adjusting calibration factor
 
+  // Ensure the initial step size and minimum step are not zero to allow for adjustments, 
+  // even if the current calibration factor is zero (such as on first setup).
   if (adjustmentStep == 0.0f) adjustmentStep = 10.0f;
   if (minStep == 0.0f) minStep = 0.001f;
   
   Serial.println();
   Serial.print("Manual calibration mode");
 
+  // non-modal check to ensure the scale is responding before prompting the user to interact with it, 
+  // so we don't get stuck waiting for them to place weight on a non-responsive scale
   if (!ensureScaleReady("manual calibration")) {
     return;
   }
 
+  // non-modal wait for empty scale condition with user override
   if (!waitForCalibrationEmptyScale("Manual calibration cancelled")) {
+
+    // fall back to default calibration factor if we can't confirm an empty scale
+    // if eeprom save fails, we still have the default calibration factor from setup in memory, 
+    // but it will not be persisted across power cycles
     calibration_factor = DEF_CALIBRATION_FACTOR;
-    if (!saveCalibrationToEeprom(calibration_factor)) {
-      Serial.println(DEFAULT_CALIBRATION_SAVE_FAILED_MSG);
+    bool defCalibrationSaved = saveCalibrationToEeprom(calibration_factor);
+    
+    if (!defCalibrationSaved) {
+      Serial.println(CALIBRATION_SAVE_FAILURE_MSG);
     } else {
-      Serial.println(DEFAULT_CALIBRATION_SAVED_MSG);
+      Serial.println(CALIBRATION_SAVE_SUCCESS_MSG);
     }
+
     return;
   }
 
@@ -859,7 +911,14 @@ void manualCalibration() {
   scale.set_scale();
   scale.tare();
 
+  // measure noise to compute a load detection threshold, 
+  // for non-modal auto-detect when the known weight is placed on the scale
   loadDetectThreshold = computeLoadDetectThreshold(MINIMUM_LOAD_THRESHOLD);
+
+  // @todo need to tell user the specific known weight value that was saved in eeprom for calibration, 
+  // so they place correct weight to place on the scale for calibration, 
+  // instead of just a generic prompt to place a known weight,
+  // since the specific value matters for the calibration factor computation
 
   Serial.println("After readings begin, place known weight on scale");
   Serial.println("Waiting for weight placement on scale...");
@@ -867,13 +926,14 @@ void manualCalibration() {
   Serial.print(SETUP_EMPTY_MAX_WAIT_MS / 1000UL);
   Serial.println(" seconds.");
 
-  if (!waitForLoadPlacement(loadDetectThreshold, measuredUnits, "Weight placement timed out; calibration cancelled.")) {
+  bool loadPlaced = waitForLoadPlacement(loadDetectThreshold, measuredUnits, "Weight placement timed out; calibration cancelled.");
+  if (!loadPlaced) {
     return;
   }
 
   Serial.println("Weight detected. Adjust calibration until the reading matches the known weight.");
-  Serial.println("Press + (plus) increase calibration factor");
-  Serial.println("Press - (minus) to decrease calibration factor");
+  Serial.println("Press numeric keypad+ (plus) increase calibration factor");
+  Serial.println("Press numeric keypad- (minus) to decrease calibration factor");
   Serial.println("(step halves on direction reversal)");
 
   while (true) {
@@ -903,7 +963,8 @@ void manualCalibration() {
         Serial.print("Manual calibration complete, computed calibration factor: ");
         Serial.println(calibration_factor, 2);
 
-        if (!saveCalibrationToEeprom(calibration_factor)) {
+        bool manualCalSaved = saveCalibrationToEeprom(calibration_factor);
+        if (!manualCalSaved) {
           Serial.println("Failed to save calibration to EEPROM.");
         } else {
           Serial.println("Calibration saved to EEPROM.");
@@ -911,6 +972,8 @@ void manualCalibration() {
         return;
       }
     } else {
+      // @todo query agent if it is necessary to have some delay here to avoid hammering the HX711 with continuous reads in a tight loop,  
+      // since the HX711 may have a limited sample rate and continuous reads without delay could cause issues
       delay(50);
     }
   }
@@ -1252,11 +1315,13 @@ void setup() {
   // If load fails, we fall back to defaults and attempt to save those defaults to EEPROM for future use
   eepromReady = EEPROM.begin(EEPROM_SIZE_BYTES);
 
+  // @todo add known tank weight to eeprom saves and loads, 
+  // and add a user command for updating the known tank weight as well, 
   if (!eepromReady) {
     Serial.println("EEPROM init failed. Using default calibration factor, tank tare, and max propane weight.");
     calibration_factor = DEF_CALIBRATION_FACTOR;
     tankTare = DEF_TANK_TARE;
-    maxPropaneLbs = MAX_PROPANE_LBS;
+    maxPropaneLbs = DEF_MAX_PROPANE_LBS;
   } else {
     loadOrInitializeEepromValue(
       "calibration factor",
@@ -1282,7 +1347,7 @@ void setup() {
 
     loadOrInitializeEepromValue(
       "max propane weight",
-      MAX_PROPANE_LBS,
+      DEF_MAX_PROPANE_LBS,
       maxPropaneLbs,
       loadMaxPropaneWeightFromEeprom,
       saveMaxPropaneWeightToEeprom,
@@ -1308,12 +1373,12 @@ void setup() {
   Serial.println();
 
   Serial.println(CMD_AUTO_CAL_MSG);
-  Serial.println(CMD_SHOW_EEPROM_MSG);
-  Serial.println(CMD_SHOW_LEVEL_MSG);
+  Serial.println(CMD_EEPROM_MSG);
+  Serial.println(CMD_LEVEL_MSG);
   Serial.println(CMD_MANUAL_CAL_MSG);
   Serial.println(CMD_REZERO_MSG);
   Serial.println(CMD_TANK_TARE_MSG);
-  Serial.println(CMD_MAX_PROPANE_MSG);
+  Serial.println(CMD_WEIGHT_PROPANE);
 }
 
 /**
@@ -1349,6 +1414,7 @@ void loop() {
         displayEepromValues();
         break;
       // @todo case 'h' for displaying this help menu again on demand
+      // @todo case'k' for entering known weight value for calibration mode
       case 'l':
       case 'L':
         displayLevel();
@@ -1357,7 +1423,7 @@ void loop() {
       case 'M':
         manualCalibration();
         break;
-      // @todo case 'p' print current runtime values (cal factor, tare, max, platen tare, etc) for debugging without needing to check EEPROM values
+      // @todo case 'p' print current runtime values (cal factor, tank tare, max legal propane weight, known tank weight) for debugging without needing to check EEPROM values
       case 'r':
       case 'R':
         reZeroScale();
