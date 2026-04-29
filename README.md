@@ -72,7 +72,7 @@ Upload:
 ```bash
 arduino-cli upload -v -p "${input:COMPort}" --fqbn "${input:FQBN}" --input-dir "${workspaceFolder}/PropaneScale/build/${input:FQBNDIR}" "${workspaceFolder}/PropaneScale"
 
-esptool.exe --verbose --chip esp32 --port "${input:COMPort}" --baud "${input:uploadSpeed}" write-flash -z 0x0 "${input:openMergedBinDialog}"
+esptool.exe --verbose --chip esp32 --port "${input:COMPort}" --baud "${input:espUploadSpeed}" write-flash -z 0x0 "${input:openMergedBinDialog}"
 ```
 
 VS Code tasks for compile, clean rebuild, upload, and serial monitor are provided in `.vscode/tasks.json`.
