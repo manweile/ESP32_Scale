@@ -152,13 +152,13 @@ if (!Serial.available()) {
 
 ### 2. **Repeated `scale.set_scale()` Calls**
 ```cpp
-// Line 415 (displayLevel)
+// Line 415 (liquidLevel)
 scale.set_scale(calibration_factor);
 
 // Line 536 (waitForCalibrationEmptyScale)  
 scale.set_scale(calibration_factor);
 
-// Line 750 (also displayLevel)
+// Line 750 (also liquidLevel)
 scale.set_scale(calibration_factor);
 
 // Line 861 (manualCalibration loop - called every iteration!)
@@ -184,7 +184,7 @@ if (calibration_factor != lastSetFactor) {
 
 ### 3. **Multiple Serial.print() Calls**
 ```cpp
-// Lines 783-791 (displayLevel)
+// Lines 783-791 (liquidLevel)
 Serial.print("Scale load: ");
 Serial.print(rawLbs, 1);
 Serial.print(" lbs, ");
