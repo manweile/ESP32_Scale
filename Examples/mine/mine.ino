@@ -163,7 +163,7 @@ void autoCalibrate(float knownWeightLbs) {
  * @brief Runs the interactive serial calibration workflow.
  *
  * @details Resets the current scale calibration state, tares the scale, prints the
- * zero factor, and then allows the operator to adjust calibration_factor using serial
+ * zero factor, and then allows the operator to adjust calibrationFactor using serial
  * commands until the displayed weight matches a known reference load.
  *
  * @return {void} No value is returned.

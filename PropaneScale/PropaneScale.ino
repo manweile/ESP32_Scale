@@ -28,7 +28,7 @@
 HX711 scale;                            // HX711 instance for interacting with the load cell amplifier
 
 // Global state variables
-float calibration_factor = 0.0f;        // Calibration factor for converting raw HX711 readings to weight in pounds
+float calibrationFactor = 0.0f;        // Calibration factor for converting raw HX711 readings to weight in pounds
 bool eepromReady = false;               // Flag to track if EEPROM was successfully initialized
 float knownWeightLbs = 0.0f;            // Known weight for calibration
 float maxPropaneLbs = 0.0f;             // Maximum legal propane weight in pounds
@@ -41,24 +41,31 @@ enum class CalMode  : uint8_t { NONE, AUTO, MANUAL, REZERO };
 // Calibration state enum to manage multi-step calibration workflows and user prompts
 enum class CalState : uint8_t { IDLE, WAIT_EMPTY, WAIT_LOAD, ADJUSTING };
 
+/**
+ * @struct CalContext
+ * 
+ * @brief Struct to hold state for calibration workflows.
+ * 
+ * @details Contains variables that allow managing complex calibration workflows.
+  */
 struct CalContext {
-  float         adjustmentStep     = 0.0f;                  // manual mode: current factor nudge size
-  bool          hasManualDisplay   = false;                 // manual mode: whether we have a prior display snapshot to compare against
-  int           lastDirection      = 0;                     // manual mode: +1 = last press +, -1 = last press -
-  int           lastFactorHundredth = 0;                    // manual mode: last displayed factor, scaled by 100 (2 decimal places)
-  int           lastReadingTenth   = 0;                     // manual mode: last displayed reading, scaled by 10 (1 decimal place)
-  int           lastStepTenThousandth = 0;                  // manual mode: last displayed step, scaled by 10000 (4 decimal places)
-  float         loadDetectThreshold = 0.0f;                 // noise-derived threshold for weight detection
-  float         measuredUnits      = 0.0f;                  // last averaged reading in pounds
-  float         minStep            = 0.0f;                  // manual mode: floor for adjustmentStep
-  CalMode       mode               = CalMode::NONE;         // current calibration mode, or NONE when not in a calibration workflow
-  float         originalCalibrationFactor = 0.0f;           // manual mode: calibration factor captured at start for cancel/restore
-  int           stableEmptyChecks  = 0;                     // consecutive empty-scale readings in WAIT_EMPTY
-  CalState      state              = CalState::IDLE;        // current state within the calibration workflow, used to manage multi-step processes and user prompts
-  unsigned long stateStartMs       = 0;                     // millis() when current state was entered
+  float         adjustmentStep     = 0.0f;                  /**< manual mode: current factor nudge size */
+  bool          hasManualDisplay   = false;                 /**< manual mode: whether we have a prior display snapshot to compare against */
+  int           lastDirection      = 0;                     /**< manual mode: +1 = last press +, -1 = last press - */
+  int           lastFactorHundredth = 0;                    /**< manual mode: last displayed factor, scaled by 100 (2 decimal places) */
+  int           lastReadingTenth   = 0;                     /**< manual mode: last displayed reading, scaled by 10 (1 decimal place) */
+  int           lastStepTenThousandth = 0;                  /**< manual mode: last displayed step, scaled by 10000 (4 decimal places) */
+  float         loadDetectThreshold = 0.0f;                 /**< noise-derived threshold for weight detection */
+  float         measuredUnits      = 0.0f;                  /**< last averaged reading in pounds */
+  float         minStep            = 0.0f;                  /**< manual mode: floor for adjustmentStep */
+  CalMode       mode               = CalMode::NONE;         /**< current calibration mode, or NONE when not in a calibration workflow */
+  float         originalCalibrationFactor = 0.0f;           /**< manual mode: calibration factor captured at start for cancel/restore */
+  int           stableEmptyChecks  = 0;                     /**< consecutive empty-scale readings in WAIT_EMPTY */
+  CalState      state              = CalState::IDLE;        /**< current state within the calibration workflow, used to manage multi-step processes and user prompts */
+  unsigned long stateStartMs       = 0;                     /**< millis() when current state was entered */
 };
 
-static CalContext calCtx;                                   // Calibration context instance to hold state for calibration workflows
+static CalContext calCtx;                                   /**< Calibration context instance to hold state for calibration workflows */
 
 // @todo move to config.h
 // EEPROM sanity limits for persisted values
@@ -103,11 +110,13 @@ constexpr char CMD_TANK_TARE_MSG[] = "Send 't' to set propane tank tare";
  * @throws {none} This function does not throw exceptions.
  */
 bool isValidCalibrationFactor(float value) {
+  float magnitude = 0.0f;
+
   if (!isfinite(value)) {
     return false;
   }
 
-  float magnitude = fabsf(value);
+  magnitude = fabsf(value);
   return (magnitude >= CAL_FACTOR_ABS_MIN) && (magnitude <= CAL_FACTOR_ABS_MAX);
 }
 
@@ -123,11 +132,14 @@ bool isValidCalibrationFactor(float value) {
  * @throws {none} This function does not throw exceptions.
  */
 bool isValidMaxPropaneLbs(float value) {
+  float magnitude = 0.0f;
+
   if (!isfinite(value)) {
     return false;
   }
 
-  return (value >= MAX_PROPANE_MIN_LBS) && (value <= MAX_PROJECT_WEIGHT_LBS);
+  magnitude = fabsf(value);
+  return (magnitude >= MAX_PROPANE_MIN_LBS) && (magnitude <= MAX_PROJECT_WEIGHT_LBS);
 }
 
 /**
@@ -142,11 +154,14 @@ bool isValidMaxPropaneLbs(float value) {
  * @throws {none} This function does not throw exceptions.
  */
 bool isValidTankTare(float value) {
+  float magnitude = 0.0f;
+
   if (!isfinite(value)) {
     return false;
   }
 
-  return (value >= TANK_TARE_MIN_LBS) && (value <= MAX_PROJECT_WEIGHT_LBS);
+  magnitude = fabsf(value);
+  return (magnitude >= TANK_TARE_MIN_LBS) && (magnitude <= MAX_PROJECT_WEIGHT_LBS);
 }
 
 /**
@@ -171,13 +186,9 @@ void loadOrInitializeEepromValue(
   bool (*loadFn)(float&), bool (*saveFn)(float), bool (*validateFn)(float),
   int decimals, const char* units)
 {
-  EepromLoadInitResult initResult = loadOrInitializeFloatValue(
-    defaultValue,
-    targetValue,
-    loadFn,
-    saveFn,
-    validateFn
-  );
+  // Call shared load-or-default logic and capture result for status reporting
+  EepromLoadInitResult initResult;
+  initResult = loadOrInitializeFloatValue(defaultValue, targetValue, loadFn, saveFn, validateFn);
 
   if (initResult.status == EEPROM_VALUE_LOADED_VALID) {
     Serial.print("Loaded ");
@@ -483,7 +494,7 @@ static void transitionFromWaitEmpty() {
   if (calCtx.mode == CalMode::REZERO) {
     scale.set_scale();
     scale.tare();
-    scale.set_scale(calibration_factor);
+    scale.set_scale(calibrationFactor);
     Serial.println("Scale re-zero complete.");
     calCtx.state = CalState::IDLE;
     calCtx.mode  = CalMode::NONE;
@@ -588,17 +599,17 @@ void tickCalibration() {
         return;
       }
 
-      calibration_factor = calCtx.measuredUnits / DEF_KNOWN_WEIGHT_LBS;
-      scale.set_scale(calibration_factor);
+      calibrationFactor = calCtx.measuredUnits / DEF_KNOWN_WEIGHT_LBS;
+      scale.set_scale(calibrationFactor);
       float verifiedUnits = readAveragedUnits(CAL_SAMPLES, LIVE_SAMPLES);
       Serial.print("Initial calibration factor estimate: ");
-      Serial.println(calibration_factor, 2);
+      Serial.println(calibrationFactor, 2);
       Serial.print("Verified reading: ");
       Serial.print(verifiedUnits, 2);
       Serial.println(" lbs");
       Serial.print("Automatic calibration complete, computed calibration factor: ");
-      Serial.println(calibration_factor, 2);
-      if (!saveCalibrationToEeprom(calibration_factor)) {
+      Serial.println(calibrationFactor, 2);
+      if (!saveCalibrationToEeprom(calibrationFactor)) {
         Serial.println("Failed to save calibration to EEPROM.");
       } else {
         Serial.println("Calibration saved to EEPROM.");
@@ -619,10 +630,10 @@ void tickCalibration() {
   }
 
   if (calCtx.state == CalState::ADJUSTING) {
-    scale.set_scale(calibration_factor);
+    scale.set_scale(calibrationFactor);
     float readingLbs = scale.get_units();
     int readingTenth = static_cast<int>(lroundf(readingLbs * 10.0f));
-    int factorHundredth = static_cast<int>(lroundf(calibration_factor * 100.0f));
+    int factorHundredth = static_cast<int>(lroundf(calibrationFactor * 100.0f));
     int stepTenThousandth = static_cast<int>(lroundf(calCtx.adjustmentStep * 10000.0f));
 
     if (!calCtx.hasManualDisplay ||
@@ -632,7 +643,7 @@ void tickCalibration() {
       Serial.print("Reading: ");
       Serial.print(readingLbs, 1);
       Serial.print(" lbs  factor: ");
-      Serial.print(calibration_factor, 2);
+      Serial.print(calibrationFactor, 2);
       Serial.print("  step: ");
       Serial.println(calCtx.adjustmentStep, 4);
 
@@ -673,15 +684,15 @@ void handleCalibrationInput(char serialchar) {
 
     if (calCtx.mode == CalMode::AUTO) {
       Serial.println("Automatic calibration cancelled.");
-      calibration_factor = DEF_CALIBRATION_FACTOR;
-      if (!saveCalibrationToEeprom(calibration_factor)) {
+      calibrationFactor = DEF_CALIBRATION_FACTOR;
+      if (!saveCalibrationToEeprom(calibrationFactor)) {
         Serial.println(CALIBRATION_SAVE_FAILURE_MSG);
       } else {
         Serial.println(CALIBRATION_SAVE_SUCCESS_MSG);
       }
     } else if (calCtx.mode == CalMode::MANUAL) {
-      calibration_factor = calCtx.originalCalibrationFactor;
-      scale.set_scale(calibration_factor);
+      calibrationFactor = calCtx.originalCalibrationFactor;
+      scale.set_scale(calibrationFactor);
       Serial.println("Manual calibration cancelled. Changes were not saved.");
     } else if (calCtx.mode == CalMode::REZERO) {
       Serial.println("Runtime re-zero cancelled.");
@@ -697,18 +708,18 @@ void handleCalibrationInput(char serialchar) {
       if (calCtx.lastDirection == -1) {
         calCtx.adjustmentStep = max(calCtx.adjustmentStep * 0.5f, calCtx.minStep);
       }
-      calibration_factor  += calCtx.adjustmentStep;
+      calibrationFactor  += calCtx.adjustmentStep;
       calCtx.lastDirection = 1;
     } else if (serialchar == '-') {
       if (calCtx.lastDirection == 1) {
         calCtx.adjustmentStep = max(calCtx.adjustmentStep * 0.5f, calCtx.minStep);
       }
-      calibration_factor  -= calCtx.adjustmentStep;
+      calibrationFactor  -= calCtx.adjustmentStep;
       calCtx.lastDirection = -1;
     } else if (serialchar == 's' || serialchar == 'S') {
       Serial.print("Manual calibration complete, computed calibration factor: ");
-      Serial.println(calibration_factor, 2);
-      if (!saveCalibrationToEeprom(calibration_factor)) {
+      Serial.println(calibrationFactor, 2);
+      if (!saveCalibrationToEeprom(calibrationFactor)) {
         Serial.println("Failed to save calibration to EEPROM.");
       } else {
         Serial.println("Calibration saved to EEPROM.");
@@ -716,8 +727,8 @@ void handleCalibrationInput(char serialchar) {
       calCtx.state = CalState::IDLE;
       calCtx.mode  = CalMode::NONE;
     } else if (serialchar == 'q' || serialchar == 'Q') {
-      calibration_factor = calCtx.originalCalibrationFactor;
-      scale.set_scale(calibration_factor);
+      calibrationFactor = calCtx.originalCalibrationFactor;
+      scale.set_scale(calibrationFactor);
       Serial.println("Manual calibration cancelled. Changes were not saved.");
       calCtx.state = CalState::IDLE;
       calCtx.mode  = CalMode::NONE;
@@ -794,7 +805,7 @@ bool waitForStartupEmptyScale() {
   Serial.println(F("Timeout expiry with stable scale values auto-confirms taring workflow."));
   Serial.println(F("Send 'q' to skip startup tare."));
   
-  scale.set_scale(calibration_factor);
+  scale.set_scale(calibrationFactor);
 
   // Establish baseline before tare; stability is checked relative to this reading.
   baseline = readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES);
@@ -866,7 +877,7 @@ void automaticCalibration() {
 
   Serial.println();
   Serial.println("Automatic calibration mode");
-  scale.set_scale(calibration_factor);
+  scale.set_scale(calibrationFactor);
 
   Serial.println();
   Serial.println("Remove all weight from scale.");
@@ -960,7 +971,7 @@ void liquidLevel() {
   }
 
   // apply the current calibration factor to convert raw readings to weight in pounds
-  scale.set_scale(calibration_factor);
+  scale.set_scale(calibrationFactor);
 
   // measure baseline noise with no load to compute a detection threshold (readings are in pounds)
   loadDetectThreshold = computeLoadDetectThreshold(PLACED_LOAD_THRESHOLD_LBS);
@@ -1042,14 +1053,14 @@ void manualCalibration() {
     return;
   }
 
-  float step    = fabsf(calibration_factor) * 0.01f;
-  float minStep = fabsf(calibration_factor) * 0.0001f;
+  float step    = fabsf(calibrationFactor) * 0.01f;
+  float minStep = fabsf(calibrationFactor) * 0.0001f;
   if (step    == 0.0f) step    = 10.0f;
   if (minStep == 0.0f) minStep = 0.001f;
 
   Serial.println();
   Serial.println("Manual calibration mode");
-  scale.set_scale(calibration_factor);
+  scale.set_scale(calibrationFactor);
 
   Serial.println();
   Serial.println("Remove all weight from scale.");
@@ -1068,7 +1079,7 @@ void manualCalibration() {
   calCtx.measuredUnits     = 0.0f;
   calCtx.minStep           = minStep;
   calCtx.mode              = CalMode::MANUAL;
-  calCtx.originalCalibrationFactor = calibration_factor;
+  calCtx.originalCalibrationFactor = calibrationFactor;
   calCtx.stableEmptyChecks = 0;
   calCtx.state             = CalState::WAIT_EMPTY;
   calCtx.stateStartMs      = millis();
@@ -1097,7 +1108,7 @@ void reZero() {
 
   Serial.println();
   Serial.println("Runtime re-zero requested.");
-  scale.set_scale(calibration_factor);
+  scale.set_scale(calibrationFactor);
 
   Serial.println();
   Serial.println("Remove all weight from scale.");
@@ -1429,14 +1440,14 @@ void setup() {
   // and add a user command for updating the known tank weight as well, 
   if (!eepromReady) {
     Serial.println("EEPROM init failed. Using default calibration factor, tank tare, and max propane weight.");
-    calibration_factor = DEF_CALIBRATION_FACTOR;
+    calibrationFactor = DEF_CALIBRATION_FACTOR;
     tankTare = DEF_TANK_TARE;
     maxPropaneLbs = DEF_MAX_PROPANE_LBS;
   } else {
     loadOrInitializeEepromValue(
       "calibration factor",
       DEF_CALIBRATION_FACTOR,
-      calibration_factor,
+      calibrationFactor,
       loadCalibrationFromEeprom,
       saveCalibrationToEeprom,
       isValidCalibrationFactor,
