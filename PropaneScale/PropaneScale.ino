@@ -856,7 +856,7 @@ void liquidLevel() {
  * 
  * @throws {none} This function does not throw exceptions.
  */
-void helpmenu() {
+void helpMenu() {
   Serial.println();
   Serial.println(CMD_AUTO_CAL_MSG);
   Serial.println(CMD_EEPROM_MSG);
@@ -1383,7 +1383,7 @@ void setup() {
   }
   Serial.println();
 
-  helpmenu();
+  helpMenu();
 }
 
 /**
@@ -1420,7 +1420,7 @@ void loop() {
         break;
       case 'h':
       case 'H':
-        helpmenu();
+        helpMenu();
         break;
       // @todo case'k' for entering known weight value for calibration mode
       case 'l':
