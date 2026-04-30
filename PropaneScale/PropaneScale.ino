@@ -9,6 +9,7 @@
  * 
  * @version 0.1
  * @date 2024-06-01
+ * @copyright Copyright (c) 2024
  */
 
 // Standard library headers
