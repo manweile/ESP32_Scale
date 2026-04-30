@@ -34,6 +34,28 @@ float knownWeightLbs = 0.0f;            // Known weight for calibration
 float maxPropaneLbs = 0.0f;             // Maximum legal propane weight in pounds
 float tankTare = 0.0f;                  // Tare weight of the empty propane tank in pounds
 
+// Calibration state machine variables and constants
+
+// Calibration mode and state enums to manage user-initiated calibration workflows
+enum class CalMode  : uint8_t { NONE, AUTO, MANUAL, REZERO };
+// Calibration state enum to manage multi-step calibration workflows and user prompts
+enum class CalState : uint8_t { IDLE, WAIT_EMPTY, WAIT_LOAD, ADJUSTING };
+
+struct CalContext {
+  CalMode       mode               = CalMode::NONE;         // current calibration mode, or NONE when not in a calibration workflow
+  CalState      state              = CalState::IDLE;        // current state within the calibration workflow, used to manage multi-step processes and user prompts
+  unsigned long stateStartMs       = 0;                     // millis() when current state was entered
+  int           stableEmptyChecks  = 0;                     // consecutive empty-scale readings in WAIT_EMPTY
+  float         loadDetectThreshold = 0.0f;                 // noise-derived threshold for weight detection
+  float         measuredUnits      = 0.0f;                  // last averaged reading in pounds
+  float         adjustmentStep     = 0.0f;                  // manual mode: current factor nudge size
+  float         minStep            = 0.0f;                  // manual mode: floor for adjustmentStep
+  int           lastDirection      = 0;                     // manual mode: +1 = last press +, -1 = last press -
+  unsigned long lastPrintMs        = 0;                     // manual mode: millis() of last reading print
+};
+
+static CalContext calCtx;                                   // Calibration context instance to hold state for calibration workflows
+
 // @todo move to config.h
 // EEPROM sanity limits for persisted values
 constexpr float CAL_FACTOR_ABS_MAX = 500000.0f;             // Maximum absolute value for valid calibration factor 
@@ -48,16 +70,16 @@ constexpr char APP_TITLE[] = "Propane Level Scale";
 constexpr char CALIBRATION_SAVE_FAILURE_MSG[] = "Failed to save default calibration to EEPROM.";
 constexpr char CALIBRATION_SAVE_SUCCESS_MSG[] = "Default calibration saved to EEPROM.";
 constexpr char CMD_AUTO_CAL_MSG[] = "Send 'a' to enter automatic calibration mode";
-constexpr char CMD_DEFAULT_EEPROM_MSG[] = "Send 'd' to reset EEPROM to default values";
+// constexpr char CMD_CURRENT_VALUES_MSG[] = "Send 'c' to print current runtime values";
+// constexpr char CMD_DEFAULT_EEPROM_MSG[] = "Send 'd' to reset EEPROM to default values";
 constexpr char CMD_EEPROM_MSG[] = "Send 'e' to display saved EEPROM values";
 constexpr char CMD_HELP_MSG[] = "Send 'h' to display this help menu";
-constexpr char CMD_KNOWN_WEIGHT_MSG[] = "Send 'k' to enter known weight value for calibration mode";
+// constexpr char CMD_KNOWN_WEIGHT_MSG[] = "Send 'k' to enter known weight value for calibration mode";
 constexpr char CMD_LEVEL_MSG[] = "Send 'l' to display one liquid propane percent level reading";
 constexpr char CMD_MANUAL_CAL_MSG[] = "Send 'm' to enter manual calibration mode";
-constexpr char CMD_PRINT_CURRENT_MSG[] = "Send 'p' to print current runtime values";
+constexpr char CMD_PROPANE_WEIGHT_MSG[] = "Send 'p' to set maximum legal propane weight";
 constexpr char CMD_REZERO_MSG[] = "Send 'r' to re-zero scale with no propane weight on it";
 constexpr char CMD_TANK_TARE_MSG[] = "Send 't' to set propane tank tare";
-constexpr char CMD_WEIGHT_PROPANE[] = "Send 'w' to set maximum legal propane weight";
 
 // Helper functions for EEPROM workflows
 
@@ -444,80 +466,238 @@ float readAveragedUnits(int readings, int samplesPerReading) {
 }
 
 /**
- * @brief Waits for an empty-scale condition or user cancel.
+ * @brief Advances the calibration context from WAIT_EMPTY to the next appropriate state.
  *
- * @details Uses calibrated readings to auto-detect empty scale with a timeout, so workflows do not block.
- * User can still send 'q' to cancel immediately.
+ * @details For REZERO mode, tares the scale and returns to IDLE.
+ * For AUTO and MANUAL modes, tares, measures the noise threshold, and transitions to WAIT_LOAD.
  *
- * @param {const char*} cancelMessage Text to print when the user cancels.
- * @return {bool} True when empty scale is detected, false when cancelled or timeout with non-empty scale.
+ * @return {void} No value is returned.
  *
  * @throws {none} This function does not throw exceptions.
  */
-bool waitForCalibrationEmptyScale(const char* cancelMessage) {
-  float measuredUnits = 0.0f;           // Current measured weight in pounds
-  int stableEmptyChecks = 0;            // Consecutive readings considered empty
-  unsigned long startTimeMs = millis(); // Start of the waiting period
-  char temp = '\0';                     // User input from the serial interface
-
-  if (!ensureScaleReady("empty scale confirmation")) {
-    return false;
+static void transitionFromWaitEmpty() {
+  if (calCtx.mode == CalMode::REZERO) {
+    scale.set_scale();
+    scale.tare();
+    scale.set_scale(calibration_factor);
+    Serial.println("Scale re-zero complete.");
+    calCtx.state = CalState::IDLE;
+    calCtx.mode  = CalMode::NONE;
+    return;
   }
 
-  // Use calibrated readings and treat near-zero as empty (no propane weight present).
-  scale.set_scale(calibration_factor);
+  Serial.println("Empty scale confirmed. Taring now...");
+  scale.set_scale();
+  scale.tare();
+  calCtx.loadDetectThreshold = computeLoadDetectThreshold(MINIMUM_LOAD_THRESHOLD);
 
-  Serial.println();
-  Serial.println("Remove all weight from scale.");
-  Serial.println("Auto-detect is active.");
-  Serial.print("Empty threshold: +/- ");
-  Serial.print(PLACED_LOAD_THRESHOLD_LBS, 2);
-  Serial.println(" lbs.");
-  Serial.println("Send 'q' to cancel.");
-  Serial.print("Confirmation timeout: ");
-  Serial.print(USER_CONFIRMATION_TIMEOUT_MS / 1000UL);
+  // @todo need to tell user the specific known weight value that was saved in eeprom for calibration, 
+  // so they place correct weight to place on the scale for calibration, 
+  // instead of just a generic prompt to place a known weight,
+  // since the specific value matters for the calibration factor computation
+
+  if (calCtx.mode == CalMode::AUTO) {
+    Serial.print("Place the known weight on the scale: ");
+    Serial.print(DEF_KNOWN_WEIGHT_LBS, 2);
+    Serial.println(" lbs");
+  } else {
+    Serial.println("Place known weight on scale");
+  }
+  Serial.println("Waiting for weight placement on scale...");
+  Serial.print("Load placement timeout: ");
+  Serial.print(SETUP_EMPTY_MAX_WAIT_MS / 1000UL);
   Serial.println(" seconds.");
 
-  // Check for stable readings near zero to auto-confirm empty scale, but allow user to cancel with 'q'.
-  while ((millis() - startTimeMs) < USER_CONFIRMATION_TIMEOUT_MS) {
-    measuredUnits = readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES);
+  calCtx.stateStartMs = millis();
+  calCtx.state        = CalState::WAIT_LOAD;
+}
 
-    if (fabsf(measuredUnits) <= PLACED_LOAD_THRESHOLD_LBS) {
-      stableEmptyChecks++;
-      if (stableEmptyChecks >= SETUP_EMPTY_REQUIRED_STABLE_CHECKS) {
-        Serial.println("Empty scale auto-detected, continuing with calibration");
+/**
+ * @brief Advances the calibration state machine by one step.
+ *
+ * @details Called every loop() iteration. Returns immediately when idle.
+ * Handles scale reads, stable-empty checks, load detection, and the
+ * manual-calibration print interval without blocking loop() for more than
+ * one HX711 read period (~1 s at 10 SPS). Serial input is fed separately
+ * via handleCalibrationInput().
+ *
+ * @return {void} No value is returned.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+void tickCalibration() {
+  if (calCtx.state == CalState::IDLE) {
+    return;
+  }
+
+  if (calCtx.state == CalState::WAIT_EMPTY) {
+    if ((millis() - calCtx.stateStartMs) >= USER_CONFIRMATION_TIMEOUT_MS) {
+      calCtx.measuredUnits = readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES);
+      if (fabsf(calCtx.measuredUnits) <= PLACED_LOAD_THRESHOLD_LBS) {
+        Serial.println("Empty scale auto-confirmed at timeout (stable scale).");
         Serial.println();
-        return true;
+        transitionFromWaitEmpty();
+      } else {
+        Serial.println("Confirmation timed out: scale not empty; cancelled.");
+        Serial.println();
+        calCtx.state = CalState::IDLE;
+        calCtx.mode  = CalMode::NONE;
+      }
+      return;
+    }
+
+    calCtx.measuredUnits = readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES);
+    if (fabsf(calCtx.measuredUnits) <= PLACED_LOAD_THRESHOLD_LBS) {
+      calCtx.stableEmptyChecks++;
+      if (calCtx.stableEmptyChecks >= SETUP_EMPTY_REQUIRED_STABLE_CHECKS) {
+        Serial.println("Empty scale auto-detected, continuing with calibration.");
+        Serial.println();
+        transitionFromWaitEmpty();
       }
     } else {
-      stableEmptyChecks = 0;
+      calCtx.stableEmptyChecks = 0;
+    }
+    return;
+  }
+
+  if (calCtx.state == CalState::WAIT_LOAD) {
+    if ((millis() - calCtx.stateStartMs) >= SETUP_EMPTY_MAX_WAIT_MS) {
+      Serial.println("Weight placement timed out; calibration cancelled.");
+      calCtx.state = CalState::IDLE;
+      calCtx.mode  = CalMode::NONE;
+      return;
     }
 
-    if (Serial.available()) {
-      temp = Serial.read();
-      if (temp == 'q' || temp == 'Q') {
-        Serial.println(cancelMessage);
-        Serial.println();
-        return false;
+    calCtx.measuredUnits = readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES);
+    if (fabsf(calCtx.measuredUnits) < calCtx.loadDetectThreshold) {
+      return;
+    }
+
+    // Load detected
+    if (calCtx.mode == CalMode::AUTO) {
+      Serial.println("Weight detected. Measuring stable reading...");
+      calCtx.measuredUnits = readAveragedUnits(CAL_SAMPLES, LIVE_SAMPLES);
+      if (DEF_KNOWN_WEIGHT_LBS == 0.0f || calCtx.measuredUnits == 0.0f) {
+        Serial.println("Automatic calibration failed: invalid known weight or reading.");
+        calCtx.state = CalState::IDLE;
+        calCtx.mode  = CalMode::NONE;
+        return;
       }
+
+      calibration_factor = calCtx.measuredUnits / DEF_KNOWN_WEIGHT_LBS;
+      scale.set_scale(calibration_factor);
+      float verifiedUnits = readAveragedUnits(CAL_SAMPLES, LIVE_SAMPLES);
+      Serial.print("Initial calibration factor estimate: ");
+      Serial.println(calibration_factor, 2);
+      Serial.print("Verified reading: ");
+      Serial.print(verifiedUnits, 2);
+      Serial.println(" lbs");
+      Serial.print("Automatic calibration complete, computed calibration factor: ");
+      Serial.println(calibration_factor, 2);
+      if (!saveCalibrationToEeprom(calibration_factor)) {
+        Serial.println("Failed to save calibration to EEPROM.");
+      } else {
+        Serial.println("Calibration saved to EEPROM.");
+      }
+      calCtx.state = CalState::IDLE;
+      calCtx.mode  = CalMode::NONE;
+    } else if (calCtx.mode == CalMode::MANUAL) {
+      Serial.println("Weight detected. Adjust calibration until the reading matches the known weight.");
+      Serial.println("Send '+' to increase calibration factor");
+      Serial.println("Send '-' to decrease calibration factor");
+      Serial.println("(step halves on direction reversal)");
+      Serial.println("Send 'q' to finish and save.");
+      calCtx.lastPrintMs = 0;
+      calCtx.state       = CalState::ADJUSTING;
+    }
+    return;
+  }
+
+  if (calCtx.state == CalState::ADJUSTING) {
+    unsigned long now = millis();
+    if ((now - calCtx.lastPrintMs) >= 500UL) {
+      scale.set_scale(calibration_factor);
+      Serial.print("Reading: ");
+      Serial.print(scale.get_units(), 1);
+      Serial.print(" lbs  factor: ");
+      Serial.print(calibration_factor, 2);
+      Serial.print("  step: ");
+      Serial.println(calCtx.adjustmentStep, 4);
+      calCtx.lastPrintMs = now;
+    }
+  }
+}
+
+/**
+ * @brief Routes a single serial character to the active calibration state machine.
+ *
+ * @details Called by loop() when a character arrives while calibration is in progress.
+ * Handles cancel ('q'/'Q') from WAIT_EMPTY and WAIT_LOAD, and factor adjustment
+ * ('+', '-', 'q') from the ADJUSTING state.
+ *
+ * @param {char} serialchar The received serial character.
+ * @return {void} No value is returned.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+void handleCalibrationInput(char serialchar) {
+  if (calCtx.state == CalState::WAIT_EMPTY || calCtx.state == CalState::WAIT_LOAD) {
+    if (serialchar != 'q' && serialchar != 'Q') {
+      return;
     }
 
-    // @todo query agent if this should be removed 
-    // or if it is necessary to have some delay here to avoid hammering the HX711 with continuous reads in a tight loop,  
-    // since the HX711 may have a limited sample rate and continuous reads without delay could cause issues 
-    delay(100);
+    if (calCtx.mode == CalMode::AUTO) {
+      Serial.println("Automatic calibration cancelled.");
+      calibration_factor = DEF_CALIBRATION_FACTOR;
+      if (!saveCalibrationToEeprom(calibration_factor)) {
+        Serial.println(CALIBRATION_SAVE_FAILURE_MSG);
+      } else {
+        Serial.println(CALIBRATION_SAVE_SUCCESS_MSG);
+      }
+    } else if (calCtx.mode == CalMode::MANUAL) {
+      Serial.println("Manual calibration cancelled.");
+      calibration_factor = DEF_CALIBRATION_FACTOR;
+      if (!saveCalibrationToEeprom(calibration_factor)) {
+        Serial.println(CALIBRATION_SAVE_FAILURE_MSG);
+      } else {
+        Serial.println(CALIBRATION_SAVE_SUCCESS_MSG);
+      }
+    } else if (calCtx.mode == CalMode::REZERO) {
+      Serial.println("Runtime re-zero cancelled.");
+    }
+
+    calCtx.state = CalState::IDLE;
+    calCtx.mode  = CalMode::NONE;
+    return;
   }
 
-  // Timeout: auto-confirm if the reading remained near zero, otherwise cancel.
-  if (fabsf(measuredUnits) <= PLACED_LOAD_THRESHOLD_LBS) {
-    Serial.println("Empty scale auto-confirmed at timeout (stable scale).");
-    Serial.println();
-    return true;
+  if (calCtx.state == CalState::ADJUSTING) {
+    if (serialchar == '+') {
+      if (calCtx.lastDirection == -1) {
+        calCtx.adjustmentStep = max(calCtx.adjustmentStep * 0.5f, calCtx.minStep);
+      }
+      calibration_factor  += calCtx.adjustmentStep;
+      calCtx.lastDirection = 1;
+      calCtx.lastPrintMs   = 0;
+    } else if (serialchar == '-') {
+      if (calCtx.lastDirection == 1) {
+        calCtx.adjustmentStep = max(calCtx.adjustmentStep * 0.5f, calCtx.minStep);
+      }
+      calibration_factor  -= calCtx.adjustmentStep;
+      calCtx.lastDirection = -1;
+      calCtx.lastPrintMs   = 0;
+    } else if (serialchar == 'q' || serialchar == 'Q') {
+      Serial.print("Manual calibration complete, computed calibration factor: ");
+      Serial.println(calibration_factor, 2);
+      if (!saveCalibrationToEeprom(calibration_factor)) {
+        Serial.println("Failed to save calibration to EEPROM.");
+      } else {
+        Serial.println("Calibration saved to EEPROM.");
+      }
+      calCtx.state = CalState::IDLE;
+      calCtx.mode  = CalMode::NONE;
+    }
   }
-
-  Serial.println("Confirmation timed out: scale not empty; cancelled.");
-  Serial.println();
-  return false;
 }
 
 /**
@@ -635,102 +815,46 @@ bool waitForStartupEmptyScale() {
 // These functions are called in response to user commands over serial
 
 /**
- * @brief Runs automatic calibration using a known reference weight.
+ * @brief Starts the automatic calibration workflow.
  *
- * @details Clears any prior scale factor, tares the empty scale, waits for the known
- * reference weight to be placed on the platform, then computes a calibration factor
- * from the measured reading without any further serial input.
+ * @details Validates that no calibration is already running, checks scale readiness,
+ * prints the initial prompts, and sets the calibration context to begin waiting for
+ * an empty scale. The workflow continues asynchronously through tickCalibration().
  *
  * @return {void} No value is returned.
  *
  * @throws {none} This function does not throw exceptions.
  */
 void automaticCalibration() {
-  float loadDetectThreshold = 0.0f;     // Threshold of known weight placement
-  float measuredUnits = 0.0f;           // Current measured weight in pounds
+  if (calCtx.state != CalState::IDLE) {
+    Serial.println("Calibration already in progress. Send 'q' to cancel first.");
+    return;
+  }
 
-  Serial.println();
-  Serial.println("Automatic calibration mode");
-
-  // non-modal check to ensure the scale is responding before prompting the user to interact with it, 
-  // so we don't get stuck waiting for them to place weight on a non-responsive scale
   if (!ensureScaleReady("automatic calibration")) {
     return;
   }
 
-  // non-modal wait for empty scale condition with user override
-  if (!waitForCalibrationEmptyScale("Automatic calibration cancelled")) {
+  Serial.println();
+  Serial.println("Automatic calibration mode");
+  scale.set_scale(calibration_factor);
 
-    // fall back to default calibration factor if we can't confirm an empty scale
-    // if eeprom save fails, we still have the default calibration factor from setup in memory, 
-    // but it will not be persisted across power cycles
-    calibration_factor = DEF_CALIBRATION_FACTOR;
-    bool defCalibrationSaved = saveCalibrationToEeprom(calibration_factor);
-
-    if (!defCalibrationSaved) {
-      Serial.println(CALIBRATION_SAVE_FAILURE_MSG);
-    } else {
-      Serial.println(CALIBRATION_SAVE_SUCCESS_MSG);
-    }
-
-    return;
-  }
-
-  Serial.println("Empty scale confirmed. Taring now...");
-
-  scale.set_scale();
-  scale.tare();
-
-  // measure noise to compute a load detection threshold, 
-  // for non-modal auto-detect when the known weight is placed on the scale
-  loadDetectThreshold = computeLoadDetectThreshold(MINIMUM_LOAD_THRESHOLD);
-
-  // @todo need to tell user the specific known weight value that was saved in eeprom for calibration, 
-  // so they place correct weight to place on the scale for calibration, 
-  // instead of just a generic prompt to place a known weight,
-  // since the specific value matters for the calibration factor computation
-
-  Serial.print("Place the known weight on the scale: ");
-  Serial.print(DEF_KNOWN_WEIGHT_LBS, 2);
-  Serial.println(" lbs");
-  Serial.println("Waiting for weight placement on scale...");
-  Serial.print("Load placement timeout: ");
-  Serial.print(SETUP_EMPTY_MAX_WAIT_MS / 1000UL);
+  Serial.println();
+  Serial.println("Remove all weight from scale.");
+  Serial.println("Auto-detect is active.");
+  Serial.print("Empty threshold: +/- ");
+  Serial.print(PLACED_LOAD_THRESHOLD_LBS, 2);
+  Serial.println(" lbs.");
+  Serial.println("Send 'q' to cancel.");
+  Serial.print("Confirmation timeout: ");
+  Serial.print(USER_CONFIRMATION_TIMEOUT_MS / 1000UL);
   Serial.println(" seconds.");
 
-  // non-modal timed wait for load placement
-  bool loadPlaced = waitForLoadPlacement(loadDetectThreshold, measuredUnits, "Weight placement timed out; calibration cancelled.");
-  if (!loadPlaced) {
-    return;
-  }
-
-  // smooth out noise and get a stable measurement for failure check
-  Serial.println("Weight detected. Measuring stable reading...");
-  measuredUnits = readAveragedUnits(CAL_SAMPLES, LIVE_SAMPLES);
-  if (DEF_KNOWN_WEIGHT_LBS == 0.0f || measuredUnits == 0.0f) {
-    Serial.println("Automatic calibration failed: invalid known weight or reading.");
-    return;
-  }
-
-  // compute the calibration factor and apply it to the scale for verification
-  calibration_factor = measuredUnits / DEF_KNOWN_WEIGHT_LBS;
-  scale.set_scale(calibration_factor);
-  measuredUnits = readAveragedUnits(CAL_SAMPLES, LIVE_SAMPLES);
-
-  Serial.print("Initial calibration factor estimate: ");
-  Serial.println(calibration_factor, 2);
-  Serial.print("Verified reading: ");
-  Serial.print(measuredUnits, 2);
-  Serial.println(" lbs");
-  Serial.print("Automatic calibration complete, computed calibration factor: ");
-  Serial.println(calibration_factor, 2);
-
-  bool autoCalSaved = saveCalibrationToEeprom(calibration_factor); 
-  if (!autoCalSaved) {
-    Serial.println("Failed to save calibration to EEPROM.");
-  } else {
-    Serial.println("Calibration saved to EEPROM.");
-  }
+  calCtx.mode              = CalMode::AUTO;
+  calCtx.state             = CalState::WAIT_EMPTY;
+  calCtx.stateStartMs      = millis();
+  calCtx.stableEmptyChecks = 0;
+  calCtx.measuredUnits     = 0.0f;
 }
 
 /**
@@ -862,164 +986,108 @@ void helpMenu() {
   Serial.println(CMD_EEPROM_MSG);
   Serial.println(CMD_LEVEL_MSG);
   Serial.println(CMD_MANUAL_CAL_MSG);
+  Serial.println(CMD_PROPANE_WEIGHT_MSG);
   Serial.println(CMD_REZERO_MSG);
   Serial.println(CMD_TANK_TARE_MSG);
-  Serial.println(CMD_WEIGHT_PROPANE);
 }
 
 /**
- * @brief Enters manual calibration mode for the scale.
- * 
- * @details Prompts the user to remove all weight from the scale, then place a known weight on the scale.
- * Allows the user to adjust the calibration factor using serial commands.
- * 
+ * @brief Starts the manual calibration workflow.
+ *
+ * @details Validates that no calibration is already running, checks scale readiness,
+ * initializes the adjustment step from the current calibration factor magnitude,
+ * prints the initial prompts, and sets the calibration context to begin waiting for
+ * an empty scale. The workflow continues asynchronously through tickCalibration().
+ *
  * @return {void} No value is returned.
- * 
+ *
  * @throws {none} This function does not throw exceptions.
  */
 void manualCalibration() {
-  float adjustmentStep = fabsf(calibration_factor) * 0.01f; // Start step at 1% of current factor magnitude; floor at 0.01% to prevent stall
-  int lastDirection = 0;                                    // +1 = last press increased, -1 = last press decreased, 0 = none
-  float loadDetectThreshold = 0.0f;                         // Threshold to detect when the known weight has been placed on the scale
-  float measuredUnits = 0.0f;                               // Current averaged reading from the scale in pounds during calibration adjustments
-  float minStep = fabsf(calibration_factor) * 0.0001f;      // Minimum adjustment step to prevent infinite halving and stalling during fine-tuning
-  char temp = '\0';                                         // Temporary variable to hold user input from serial for adjusting calibration factor
+  if (calCtx.state != CalState::IDLE) {
+    Serial.println("Calibration already in progress. Send 'q' to cancel first.");
+    return;
+  }
 
-  // Ensure the initial step size and minimum step are not zero to allow for adjustments, 
-  // even if the current calibration factor is zero (such as on first setup).
-  if (adjustmentStep == 0.0f) adjustmentStep = 10.0f;
-  if (minStep == 0.0f) minStep = 0.001f;
-  
-  Serial.println();
-  Serial.print("Manual calibration mode");
-
-  // non-modal check to ensure the scale is responding before prompting the user to interact with it, 
-  // so we don't get stuck waiting for them to place weight on a non-responsive scale
   if (!ensureScaleReady("manual calibration")) {
     return;
   }
 
-  // non-modal wait for empty scale condition with user override
-  if (!waitForCalibrationEmptyScale("Manual calibration cancelled")) {
+  float step    = fabsf(calibration_factor) * 0.01f;
+  float minStep = fabsf(calibration_factor) * 0.0001f;
+  if (step    == 0.0f) step    = 10.0f;
+  if (minStep == 0.0f) minStep = 0.001f;
 
-    // fall back to default calibration factor if we can't confirm an empty scale
-    // if eeprom save fails, we still have the default calibration factor from setup in memory, 
-    // but it will not be persisted across power cycles
-    calibration_factor = DEF_CALIBRATION_FACTOR;
-    bool defCalibrationSaved = saveCalibrationToEeprom(calibration_factor);
-    
-    if (!defCalibrationSaved) {
-      Serial.println(CALIBRATION_SAVE_FAILURE_MSG);
-    } else {
-      Serial.println(CALIBRATION_SAVE_SUCCESS_MSG);
-    }
+  Serial.println();
+  Serial.println("Manual calibration mode");
+  scale.set_scale(calibration_factor);
 
-    return;
-  }
-
-  Serial.println("Empty scale confirmed. Taring now...");
-
-  // clear all calibration and tare settings to start fresh
-  scale.set_scale();
-  scale.tare();
-
-  // measure noise to compute a load detection threshold, 
-  // for non-modal auto-detect when the known weight is placed on the scale
-  loadDetectThreshold = computeLoadDetectThreshold(MINIMUM_LOAD_THRESHOLD);
-
-  // @todo need to tell user the specific known weight value that was saved in eeprom for calibration, 
-  // so they place correct weight to place on the scale for calibration, 
-  // instead of just a generic prompt to place a known weight,
-  // since the specific value matters for the calibration factor computation
-
-  Serial.println("After readings begin, place known weight on scale");
-  Serial.println("Waiting for weight placement on scale...");
-  Serial.print("Load placement timeout: ");
-  Serial.print(SETUP_EMPTY_MAX_WAIT_MS / 1000UL);
+  Serial.println();
+  Serial.println("Remove all weight from scale.");
+  Serial.println("Auto-detect is active.");
+  Serial.print("Empty threshold: +/- ");
+  Serial.print(PLACED_LOAD_THRESHOLD_LBS, 2);
+  Serial.println(" lbs.");
+  Serial.println("Send 'q' to cancel.");
+  Serial.print("Confirmation timeout: ");
+  Serial.print(USER_CONFIRMATION_TIMEOUT_MS / 1000UL);
   Serial.println(" seconds.");
 
-  bool loadPlaced = waitForLoadPlacement(loadDetectThreshold, measuredUnits, "Weight placement timed out; calibration cancelled.");
-  if (!loadPlaced) {
-    return;
-  }
-
-  Serial.println("Weight detected. Adjust calibration until the reading matches the known weight.");
-  Serial.println("Press numeric keypad+ (plus) increase calibration factor");
-  Serial.println("Press numeric keypad- (minus) to decrease calibration factor");
-  Serial.println("(step halves on direction reversal)");
-
-  while (true) {
-    scale.set_scale(calibration_factor);
-    Serial.print("Reading: ");
-    Serial.print(scale.get_units(), 1);
-    Serial.print(" lbs  factor: ");
-    Serial.print(calibration_factor, 2);
-    Serial.print("  step: ");
-    Serial.println(adjustmentStep, 4);
-
-    if (Serial.available()) {
-      temp = Serial.read();
-      if (temp == '+') {
-        if (lastDirection == -1) {
-          adjustmentStep = max(adjustmentStep * 0.5f, minStep);
-        }
-        calibration_factor += adjustmentStep;
-        lastDirection = 1;
-      } else if (temp == '-') {
-        if (lastDirection == 1) {
-          adjustmentStep = max(adjustmentStep * 0.5f, minStep);
-        }
-        calibration_factor -= adjustmentStep;
-        lastDirection = -1;
-      } else if (temp == 'q' || temp == 'Q') {
-        Serial.print("Manual calibration complete, computed calibration factor: ");
-        Serial.println(calibration_factor, 2);
-
-        bool manualCalSaved = saveCalibrationToEeprom(calibration_factor);
-        if (!manualCalSaved) {
-          Serial.println("Failed to save calibration to EEPROM.");
-        } else {
-          Serial.println("Calibration saved to EEPROM.");
-        }
-        return;
-      }
-    } else {
-      // @todo query agent if it is necessary to have some delay here to avoid hammering the HX711 with continuous reads in a tight loop,  
-      // since the HX711 may have a limited sample rate and continuous reads without delay could cause issues
-      delay(50);
-    }
-  }
-};
+  calCtx.mode              = CalMode::MANUAL;
+  calCtx.state             = CalState::WAIT_EMPTY;
+  calCtx.stateStartMs      = millis();
+  calCtx.stableEmptyChecks = 0;
+  calCtx.measuredUnits     = 0.0f;
+  calCtx.adjustmentStep    = step;
+  calCtx.minStep           = minStep;
+  calCtx.lastDirection     = 0;
+  calCtx.lastPrintMs       = 0;
+}
 
 /**
- * @brief Re-zeros (tares) the scale during runtime.
+ * @brief Starts the runtime re-zero workflow.
  *
- * @details Prompts the user to remove all weight, confirms over serial,
- * and then runs HX711 tare so subsequent readings start from zero load.
+ * @details Validates that no calibration is in progress, checks scale readiness,
+ * prints prompts, and sets the calibration context to REZERO mode waiting for
+ * an empty scale. The tare is applied asynchronously via tickCalibration().
  *
  * @return {void} No value is returned.
  *
  * @throws {none} This function does not throw exceptions.
  */
-void reZeroScale() {
-  Serial.println();
-  Serial.println("Runtime re-zero requested.");
+void reZero() {
+  if (calCtx.state != CalState::IDLE) {
+    Serial.println("Calibration already in progress. Send 'q' to cancel first.");
+    return;
+  }
 
   if (!ensureScaleReady("re-zero")) {
     return;
   }
 
-  if (!waitForCalibrationEmptyScale("Runtime re-zero cancelled.")) {
-    return;
-  }
-
-  scale.set_scale();
-  scale.tare();
+  Serial.println();
+  Serial.println("Runtime re-zero requested.");
   scale.set_scale(calibration_factor);
 
-  Serial.println("Scale re-zero complete.");
+  Serial.println();
+  Serial.println("Remove all weight from scale.");
+  Serial.println("Auto-detect is active.");
+  Serial.print("Empty threshold: +/- ");
+  Serial.print(PLACED_LOAD_THRESHOLD_LBS, 2);
+  Serial.println(" lbs.");
+  Serial.println("Send 'q' to cancel.");
+  Serial.print("Confirmation timeout: ");
+  Serial.print(USER_CONFIRMATION_TIMEOUT_MS / 1000UL);
+  Serial.println(" seconds.");
+
+  calCtx.mode              = CalMode::REZERO;
+  calCtx.state             = CalState::WAIT_EMPTY;
+  calCtx.stateStartMs      = millis();
+  calCtx.stableEmptyChecks = 0;
+  calCtx.measuredUnits     = 0.0f;
 }
 
+// @todo query agent if tankTareUpdate is non-blocking
 /**
  * @brief Prompts the user for a tare value and saves it to EEPROM.
  *
@@ -1160,6 +1228,7 @@ void tankTareUpdate() {
   }
 }
 
+// @todo query agent if propaneWeightUpdate is non-blocking
 /**
  * @brief Prompts the user for max propane weight and saves it to EEPROM.
  *
@@ -1170,7 +1239,7 @@ void tankTareUpdate() {
  * 
  * @throws {none} This function does not throw exceptions.
  */
-void weightUpdate() {
+void propaneWeightUpdate() {
   char inputBuffer[24] = {0};           // Buffer to hold user input for the new maximum propane weight as a string
   float parsedValue = 0.0f;             // Variable to hold the parsed float value of the new maximum propane weight after validating the input string
   int inputIndex = 0;                   // Index to track the current position in the inputBuffer for storing incoming characters from serial input
@@ -1397,61 +1466,73 @@ void setup() {
  * @throws {none} This function does not throw exceptions. 
  */
 void loop() {
-  char temp = '\0';                     // Temporary variable to hold user input from the serial interface for command processing
-  if (Serial.available()) {
-    temp = Serial.read();
-    
-    // ignore newline characters that may be sent by the serial monitor after commands to avoid accidentally triggering multiple commands in a row
-    if (temp == '\r' || temp == '\n') {
-      return;
-    }
-    bool handled = true;
+  tickCalibration();
 
-    // having empty lower case input cases allows not needing to call tolower() on the input
-    switch (temp) {
-      case 'a':
-      case 'A':
-        automaticCalibration();
-        break;
-      // @todo case 'd' for resetting EEPROM to default cal, known tank weight, propane tank tare, max legal propane values
-      case 'e':
-      case 'E':
-        eepromValues();
-        break;
-      case 'h':
-      case 'H':
-        helpMenu();
-        break;
-      // @todo case'k' for entering known weight value for calibration mode
-      case 'l':
-      case 'L':
-        liquidLevel();
-        break;
-      case 'm':
-      case 'M':
-        manualCalibration();
-        break;
-      // @todo case 'p' print current runtime values (cal factor, tank tare, max legal propane weight, known tank weight) for debugging without needing to check EEPROM values
-      case 'r':
-      case 'R':
-        reZeroScale();
-        break;
-      case 't':
-      case 'T':
-        tankTareUpdate();
-        break;
-      case 'w':
-      case 'W':
-        weightUpdate();
-        break;
-      default:
-        handled = false;
-        break;
-    }
+  if (!Serial.available()) {
+    return;
+  }
 
-    // flush any extra input after handling a command to prevent accidental multiple command triggers from a single line of input
-    if (handled) {
-      flushSerialInput();
-    }
+  char temp = Serial.read();
+
+  // ignore newline characters that may be sent by the serial monitor after commands
+  // to avoid accidentally triggering multiple commands in a row
+  if (temp == '\r' || temp == '\n') {
+    return;
+  }
+
+  // Route input to the active calibration state machine; ignore other commands while busy
+  if (calCtx.state != CalState::IDLE) {
+    handleCalibrationInput(temp);
+    return;
+  }
+
+  bool handled = true;
+
+  // having empty lower case input cases allows not needing to call tolower() on the input
+  switch (temp) {
+    case 'a':
+    case 'A':
+      automaticCalibration();
+      break;
+    // @todo case 'c' print current runtime values (cal factor, tank tare, max legal propane weight, known tank weight) for debugging without needing to check EEPROM values
+    // @todo case 'd' for resetting EEPROM to default cal, known tank weight, propane tank tare, max legal propane values
+    case 'e':
+    case 'E':
+      eepromValues();
+      break;
+    case 'h':
+    case 'H':
+      helpMenu();
+      break;
+    // @todo case'k' for entering known weight value for calibration mode
+    case 'l':
+    case 'L':
+      liquidLevel();
+      break;
+    case 'm':
+    case 'M':
+      manualCalibration();
+      break;
+    case 'p':
+    case 'P':
+      propaneWeightUpdate();
+      break;
+    case 'r':
+    case 'R':
+      reZero();
+      break;
+    case 't':
+    case 'T':
+      tankTareUpdate();
+      break;
+
+    default:
+      handled = false;
+      break;
+  }
+
+  // flush any extra input after handling a command to prevent accidental multiple command triggers from a single line of input
+  if (handled) {
+    flushSerialInput();
   }
 }

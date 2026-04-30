@@ -142,7 +142,7 @@ if (!Serial.available()) {
   continue;
 }
 ```
-**Issue**: `tankTareUpdate()` and `weightUpdate()` still busy-wait with 10ms delays.
+**Issue**: `tankTareUpdate()` and `propaneWeightUpdate()` still busy-wait with 10ms delays.
 
 **Impact**: Wastes CPU during user input entry.
 
