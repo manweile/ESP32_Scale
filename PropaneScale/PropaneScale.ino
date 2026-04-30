@@ -28,7 +28,7 @@
 HX711 scale;                            // HX711 instance for interacting with the load cell amplifier
 
 // Global state variables
-float calibrationFactor = 0.0f;        // Calibration factor for converting raw HX711 readings to weight in pounds
+float calibrationFactor = 0.0f;         // Calibration factor for converting raw HX711 readings to weight in pounds
 bool eepromReady = false;               // Flag to track if EEPROM was successfully initialized
 float knownWeightLbs = 0.0f;            // Known weight for calibration
 float maxPropaneLbs = 0.0f;             // Maximum legal propane weight in pounds
@@ -38,6 +38,7 @@ float tankTare = 0.0f;                  // Tare weight of the empty propane tank
 
 // Calibration mode and state enums to manage user-initiated calibration workflows
 enum class CalMode  : uint8_t { NONE, AUTO, MANUAL, REZERO };
+
 // Calibration state enum to manage multi-step calibration workflows and user prompts
 enum class CalState : uint8_t { IDLE, WAIT_EMPTY, WAIT_LOAD, ADJUSTING };
 
@@ -94,74 +95,66 @@ constexpr char CMD_TANK_TARE_MSG[] = "Send 't' to set propane tank tare";
 
 // Helper functions for EEPROM workflows
 
-// @todo turn these 3 into one function that takes parameters for the specific value being loaded/saved, 
-// to reduce code duplication between the similar load*FromEeprom and save*ToEeprom functions, 
-// since they all follow the same pattern of checking a magic number and then loading/saving a float value at specific EEPROM addresses.
+/**
+ * @brief Validates a finite float against configured bounds.
+ *
+ * @details Optionally validates against the absolute magnitude of the value.
+ * Used for calibration factor checks (absolute bounds) and direct positive-range checks.
+ * 
+ * @param {float} value Value to validate.
+ * @param {float} minimumValue Lower bound for validation.
+ * @param {float} maximumValue Upper bound for validation.
+ * @param {bool} useAbsoluteMagnitude When true, validates fabs(value) instead of value.
+ * @return {bool} True when finite and inside [minimumValue, maximumValue].
+ * 
+ * @throws {none} This function does not throw exceptions.
+ */
+bool isValidBoundedFloat(float value, float minimumValue, float maximumValue, bool useAbsoluteMagnitude = false) {
+  if (!isfinite(value)) {
+    return false;
+  }
+
+  float candidate = useAbsoluteMagnitude ? fabsf(value) : value;
+  return (candidate >= minimumValue) && (candidate <= maximumValue);
+}
 
 /**
- * @brief Validates that an EEPROM calibration factor is finite and plausible.
+ * @brief Validates calibration factor values loaded from EEPROM.
  *
- * @details Checks that the calibration factor is a finite number and falls within configured absolute magnitude limits.
- * This helps to catch EEPROM corruption or invalid values that could lead to wildly incorrect weight readings.
- * 
+ * @details Uses absolute magnitude bounds so both positive and negative
+ * calibration factors are accepted when their magnitude is plausible.
+ *
  * @param {float} value Calibration factor to validate.
- * @return {bool} True when value is finite and within expected magnitude limits.
- * 
+ * @return {bool} True when value is finite and abs(value) is within calibration bounds.
+ *
  * @throws {none} This function does not throw exceptions.
  */
-bool isValidCalibrationFactor(float value) {
-  float magnitude = 0.0f;
-
-  if (!isfinite(value)) {
-    return false;
-  }
-
-  magnitude = fabsf(value);
-  return (magnitude >= CAL_FACTOR_ABS_MIN) && (magnitude <= CAL_FACTOR_ABS_MAX);
+bool isValidCalibrationFactorValue(float value) {
+  return isValidBoundedFloat(value, CAL_FACTOR_ABS_MIN, CAL_FACTOR_ABS_MAX, true);
 }
 
 /**
- * @brief Validates that an EEPROM max propane weight is finite and positive.
+ * @brief Validates tank tare values loaded from EEPROM.
  *
- * @details Checks that the maximum propane weight value is a finite number and falls within configured bounds for plausible maximum propane weights.
- * Catches EEPROM corruption or invalid values that could lead to incorrect percentage calculations or unrealistic readings.
- * 
- * @param {float} value Maximum propane pounds value to validate.
- * @return {bool} True when value is finite and within configured propane bounds.
- * 
+ * @param {float} value Tank tare value in pounds.
+ * @return {bool} True when value is finite and within tank tare bounds.
+ *
  * @throws {none} This function does not throw exceptions.
  */
-bool isValidMaxPropaneLbs(float value) {
-  float magnitude = 0.0f;
-
-  if (!isfinite(value)) {
-    return false;
-  }
-
-  magnitude = fabsf(value);
-  return (magnitude >= MAX_PROPANE_MIN_LBS) && (magnitude <= MAX_PROJECT_WEIGHT_LBS);
+bool isValidTankTareValue(float value) {
+  return isValidBoundedFloat(value, TANK_TARE_MIN_LBS, MAX_PROJECT_WEIGHT_LBS);
 }
 
 /**
- * @brief Validates that an EEPROM tank tare value is finite and non-negative.
+ * @brief Validates max propane weight values loaded from EEPROM.
  *
- * @details Checks that the tank tare value is a finite number and falls within configured bounds for plausible tank tare weights.
- * Catches EEPROM corruption or invalid values that could lead to incorrect net weight calculations.
- * 
- * @param {float} value Tank tare in pounds to validate.
- * @return {bool} True when value is finite and within configured tare bounds.
- * 
+ * @param {float} value Max propane weight value in pounds.
+ * @return {bool} True when value is finite and within max propane bounds.
+ *
  * @throws {none} This function does not throw exceptions.
  */
-bool isValidTankTare(float value) {
-  float magnitude = 0.0f;
-
-  if (!isfinite(value)) {
-    return false;
-  }
-
-  magnitude = fabsf(value);
-  return (magnitude >= TANK_TARE_MIN_LBS) && (magnitude <= MAX_PROJECT_WEIGHT_LBS);
+bool isValidMaxPropaneWeightValue(float value) {
+  return isValidBoundedFloat(value, MAX_PROPANE_MIN_LBS, MAX_PROJECT_WEIGHT_LBS);
 }
 
 /**
@@ -223,6 +216,9 @@ void loadOrInitializeEepromValue(
 
 // EEPROM workflows
 
+// @todo ask agent if it is possible to write a function that condenses all of the load*FromEeprom functions,
+// to reduce repeated code between the different load*FromEeprom functions, 
+// since they are very similar except for the input value, specific magic number and EEPROM addresses they use.
 /**
  * @brief Loads the calibration factor from EEPROM if the magic number is valid.
  * 
@@ -819,7 +815,6 @@ bool waitForStartupEmptyScale() {
       stableEmptyChecks++;
       if (stableEmptyChecks >= UNLOAD_CHECK_COUNT) {
         Serial.println("Stable scale detected, proceeding with tare.");
-        Serial.println();
         return true;
       }
     } else {
@@ -830,7 +825,6 @@ bool waitForStartupEmptyScale() {
       temp = Serial.read();
       if (temp == 'q' || temp == 'Q') {
         Serial.println("Startup tare skipped by user.");
-        Serial.println();
         return false;
       }
     }
@@ -1209,7 +1203,7 @@ void tankTareUpdate() {
         return;
       }
 
-      if (parseNonNegativeFloat(inputBuffer, parsedValue) && isValidTankTare(parsedValue)) {
+      if (parseNonNegativeFloat(inputBuffer, parsedValue) && isValidBoundedFloat(parsedValue, TANK_TARE_MIN_LBS, MAX_PROJECT_WEIGHT_LBS)) {
         Serial.print("New tank tare entered: ");
         Serial.print(parsedValue, 2);
         Serial.println(" lbs");
@@ -1237,7 +1231,7 @@ void tankTareUpdate() {
       }
 
       inputBuffer[inputIndex] = '\0';
-      if (!parseNonNegativeFloat(inputBuffer, parsedValue) || !isValidTankTare(parsedValue)) {
+      if (!parseNonNegativeFloat(inputBuffer, parsedValue) || !isValidBoundedFloat(parsedValue, TANK_TARE_MIN_LBS, MAX_PROJECT_WEIGHT_LBS)) {
         Serial.print("Invalid tank tare. Enter a number from ");
         Serial.print(TANK_TARE_MIN_LBS, 2);
         Serial.print(" to ");
@@ -1351,7 +1345,7 @@ void propaneWeightUpdate() {
       }
 
       parsedValue = 0.0f;
-      if (parseNonNegativeFloat(inputBuffer, parsedValue) && isValidMaxPropaneLbs(parsedValue)) {
+      if (parseNonNegativeFloat(inputBuffer, parsedValue) && isValidBoundedFloat(parsedValue, MAX_PROPANE_MIN_LBS, MAX_PROJECT_WEIGHT_LBS)) {
         Serial.print("New max propane weight entered: ");
         Serial.print(parsedValue, 2);
         Serial.println(" lbs");
@@ -1379,7 +1373,7 @@ void propaneWeightUpdate() {
       }
 
       inputBuffer[inputIndex] = '\0';
-      if (!parseNonNegativeFloat(inputBuffer, parsedValue) || !isValidMaxPropaneLbs(parsedValue)) {
+      if (!parseNonNegativeFloat(inputBuffer, parsedValue) || !isValidBoundedFloat(parsedValue, MAX_PROPANE_MIN_LBS, MAX_PROJECT_WEIGHT_LBS)) {
         Serial.print("Invalid max propane weight. Enter a number from ");
         Serial.print(MAX_PROPANE_MIN_LBS, 2);
         Serial.print(" to ");
@@ -1427,9 +1421,7 @@ void propaneWeightUpdate() {
 void setup() {
   Serial.begin(BAUD);
 
-  Serial.println();
   Serial.println(APP_TITLE);
-  Serial.println();
 
   // If EEPROM initialization fails, we will continue with default values
   // If EEPROM initializes succeeds, we will attempt to load saved values
@@ -1450,7 +1442,7 @@ void setup() {
       calibrationFactor,
       loadCalibrationFromEeprom,
       saveCalibrationToEeprom,
-      isValidCalibrationFactor,
+      isValidCalibrationFactorValue,
       2,
       nullptr
     );
@@ -1461,7 +1453,7 @@ void setup() {
       tankTare,
       loadTankTareFromEeprom,
       saveTankTareToEeprom,
-      isValidTankTare,
+      isValidTankTareValue,
       2,
       " lbs"
     );
@@ -1472,12 +1464,11 @@ void setup() {
       maxPropaneLbs,
       loadMaxPropaneWeightFromEeprom,
       saveMaxPropaneWeightToEeprom,
-      isValidMaxPropaneLbs,
+      isValidMaxPropaneWeightValue,
       2,
       " lbs"
     );
 
-    Serial.println();
   }
 
   scale.begin(DOUT_PIN, CLK_PIN);
@@ -1491,8 +1482,6 @@ void setup() {
     Serial.println("Continuing without startup tare.");
     Serial.println("Remove propane weight and send 'r' to re-zero when ready.");
   }
-  Serial.println();
-
   helpMenu();
 }
 
