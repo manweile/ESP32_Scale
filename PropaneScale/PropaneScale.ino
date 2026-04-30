@@ -42,16 +42,20 @@ enum class CalMode  : uint8_t { NONE, AUTO, MANUAL, REZERO };
 enum class CalState : uint8_t { IDLE, WAIT_EMPTY, WAIT_LOAD, ADJUSTING };
 
 struct CalContext {
-  CalMode       mode               = CalMode::NONE;         // current calibration mode, or NONE when not in a calibration workflow
-  CalState      state              = CalState::IDLE;        // current state within the calibration workflow, used to manage multi-step processes and user prompts
-  unsigned long stateStartMs       = 0;                     // millis() when current state was entered
-  int           stableEmptyChecks  = 0;                     // consecutive empty-scale readings in WAIT_EMPTY
+  float         adjustmentStep     = 0.0f;                  // manual mode: current factor nudge size
+  bool          hasManualDisplay   = false;                 // manual mode: whether we have a prior display snapshot to compare against
+  int           lastDirection      = 0;                     // manual mode: +1 = last press +, -1 = last press -
+  int           lastFactorHundredth = 0;                    // manual mode: last displayed factor, scaled by 100 (2 decimal places)
+  int           lastReadingTenth   = 0;                     // manual mode: last displayed reading, scaled by 10 (1 decimal place)
+  int           lastStepTenThousandth = 0;                  // manual mode: last displayed step, scaled by 10000 (4 decimal places)
   float         loadDetectThreshold = 0.0f;                 // noise-derived threshold for weight detection
   float         measuredUnits      = 0.0f;                  // last averaged reading in pounds
-  float         adjustmentStep     = 0.0f;                  // manual mode: current factor nudge size
   float         minStep            = 0.0f;                  // manual mode: floor for adjustmentStep
-  int           lastDirection      = 0;                     // manual mode: +1 = last press +, -1 = last press -
-  unsigned long lastPrintMs        = 0;                     // manual mode: millis() of last reading print
+  CalMode       mode               = CalMode::NONE;         // current calibration mode, or NONE when not in a calibration workflow
+  float         originalCalibrationFactor = 0.0f;           // manual mode: calibration factor captured at start for cancel/restore
+  int           stableEmptyChecks  = 0;                     // consecutive empty-scale readings in WAIT_EMPTY
+  CalState      state              = CalState::IDLE;        // current state within the calibration workflow, used to manage multi-step processes and user prompts
+  unsigned long stateStartMs       = 0;                     // millis() when current state was entered
 };
 
 static CalContext calCtx;                                   // Calibration context instance to hold state for calibration workflows
@@ -505,7 +509,7 @@ static void transitionFromWaitEmpty() {
   }
   Serial.println("Waiting for weight placement on scale...");
   Serial.print("Load placement timeout: ");
-  Serial.print(SETUP_EMPTY_MAX_WAIT_MS / 1000UL);
+  Serial.print(EMPTY_CONFIRM_TIMEOUT_MS / 1000UL);
   Serial.println(" seconds.");
 
   calCtx.stateStartMs = millis();
@@ -531,7 +535,7 @@ void tickCalibration() {
   }
 
   if (calCtx.state == CalState::WAIT_EMPTY) {
-    if ((millis() - calCtx.stateStartMs) >= USER_CONFIRMATION_TIMEOUT_MS) {
+    if ((millis() - calCtx.stateStartMs) >= USER_CONFIRM_TIMEOUT_MS) {
       calCtx.measuredUnits = readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES);
       if (fabsf(calCtx.measuredUnits) <= PLACED_LOAD_THRESHOLD_LBS) {
         Serial.println("Empty scale auto-confirmed at timeout (stable scale).");
@@ -549,7 +553,7 @@ void tickCalibration() {
     calCtx.measuredUnits = readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES);
     if (fabsf(calCtx.measuredUnits) <= PLACED_LOAD_THRESHOLD_LBS) {
       calCtx.stableEmptyChecks++;
-      if (calCtx.stableEmptyChecks >= SETUP_EMPTY_REQUIRED_STABLE_CHECKS) {
+      if (calCtx.stableEmptyChecks >= UNLOAD_CHECK_COUNT) {
         Serial.println("Empty scale auto-detected, continuing with calibration.");
         Serial.println();
         transitionFromWaitEmpty();
@@ -561,7 +565,7 @@ void tickCalibration() {
   }
 
   if (calCtx.state == CalState::WAIT_LOAD) {
-    if ((millis() - calCtx.stateStartMs) >= SETUP_EMPTY_MAX_WAIT_MS) {
+    if ((millis() - calCtx.stateStartMs) >= EMPTY_CONFIRM_TIMEOUT_MS) {
       Serial.println("Weight placement timed out; calibration cancelled.");
       calCtx.state = CalState::IDLE;
       calCtx.mode  = CalMode::NONE;
@@ -606,24 +610,36 @@ void tickCalibration() {
       Serial.println("Send '+' to increase calibration factor");
       Serial.println("Send '-' to decrease calibration factor");
       Serial.println("(step halves on direction reversal)");
-      Serial.println("Send 'q' to finish and save.");
-      calCtx.lastPrintMs = 0;
-      calCtx.state       = CalState::ADJUSTING;
+      Serial.println("Send 's' to save and finish manual calibration.");
+      Serial.println("Send 'q' to cancel manual calibration without saving.");
+      calCtx.hasManualDisplay = false;
+      calCtx.state            = CalState::ADJUSTING;
     }
     return;
   }
 
   if (calCtx.state == CalState::ADJUSTING) {
-    unsigned long now = millis();
-    if ((now - calCtx.lastPrintMs) >= 500UL) {
-      scale.set_scale(calibration_factor);
+    scale.set_scale(calibration_factor);
+    float readingLbs = scale.get_units();
+    int readingTenth = static_cast<int>(lroundf(readingLbs * 10.0f));
+    int factorHundredth = static_cast<int>(lroundf(calibration_factor * 100.0f));
+    int stepTenThousandth = static_cast<int>(lroundf(calCtx.adjustmentStep * 10000.0f));
+
+    if (!calCtx.hasManualDisplay ||
+        readingTenth != calCtx.lastReadingTenth ||
+        factorHundredth != calCtx.lastFactorHundredth ||
+        stepTenThousandth != calCtx.lastStepTenThousandth) {
       Serial.print("Reading: ");
-      Serial.print(scale.get_units(), 1);
+      Serial.print(readingLbs, 1);
       Serial.print(" lbs  factor: ");
       Serial.print(calibration_factor, 2);
       Serial.print("  step: ");
       Serial.println(calCtx.adjustmentStep, 4);
-      calCtx.lastPrintMs = now;
+
+      calCtx.hasManualDisplay = true;
+      calCtx.lastReadingTenth = readingTenth;
+      calCtx.lastFactorHundredth = factorHundredth;
+      calCtx.lastStepTenThousandth = stepTenThousandth;
     }
   }
 }
@@ -633,7 +649,7 @@ void tickCalibration() {
  *
  * @details Called by loop() when a character arrives while calibration is in progress.
  * Handles cancel ('q'/'Q') from WAIT_EMPTY and WAIT_LOAD, and factor adjustment
- * ('+', '-', 'q') from the ADJUSTING state.
+ * ('+', '-', 's', 'q') from the ADJUSTING state.
  *
  * @param {char} serialchar The received serial character.
  * @return {void} No value is returned.
@@ -643,6 +659,15 @@ void tickCalibration() {
 void handleCalibrationInput(char serialchar) {
   if (calCtx.state == CalState::WAIT_EMPTY || calCtx.state == CalState::WAIT_LOAD) {
     if (serialchar != 'q' && serialchar != 'Q') {
+      if (calCtx.mode == CalMode::AUTO) {
+        Serial.print("Invalid automatic calibration key: '");
+        Serial.print(serialchar);
+        Serial.println("'. Use 'q' to cancel.");
+      } else if (calCtx.mode == CalMode::REZERO) {
+        Serial.print("Invalid re-zero key: '");
+        Serial.print(serialchar);
+        Serial.println("'. Use 'q' to cancel.");
+      }
       return;
     }
 
@@ -655,13 +680,9 @@ void handleCalibrationInput(char serialchar) {
         Serial.println(CALIBRATION_SAVE_SUCCESS_MSG);
       }
     } else if (calCtx.mode == CalMode::MANUAL) {
-      Serial.println("Manual calibration cancelled.");
-      calibration_factor = DEF_CALIBRATION_FACTOR;
-      if (!saveCalibrationToEeprom(calibration_factor)) {
-        Serial.println(CALIBRATION_SAVE_FAILURE_MSG);
-      } else {
-        Serial.println(CALIBRATION_SAVE_SUCCESS_MSG);
-      }
+      calibration_factor = calCtx.originalCalibrationFactor;
+      scale.set_scale(calibration_factor);
+      Serial.println("Manual calibration cancelled. Changes were not saved.");
     } else if (calCtx.mode == CalMode::REZERO) {
       Serial.println("Runtime re-zero cancelled.");
     }
@@ -678,15 +699,13 @@ void handleCalibrationInput(char serialchar) {
       }
       calibration_factor  += calCtx.adjustmentStep;
       calCtx.lastDirection = 1;
-      calCtx.lastPrintMs   = 0;
     } else if (serialchar == '-') {
       if (calCtx.lastDirection == 1) {
         calCtx.adjustmentStep = max(calCtx.adjustmentStep * 0.5f, calCtx.minStep);
       }
       calibration_factor  -= calCtx.adjustmentStep;
       calCtx.lastDirection = -1;
-      calCtx.lastPrintMs   = 0;
-    } else if (serialchar == 'q' || serialchar == 'Q') {
+    } else if (serialchar == 's' || serialchar == 'S') {
       Serial.print("Manual calibration complete, computed calibration factor: ");
       Serial.println(calibration_factor, 2);
       if (!saveCalibrationToEeprom(calibration_factor)) {
@@ -696,6 +715,16 @@ void handleCalibrationInput(char serialchar) {
       }
       calCtx.state = CalState::IDLE;
       calCtx.mode  = CalMode::NONE;
+    } else if (serialchar == 'q' || serialchar == 'Q') {
+      calibration_factor = calCtx.originalCalibrationFactor;
+      scale.set_scale(calibration_factor);
+      Serial.println("Manual calibration cancelled. Changes were not saved.");
+      calCtx.state = CalState::IDLE;
+      calCtx.mode  = CalMode::NONE;
+    } else {
+      Serial.print("Invalid manual calibration key: '");
+      Serial.print(serialchar);
+      Serial.println("'. Use '+', '-', 's' (save), or 'q' (cancel).");
     }
   }
 }
@@ -715,7 +744,7 @@ void handleCalibrationInput(char serialchar) {
 bool waitForLoadPlacement(float loadDetectThreshold, float& measuredUnits, const char* timeoutMessage) {
   unsigned long startTimeMs = millis();                     // Timestamp marking the start of the waiting period
 
-  while ((millis() - startTimeMs) < SETUP_EMPTY_MAX_WAIT_MS) {
+  while ((millis() - startTimeMs) < EMPTY_CONFIRM_TIMEOUT_MS) {
     measuredUnits = readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES);
     if (fabsf(measuredUnits) >= loadDetectThreshold) {
       return true;
@@ -757,7 +786,7 @@ bool waitForStartupEmptyScale() {
   Serial.println(F("Startup tare: waiting for stable scale..."));
   Serial.println(F("Auto-detect is active."));
   Serial.print(F("Auto-detect timeout: "));
-  Serial.print(SETUP_EMPTY_MAX_WAIT_MS / 1000UL);
+  Serial.print(EMPTY_CONFIRM_TIMEOUT_MS / 1000UL);
   Serial.println(F(" seconds."));
   Serial.print(F("Stability tolerance: +/- "));
   Serial.print(SETUP_EMPTY_TOLERANCE_LBS, 2);
@@ -772,12 +801,12 @@ bool waitForStartupEmptyScale() {
   measuredUnits = baseline;
 
   // Check for stable readings near the initial baseline to auto-confirm empty scale, but allow user to cancel with 'q'.
-  while ((millis() - startTimeMs) < SETUP_EMPTY_MAX_WAIT_MS) {
+  while ((millis() - startTimeMs) < EMPTY_CONFIRM_TIMEOUT_MS) {
     measuredUnits = readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES);
 
     if (fabsf(measuredUnits - baseline) <= SETUP_EMPTY_TOLERANCE_LBS) {
       stableEmptyChecks++;
-      if (stableEmptyChecks >= SETUP_EMPTY_REQUIRED_STABLE_CHECKS) {
+      if (stableEmptyChecks >= UNLOAD_CHECK_COUNT) {
         Serial.println("Stable scale detected, proceeding with tare.");
         Serial.println();
         return true;
@@ -847,7 +876,7 @@ void automaticCalibration() {
   Serial.println(" lbs.");
   Serial.println("Send 'q' to cancel.");
   Serial.print("Confirmation timeout: ");
-  Serial.print(USER_CONFIRMATION_TIMEOUT_MS / 1000UL);
+  Serial.print(USER_CONFIRM_TIMEOUT_MS / 1000UL);
   Serial.println(" seconds.");
 
   calCtx.mode              = CalMode::AUTO;
@@ -940,7 +969,7 @@ void liquidLevel() {
   Serial.println("Place propane tank on scale.");
   Serial.println("Waiting for tank placement...");
   Serial.print("Load placement timeout: ");
-  Serial.print(SETUP_EMPTY_MAX_WAIT_MS / 1000UL);
+  Serial.print(EMPTY_CONFIRM_TIMEOUT_MS / 1000UL);
   Serial.println(" seconds.");
 
   if (!waitForLoadPlacement(loadDetectThreshold, measuredUnits, "Tank placement timed out; cancelled.")) {
@@ -1030,18 +1059,19 @@ void manualCalibration() {
   Serial.println(" lbs.");
   Serial.println("Send 'q' to cancel.");
   Serial.print("Confirmation timeout: ");
-  Serial.print(USER_CONFIRMATION_TIMEOUT_MS / 1000UL);
+  Serial.print(USER_CONFIRM_TIMEOUT_MS / 1000UL);
   Serial.println(" seconds.");
 
+  calCtx.adjustmentStep    = step;
+  calCtx.hasManualDisplay  = false;
+  calCtx.lastDirection     = 0;
+  calCtx.measuredUnits     = 0.0f;
+  calCtx.minStep           = minStep;
   calCtx.mode              = CalMode::MANUAL;
+  calCtx.originalCalibrationFactor = calibration_factor;
+  calCtx.stableEmptyChecks = 0;
   calCtx.state             = CalState::WAIT_EMPTY;
   calCtx.stateStartMs      = millis();
-  calCtx.stableEmptyChecks = 0;
-  calCtx.measuredUnits     = 0.0f;
-  calCtx.adjustmentStep    = step;
-  calCtx.minStep           = minStep;
-  calCtx.lastDirection     = 0;
-  calCtx.lastPrintMs       = 0;
 }
 
 /**
@@ -1077,7 +1107,7 @@ void reZero() {
   Serial.println(" lbs.");
   Serial.println("Send 'q' to cancel.");
   Serial.print("Confirmation timeout: ");
-  Serial.print(USER_CONFIRMATION_TIMEOUT_MS / 1000UL);
+  Serial.print(USER_CONFIRM_TIMEOUT_MS / 1000UL);
   Serial.println(" seconds.");
 
   calCtx.mode              = CalMode::REZERO;

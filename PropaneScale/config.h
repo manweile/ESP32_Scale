@@ -27,19 +27,20 @@ constexpr int CAL_SAMPLES = 5;
 constexpr int LIVE_SAMPLES = 10;
 
 /**
- * Calibration Constants
+ * Calibration & Startup Constants
  */
 
 // Known reference weight used during automatic & manual calibration mode (pounds).
 // constexpr float DEF_KNOWN_WEIGHT_LBS = 19.2f;   // wire spool good for 20 lb tanks
 constexpr float DEF_KNOWN_WEIGHT_LBS = 36.8f;   // kitty litter jug of water good for 30 lb tanks
-// constexpr float DEF_KNOWN_WEIGHT_LBS = 50.11f;   // 5 gallon camping water container
 
 // Calibration value used by HX711 conversion. 
 // Adjustable at runtime by automatic & manual calibration mode.
 // constexpr float DEF_CALIBRATION_FACTOR = -11551.08f;    // wire spool @ 17.4 lbs
 constexpr float DEF_CALIBRATION_FACTOR = -10422.95f;    // litter jug of water @ 36.8 lbs
-// constexpr float DEF_CALIBRATION_FACTOR = -10651.67f;    // 5 gallon camping water @ 50.11
+
+// Maximum time to wait for load placement during startup and calibration before giving up and returning to idle state.
+constexpr unsigned long EMPTY_CONFIRM_TIMEOUT_MS = 15000UL;
 
 // Number of readings to average when checking for stable no-load condition during automatic/manual calibration.
 constexpr float MINIMUM_LOAD_THRESHOLD = 1000.0f;
@@ -48,22 +49,14 @@ constexpr float MINIMUM_LOAD_THRESHOLD = 1000.0f;
 // Calibrated readings are in pounds so MINIMUM_LOAD_THRESHOLD (raw ADC units) cannot be used here.
 constexpr float PLACED_LOAD_THRESHOLD_LBS = 1.0f;
 
-// Multiplier for noise level to set load detection threshold during automatic/manual calibration.
-constexpr int UNLOAD_CHECK_COUNT = 3;
-
-/**
- * Startup empty-scale detection behavior.
- */
-
-constexpr unsigned long SETUP_EMPTY_MAX_WAIT_MS = 15000UL;
-constexpr int SETUP_EMPTY_REQUIRED_STABLE_CHECKS = 3;
+// Tolerance in pounds for detecting stable empty condition during startup calibration.
 constexpr float SETUP_EMPTY_TOLERANCE_LBS = 1.5f;
 
-/**
- * User Interaction Constants
- */
+// Shared sample/check count used for unloaded averaging and stable-empty confirmation checks.
+constexpr int UNLOAD_CHECK_COUNT = 3;
 
-constexpr unsigned long USER_CONFIRMATION_TIMEOUT_MS = 30000UL;
+// Time to wait for user confirmation during calibration workflows before auto-confirming with stable readings or cancelling if not stable.
+constexpr unsigned long USER_CONFIRM_TIMEOUT_MS = 20000UL;
 
 /**
  * Tank Constants
