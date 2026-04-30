@@ -1421,8 +1421,10 @@ void propaneWeightUpdate() {
 void setup() {
   Serial.begin(BAUD);
 
+  Serial.println();
   Serial.println(APP_TITLE);
-
+  Serial.println();
+  
   // If EEPROM initialization fails, we will continue with default values
   // If EEPROM initializes succeeds, we will attempt to load saved values
   // If load fails, we fall back to defaults and attempt to save those defaults to EEPROM for future use
