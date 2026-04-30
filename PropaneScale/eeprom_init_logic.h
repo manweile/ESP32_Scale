@@ -22,9 +22,9 @@
  * @details Defines possible outcomes attempting loading float value from EEPROM.
  */
 enum EepromLoadInitStatus {
-  EEPROM_VALUE_LOADED_VALID,                                /**< Value successfully loaded from EEPROM, passed validation. */
-  EEPROM_VALUE_INITIALIZED_AFTER_LOAD_FAIL,                 /**< Value failed loading from EEPROM, default initialized, save attempted. */
-  EEPROM_VALUE_INITIALIZED_AFTER_INVALID_LOAD               /**< Value loaded from EEPROM but failed validation, default initialized, save attempted. */
+  EEPROM_VALUE_LOADED_VALID = 0,                            /**< Value successfully loaded from EEPROM, passed validation. */
+  EEPROM_VALUE_INITIALIZED_AFTER_LOAD_FAIL = 1,             /**< Value failed loading from EEPROM, default initialized, save attempted. */
+  EEPROM_VALUE_INITIALIZED_AFTER_INVALID_LOAD = 2           /**< Value loaded from EEPROM but failed validation, default initialized, save attempted. */
 };
 
 /**
