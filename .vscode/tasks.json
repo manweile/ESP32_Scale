@@ -166,6 +166,28 @@
       "problemMatcher": []
     },
 
+    // full clean rebuild compile task pinned to ESP32 Thing FQBN to avoid board selection prompts
+    // arduino-cli compile -v --fqbn esp32:esp32:esp32thing D:\MyArduino\Projects\ESP32_Scale/PropaneScale
+    {
+      "label": "ESP32 Thing Arduino-CLI Clean Rebuild",
+      "type": "shell",
+      "command": "arduino-cli",
+      "args": [
+        "compile",
+        "-v",
+        "--clean",
+        "--fqbn", "esp32:esp32:esp32thing",
+        "${workspaceFolder}/PropaneScale"
+      ],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+
     // Arduino CLI Production Clean Rebuild task compiles the sketch with the --clean flag, 
     // forces a full rebuild from scratch, but takes longer to complete
     // arduino-cli compile -v --clean --fqbn esp32:esp32:esp32thing D:\MyArduino\Projects\ESP32_Scale/PropaneScale
@@ -294,7 +316,7 @@
       "problemMatcher": []
     },
 
-    // direct ESP32 upload task using the default merged output file from compile
+    // upload task using ESP32 chip, com port selected from propmpt, set speed, and merged output file from compile
     // esptool.exe --verbose --chip esp32 --port COM4 --baud 921600 write-flash -z 0x0 D:\MyArduino\Projects\ESP32_Scale/PropaneScale/build/esp32.esp32.esp32thing/PropaneScale.ino.merged.bin
     {
       "label": "ESPTool USB Merged Bin Upload",
@@ -304,7 +326,7 @@
         "--verbose",
         "--chip", "esp32",
         "--port", "${input:COMPort}",
-        "--baud", "${input:espUploadSpeed}",
+        "--baud", "921600",
         "write-flash",
         "-z",
         "0x0",
@@ -344,12 +366,23 @@
       "problemMatcher": []
     },
 
-    // one-click flow: compile for ESP32 Thing and upload the direct merged.bin artifact
+    // one-click flow: quick compile for ESP32 Thing and upload the direct merged.bin artifact
     {
       "label": "ESP32 Thing Arduino-CLI Quick Compile + ESPTool Upload",
       "dependsOrder": "sequence",
       "dependsOn": [
         "ESP32 Thing Arduino-CLI Quick Compile",
+        "ESPTool USB Merged Bin Upload"
+      ],
+      "problemMatcher": []
+    },
+
+    // one-click flow: clean rebuild compile for ESP32 Thing and upload the direct merged.bin artifact
+    {
+      "label": "ESP32 Thing Arduino-CLI Clean Rebuild + ESPTool Upload",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "ESP32 Thing Arduino-CLI Clean Rebuild",
         "ESPTool USB Merged Bin Upload"
       ],
       "problemMatcher": []
