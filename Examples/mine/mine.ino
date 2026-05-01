@@ -138,7 +138,7 @@ void autoCalibrate(float knownWeightLbs) {
         case 'f':
         case 'F':
           // calculate new calibration factor based on ratio of known weight to measured weight, then apply new calibration factor to scale
-          newCalibrationFactor = weightLbs / DEF_KNOWN_WEIGHT_LBS;
+          newCalibrationFactor = weightLbs / DEF_KNOWN_WEIGHT;
           Serial.print("Exiting calibration mode, setting new calibration factor: ");
           Serial.println(newCalibrationFactor);
           calibrationFactor = newCalibrationFactor;
@@ -305,7 +305,7 @@ void manualCalibrate() {
 void computePropaneLevel() {
   totalWeight = scale.get_units(LIVE_SAMPLES);
   propaneWeight = totalWeight - tankTare;
-  propaneLevel = propaneWeight / DEF_MAX_PROPANE_LBS * 100.0f;
+  propaneLevel = propaneWeight / DEF_MAX_PROPANE * 100.0f;
   Serial.println();
   Serial.print("Reading: ");
   Serial.print(propaneLevel, 1);
@@ -476,7 +476,7 @@ void loop() {
 
     switch (command) {
       case 'a':
-        autoCalibrate(DEF_KNOWN_WEIGHT_LBS);
+        autoCalibrate(DEF_KNOWN_WEIGHT);
         break;
       case 'm':
         manualCalibrate();
