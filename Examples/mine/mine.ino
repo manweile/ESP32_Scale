@@ -79,11 +79,11 @@ bool saveCalibrationFactor(float factor) {
  * @details Adjusts the calibration factor based on the ratio of the known weight
  * to the measured weight until the displayed weight matches the known reference load.
  *
- * @param {float} knownWeightLbs The known reference weight in pounds used for automatic calibration.
+ * @param {float} knownWeight The known reference weight in pounds used for automatic calibration.
  * 
  * @throws {none} This function does not throw exceptions.
  */
-void autoCalibrate(float knownWeightLbs) {
+void autoCalibrate(float knownWeight) {
   char calibrationInput = '\0';
   float newCalibrationFactor = 0.0f;
   long reading = 0.0f;
