@@ -13,25 +13,25 @@
  */
 
 // Standard library headers
-#include <EEPROM.h>                     // EEPROM library for persistent storage of calibration and tare values
-#include <math.h>                       // Math helpers for fabsf and isfinite during value validation
-#include <stdlib.h>                     // Standard library for functions like strtof for parsing floats from strings 
+#include <EEPROM.h>                                         // EEPROM library for persistent storage of calibration and tare values
+#include <math.h>                                           // Math helpers for fabsf and isfinite during value validation
+#include <stdlib.h>                                         // Standard library for functions like strtof for parsing floats from strings 
 
 // Third party library headers
-#include "HX711.h"                      // HX711 library for interfacing with the load cell amplifier to read weight data
+#include "HX711.h"                                          // HX711 library for interfacing with the load cell amplifier to read weight data
 
 // Local library headers
-#include "config.h"                     // Local configuration header defining pin assignments, calibration constants, and EEPROM addresses
+#include "config.h"                                         // Local configuration header defining pin assignments, calibration constants, and EEPROM addresses
 
 // Global class variables
-HX711 scale;                            // HX711 instance for interacting with the load cell amplifier
+HX711 scale;                                                // HX711 instance for interacting with the load cell amplifier
 
 // Global state variables
-float calibrationFactor = 0.0f;         // Calibration factor for converting raw HX711 readings to weight in pounds
-bool eepromReady = false;               // Flag to track if EEPROM was successfully initialized
-float knownWeight = 0.0f;               // Known weight for calibration
-float maxPropane = 0.0f;                // Maximum legal propane weight in pounds
-float tankTare = 0.0f;                  // Tare weight of the empty propane tank in pounds
+float calibrationFactor = 0.0f;                             // Calibration factor for converting raw HX711 readings to weight in pounds
+bool eepromReady = false;                                   // Flag to track if EEPROM was successfully initialized
+float knownWeight = 0.0f;                                   // Known weight for calibration
+float maxPropane = 0.0f;                                    // Maximum legal propane weight in pounds
+float tankTare = 0.0f;                                      // Tare weight of the empty propane tank in pounds
 
 // Calibration state machine variables and constants
 
@@ -43,10 +43,10 @@ float tankTare = 0.0f;                  // Tare weight of the empty propane tank
  * @details Used to manage different calibration workflows initiated by the user.
  */
 enum class CalMode  : uint8_t { 
-  NONE = 0,                             /**< No calibration mode active */
-  AUTO = 1,                             /**< Automatic calibration mode */
-  MANUAL = 2,                           /**< Manual calibration mode */
-  REZERO = 3                            /**< Rezero calibration mode */
+  NONE = 0,                                                 /**< No calibration mode active */
+  AUTO = 1,                                                 /**< Automatic calibration mode */
+  MANUAL = 2,                                               /**< Manual calibration mode */
+  REZERO = 3                                                /**< Rezero calibration mode */
 };
 
 /**
@@ -57,10 +57,10 @@ enum class CalMode  : uint8_t {
  * @details Used to manage multi-step calibration processes and user prompts during calibration.
  */
 enum class CalState : uint8_t { 
-  IDLE = 0,                             /**< Not currently in a calibration workflow, waiting for user input to start one */
-  WAIT_EMPTY = 1,                       /**< Waiting for the scale to be empty before starting calibration */
-  WAIT_LOAD = 2,                        /**< Waiting for a known weight to be placed on the scale */
-  ADJUSTING = 3                         /**< Adjusting the calibration factor based on user input or measurements */
+  IDLE = 0,                                                 /**< Not currently in a calibration workflow, waiting for user input to start one */
+  WAIT_EMPTY = 1,                                           /**< Waiting for the scale to be empty before starting calibration */
+  WAIT_LOAD = 2,                                            /**< Waiting for a known weight to be placed on the scale */
+  ADJUSTING = 3                                             /**< Adjusting the calibration factor based on user input or measurements */
 };
 
 /**
@@ -88,6 +88,50 @@ struct CalContext {
 };
 
 static CalContext calCtx;                                   /**< Calibration context instance to hold state for calibration workflows */
+
+// Input state machine variables and constants
+
+/**
+ * @enum InputMode
+ *
+ * @brief Active user input workflow mode.
+ * 
+ * @details Used to manage different non-blocking serial input workflows initiated by the user
+ */
+enum class InputMode : uint8_t {
+  NONE = 0,                                                 /**< No active user input workflow */
+  TANK_TARE = 1                                             /**< Tank tare update workflow */
+};
+
+/**
+ * @enum InputState
+ *
+ * @brief Internal parse state for non-blocking input workflows.
+ * 
+ * @details Used to manage the stepwise process of collecting and confirming user input during workflows that require multiple interactions
+ */
+enum class InputState : uint8_t {
+  IDLE = 0,                                                 /**< Not collecting any input */
+  ENTER_VALUE = 1,                                          /**< Collecting numeric value text */
+  WAIT_SAVE_CONFIRM = 2                                     /**< Waiting for 's' save or 'q' cancel */
+};
+
+/**
+ * @struct InputContext
+ *
+ * @brief Persistent serial parse context for non-blocking user input workflows.
+ * 
+ * @details Contains variables for managing the state of user input collection and confirmation across multiple loop() iterations without blocking
+ */
+struct InputContext {
+  char      buffer[24]   = {0};                             /**< Text buffer for user-entered numeric value */
+  int       index        = 0;                               /**< Current write index into buffer */
+  InputMode mode         = InputMode::NONE;                 /**< Active workflow mode */
+  float     parsedValue  = 0.0f;                            /**< Last parsed numeric value pending save */
+  InputState state       = InputState::IDLE;                /**< Current parse state for active mode */
+};
+
+static InputContext inputCtx;                               /**< Non-blocking input context for serial workflows */
 
 // @todo move to config.h
 // EEPROM sanity limits for persisted values
@@ -523,6 +567,145 @@ static void transitionFromWaitEmpty() {
   calCtx.state        = CalState::WAIT_LOAD;
 }
 
+// Input state machine functions
+
+/**
+ * @brief Handles user input for the tank tare update workflow.
+ *
+ * @details Processes incoming characters from the serial input, updating the input context,
+ * validating the input, and managing the state transitions for the tank tare update workflow.
+ *
+ * @param incoming The incoming character from the serial input.
+ *
+ * @return {void} No value is returned.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+void handleTankTareInput(char incoming) {
+  if (incoming == '\r') {
+    return;
+  }
+
+  if (inputCtx.state == InputState::WAIT_SAVE_CONFIRM) {
+    if (incoming == '\n') {
+      return;
+    }
+
+    if (incoming == 'q' || incoming == 'Q') {
+      Serial.println("Tank tare update cancelled.");
+      resetInputContext();
+      return;
+    }
+
+    if (incoming == 's' || incoming == 'S') {
+      tankTare = inputCtx.parsedValue;
+      if (!saveToEeprom(tankTare, TARE_EEPROM_MAGIC, TARE_EEPROM_MAGIC_ADDR, TARE_EEPROM_VALUE_ADDR)) {
+        Serial.println("Failed to save tank tare to EEPROM.");
+      } else {
+        Serial.print("Tank tare saved successfully: ");
+        Serial.print(tankTare, 2);
+        Serial.println(" lbs");
+      }
+      resetInputContext();
+      return;
+    }
+
+    Serial.println("Invalid response. Send 's' to save, or 'q' to cancel.");
+    return;
+  }
+
+  if ((incoming == 'q' || incoming == 'Q') && inputCtx.index == 0) {
+    Serial.println("Tank tare update cancelled.");
+    resetInputContext();
+    return;
+  }
+
+  if (incoming == '\n') {
+    inputCtx.buffer[inputCtx.index] = '\0';
+
+    if (inputCtx.index == 1 && (inputCtx.buffer[0] == 'q' || inputCtx.buffer[0] == 'Q')) {
+      Serial.println("Tank tare update cancelled.");
+      resetInputContext();
+      return;
+    }
+
+    if (parseNonNegativeFloat(inputCtx.buffer, inputCtx.parsedValue) && isValidBoundedFloat(inputCtx.parsedValue, TANK_TARE_MIN_LBS, MAX_PROJECT_WEIGHT_LBS)) {
+      Serial.print("New tank tare entered: ");
+      Serial.print(inputCtx.parsedValue, 2);
+      Serial.println(" lbs");
+      Serial.println("Send 's' to save this value to EEPROM, or 'q' to cancel.");
+      inputCtx.state = InputState::WAIT_SAVE_CONFIRM;
+      inputCtx.index = 0;
+      inputCtx.buffer[0] = '\0';
+      return;
+    }
+
+    Serial.print("Invalid tank tare. Enter a number from ");
+    Serial.print(TANK_TARE_MIN_LBS, 2);
+    Serial.print(" to ");
+    Serial.print(MAX_PROJECT_WEIGHT_LBS, 2);
+    Serial.println(" lbs, or 'q' to cancel.");
+    inputCtx.index = 0;
+    inputCtx.buffer[0] = '\0';
+    return;
+  }
+
+  if (incoming == 's' || incoming == 'S') {
+    if (inputCtx.index == 0) {
+      Serial.println("Enter a tare value first, then send 's' to save.");
+      return;
+    }
+
+    inputCtx.buffer[inputCtx.index] = '\0';
+    if (!parseNonNegativeFloat(inputCtx.buffer, inputCtx.parsedValue) || !isValidBoundedFloat(inputCtx.parsedValue, TANK_TARE_MIN_LBS, MAX_PROJECT_WEIGHT_LBS)) {
+      Serial.print("Invalid tank tare. Enter a number from ");
+      Serial.print(TANK_TARE_MIN_LBS, 2);
+      Serial.print(" to ");
+      Serial.print(MAX_PROJECT_WEIGHT_LBS, 2);
+      Serial.println(" lbs, or 'q' to cancel.");
+      inputCtx.index = 0;
+      inputCtx.buffer[0] = '\0';
+      return;
+    }
+
+    tankTare = inputCtx.parsedValue;
+    if (!saveToEeprom(tankTare, TARE_EEPROM_MAGIC, TARE_EEPROM_MAGIC_ADDR, TARE_EEPROM_VALUE_ADDR)) {
+      Serial.println("Failed to save tank tare to EEPROM.");
+    } else {
+      Serial.print("Tank tare saved successfully: ");
+      Serial.print(tankTare, 2);
+      Serial.println(" lbs");
+    }
+    resetInputContext();
+    return;
+  }
+
+  if (inputCtx.index < static_cast<int>(sizeof(inputCtx.buffer) - 1)) {
+    inputCtx.buffer[inputCtx.index++] = incoming;
+  } else {
+    Serial.println("Input too long. Enter a shorter number, or 'q' to cancel.");
+    inputCtx.index = 0;
+    inputCtx.buffer[0] = '\0';
+  }
+}
+
+/**
+ * @brief Resets the input context to its initial state.
+ *
+ * @details Clears the input context, setting the mode to NONE, state to IDLE,
+ * index to 0, parsed value to 0.0f, and buffer to an empty string.
+ *
+ * @return {void} No value is returned.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+static void resetInputContext() {
+  inputCtx.mode = InputMode::NONE;
+  inputCtx.state = InputState::IDLE;
+  inputCtx.index = 0;
+  inputCtx.parsedValue = 0.0f;
+  inputCtx.buffer[0] = '\0';
+}
 
 // Helper functions for user initiated workflows
 
@@ -1030,24 +1213,29 @@ void reZero() {
   calCtx.measuredUnits     = 0.0f;
 }
 
-// @todo query agent if tankTareUpdate is non-blocking
 /**
- * @brief Prompts the user for a tare value and saves it to EEPROM.
+ * @brief Initiates the tank tare update workflow.
  *
- * @details This function interacts with the user over serial to get a new multi-digit tare weight for the propane tank.
- * It validates the input to ensure it's a non-negative float, and allows the user to cancel the update by sending 'q'.
- * 
+ * @details Starts a non-blocking serial workflow that prompts the user to enter a new tank tare value,
+ * validates the input, and saves it to EEPROM if confirmed.
+ *
  * @return {void} No value is returned.
- * 
+ *
  * @throws {none} This function does not throw exceptions.
  */
 void tankTareUpdate() {
-  char inputBuffer[24] = {0};           // Hold user input for the new tank tare value
-  int inputIndex = 0;                   // Track the current position in inputBuffer for storing incoming characters
-  float parsedValue = 0.0f;             // Parsed value of the new tank tare after validating the input string
-  bool waitingForSave = false;          // Indicate currently waiting for the user to confirm save
+  if (inputCtx.mode != InputMode::NONE) {
+    Serial.println("Another input workflow is already active.");
+    return;
+  }
 
   flushSerialInput();
+
+  inputCtx.mode = InputMode::TANK_TARE;
+  inputCtx.state = InputState::ENTER_VALUE;
+  inputCtx.index = 0;
+  inputCtx.parsedValue = 0.0f;
+  inputCtx.buffer[0] = '\0';
 
   Serial.println();
   Serial.print("Current tank tare: ");
@@ -1059,119 +1247,10 @@ void tankTareUpdate() {
   Serial.print(MAX_PROJECT_WEIGHT_LBS, 2);
   Serial.println("), then press Enter.");
   Serial.println("After entry, send 's' to save or 'q' to cancel.");
-
-  while (true) {
-    if (!Serial.available()) {
-      delay(10);
-      continue;
-    }
-
-    char incoming = Serial.read();
-
-    if (incoming == '\r') {
-      continue;
-    }
-
-    if (!waitingForSave && (incoming == 'q' || incoming == 'Q') && inputIndex == 0) {
-      Serial.println("Tank tare update cancelled.");
-      return;
-    }
-
-    if (waitingForSave) {
-      if (incoming == '\n') {
-        continue;
-      }
-
-      if (incoming == 'q' || incoming == 'Q') {
-        Serial.println("Tank tare update cancelled.");
-        return;
-      }
-
-      if (incoming == 's' || incoming == 'S') {
-        tankTare = parsedValue;
-        if (!saveToEeprom(tankTare, TARE_EEPROM_MAGIC, TARE_EEPROM_MAGIC_ADDR, TARE_EEPROM_VALUE_ADDR)) {
-          Serial.println("Failed to save tank tare to EEPROM.");
-        } else {
-          Serial.print("Tank tare saved successfully: ");
-          Serial.print(tankTare, 2);
-          Serial.println(" lbs");
-        }
-        return;
-      }
-
-      Serial.println("Invalid response. Send 's' to save, or 'q' to cancel.");
-      continue;
-    }
-
-    if (incoming == '\n') {
-      inputBuffer[inputIndex] = '\0';
-
-      if (inputIndex == 1 && (inputBuffer[0] == 'q' || inputBuffer[0] == 'Q')) {
-        Serial.println("Tank tare update cancelled.");
-        return;
-      }
-
-      if (parseNonNegativeFloat(inputBuffer, parsedValue) && isValidBoundedFloat(parsedValue, TANK_TARE_MIN_LBS, MAX_PROJECT_WEIGHT_LBS)) {
-        Serial.print("New tank tare entered: ");
-        Serial.print(parsedValue, 2);
-        Serial.println(" lbs");
-        Serial.println("Send 's' to save this value to EEPROM, or 'q' to cancel.");
-        waitingForSave = true;
-        inputIndex = 0;
-        inputBuffer[0] = '\0';
-        continue;
-      }
-
-      Serial.print("Invalid tank tare. Enter a number from ");
-      Serial.print(TANK_TARE_MIN_LBS, 2);
-      Serial.print(" to ");
-      Serial.print(MAX_PROJECT_WEIGHT_LBS, 2);
-      Serial.println(" lbs, or 'q' to cancel.");
-      inputIndex = 0;
-      inputBuffer[0] = '\0';
-      continue;
-    }
-
-    if (incoming == 's' || incoming == 'S') {
-      if (inputIndex == 0) {
-        Serial.println("Enter a tare value first, then send 's' to save.");
-        continue;
-      }
-
-      inputBuffer[inputIndex] = '\0';
-      if (!parseNonNegativeFloat(inputBuffer, parsedValue) || !isValidBoundedFloat(parsedValue, TANK_TARE_MIN_LBS, MAX_PROJECT_WEIGHT_LBS)) {
-        Serial.print("Invalid tank tare. Enter a number from ");
-        Serial.print(TANK_TARE_MIN_LBS, 2);
-        Serial.print(" to ");
-        Serial.print(MAX_PROJECT_WEIGHT_LBS, 2);
-        Serial.println(" lbs, or 'q' to cancel.");
-        inputIndex = 0;
-        inputBuffer[0] = '\0';
-        continue;
-      }
-
-      tankTare = parsedValue;
-      if (!saveToEeprom(tankTare, TARE_EEPROM_MAGIC, TARE_EEPROM_MAGIC_ADDR, TARE_EEPROM_VALUE_ADDR)) {
-        Serial.println("Failed to save tank tare to EEPROM.");
-      } else {
-        Serial.print("Tank tare saved successfully: ");
-        Serial.print(tankTare, 2);
-        Serial.println(" lbs");
-      }
-      return;
-    }
-
-    if (inputIndex < static_cast<int>(sizeof(inputBuffer) - 1)) {
-      inputBuffer[inputIndex++] = incoming;
-    } else {
-      Serial.println("Input too long. Enter a shorter number, or 'q' to cancel.");
-      inputIndex = 0;
-      inputBuffer[0] = '\0';
-    }
-  }
 }
 
-// @todo query agent if propaneWeightUpdate is non-blocking
+
+// @todo switch to non-blocking
 /**
  * @brief Prompts the user for max propane weight and saves it to EEPROM.
  *
@@ -1437,6 +1516,12 @@ void loop() {
 
   char temp = Serial.read();
 
+  // Route one character at a time to active non-blocking input workflow.
+  if (inputCtx.mode == InputMode::TANK_TARE) {
+    handleTankTareInput(temp);
+    return;
+  }
+
   // ignore newline characters that may be sent by the serial monitor after commands
   // need to avoid accidentally triggering multiple commands in a row
   if (temp == '\r' || temp == '\n') {
@@ -1501,7 +1586,7 @@ void loop() {
 
   // flush any extra input after handling a command
   // need to prevent accidental multiple command triggers from a single line of input
-  if (handled) {
+  if (handled && inputCtx.mode == InputMode::NONE) {
     flushSerialInput();
   }
 }
