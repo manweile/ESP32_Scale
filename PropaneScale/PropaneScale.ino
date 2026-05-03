@@ -596,6 +596,11 @@ void handlePropaneWeightInput(char incoming) {
     }
 
     if (incoming == 's' || incoming == 'S') {
+      if (fabsf(inputCtx.parsedValue - maxPropane) >= maxPropane * CHANGE_WARN_PCT) {
+        Serial.print("Warning: Max propane weight changed by ");
+        Serial.print(fabsf(inputCtx.parsedValue - maxPropane), 2);
+        Serial.println(" lbs. Verify tank tare ('t') and known calibration weight ('k') are still accurate, and recalibrate ('a' or 'm') if needed.");
+      }
       maxPropane = inputCtx.parsedValue;
       if (!saveToEeprom(maxPropane, MAX_PROPANE_EEPROM_MAGIC, MAX_PROPANE_EEPROM_MAGIC_ADDR, MAX_PROPANE_EEPROM_VALUE_ADDR)) {
         Serial.println("Failed to save max propane weight to EEPROM.");
@@ -667,6 +672,11 @@ void handlePropaneWeightInput(char incoming) {
       return;
     }
 
+    if (fabsf(inputCtx.parsedValue - maxPropane) >= maxPropane * CHANGE_WARN_PCT) {
+      Serial.print("Warning: Max propane weight changed by ");
+      Serial.print(fabsf(inputCtx.parsedValue - maxPropane), 2);
+      Serial.println(" lbs. Verify tank tare ('t') and known calibration weight ('k') are still accurate, and recalibrate ('a' or 'm') if needed.");
+    }
     maxPropane = inputCtx.parsedValue;
     if (!saveToEeprom(maxPropane, MAX_PROPANE_EEPROM_MAGIC, MAX_PROPANE_EEPROM_MAGIC_ADDR, MAX_PROPANE_EEPROM_VALUE_ADDR)) {
       Serial.println("Failed to save max propane weight to EEPROM.");
@@ -717,6 +727,12 @@ void handleTankTareInput(char incoming) {
     }
 
     if (incoming == 's' || incoming == 'S') {
+      if (fabsf(inputCtx.parsedValue - tankTare) >= tankTare * CHANGE_WARN_PCT) {
+        Serial.print("Warning: Tank tare changed by ");
+        Serial.print(fabsf(inputCtx.parsedValue - tankTare), 2);
+        Serial.println(" lbs.");
+        Serial.println("Update max legal propane ('p') and known calibration weight ('k'), then recalibrate ('a' or 'm') to maintain accuracy.");
+      }
       tankTare = inputCtx.parsedValue;
       if (!saveToEeprom(tankTare, TARE_EEPROM_MAGIC, TARE_EEPROM_MAGIC_ADDR, TARE_EEPROM_VALUE_ADDR)) {
         Serial.println("Failed to save tank tare to EEPROM.");
@@ -787,6 +803,12 @@ void handleTankTareInput(char incoming) {
       return;
     }
 
+    if (fabsf(inputCtx.parsedValue - tankTare) >= tankTare * CHANGE_WARN_PCT) {
+      Serial.print("Warning: Tank tare changed by ");
+      Serial.print(fabsf(inputCtx.parsedValue - tankTare), 2);
+      Serial.println(" lbs.");
+      Serial.println("Update max legal propane ('p') and known calibration weight ('k'), then recalibrate ('a' or 'm') to maintain accuracy.");
+    }
     tankTare = inputCtx.parsedValue;
     if (!saveToEeprom(tankTare, TARE_EEPROM_MAGIC, TARE_EEPROM_MAGIC_ADDR, TARE_EEPROM_VALUE_ADDR)) {
       Serial.println("Failed to save tank tare to EEPROM.");
@@ -851,7 +873,7 @@ void tickCalibration() {
   // workflow - waiting on user to remove all weight from platen
   if (calCtx.state == CalState::WAIT_EMPTY) {
     
-    if ((millis() - calCtx.stateStartMs) >= USER_CONFIRM_TIMEOUT) {
+    if ((millis() - calCtx.stateStartMs) >= USER_CONFIRM_TIMEOUT_MS) {
       
       // take one final reading to decide auto-confirm vs. abort
       calCtx.measuredUnits = readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES);
@@ -897,7 +919,7 @@ void tickCalibration() {
   if (calCtx.state == CalState::WAIT_LOAD) {
     
     // User never placed weight in time — abort rather than calibrate with no load
-    if ((millis() - calCtx.stateStartMs) >= EMPTY_CONFIRM_TIMEOUT) {
+    if ((millis() - calCtx.stateStartMs) >= EMPTY_CONFIRM_TIMEOUT_MS) {
       Serial.println("Weight placement timed out; calibration cancelled.");
       calCtx.state = CalState::IDLE;
       calCtx.mode  = CalMode::NONE;
@@ -1030,7 +1052,7 @@ void tickLevelRead() {
   }
 
   if (levelCtx.state == LevelState::WAIT_LOAD) {
-    if ((millis() - levelCtx.stateStartMs) >= EMPTY_CONFIRM_TIMEOUT) {
+    if ((millis() - levelCtx.stateStartMs) >= EMPTY_CONFIRM_TIMEOUT_MS) {
       Serial.println("Tank placement timed out; cancelled.");
       levelCtx.state = LevelState::IDLE;
       return;
@@ -1107,7 +1129,7 @@ void tickTare() {
     }
   }
 
-  if ((millis() - tareCtx.stateStartMs) >= EMPTY_CONFIRM_TIMEOUT) {
+  if ((millis() - tareCtx.stateStartMs) >= EMPTY_CONFIRM_TIMEOUT_MS) {
     float m = readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES);
     if (fabsf(m - tareCtx.baseline) <= SETUP_EMPTY_WEIGHT) {
       Serial.println("Startup tare auto-confirmed at timeout (stable scale).");
@@ -1181,7 +1203,7 @@ static void transitionFromWaitEmpty() {
   
   Serial.println("Waiting for weight placement on scale...");
   Serial.print("Load placement timeout: ");
-  Serial.print(EMPTY_CONFIRM_TIMEOUT / 1000UL);
+  Serial.print(EMPTY_CONFIRM_TIMEOUT_MS / 1000UL);
   Serial.println(" seconds.");
 
   calCtx.stateStartMs = millis();
@@ -1348,7 +1370,7 @@ void beginTare() {
   Serial.println(F("Startup tare: waiting for stable scale..."));
   Serial.println(F("Auto-detect is active."));
   Serial.print(F("Auto-detect timeout: "));
-  Serial.print(EMPTY_CONFIRM_TIMEOUT / 1000UL);
+  Serial.print(EMPTY_CONFIRM_TIMEOUT_MS / 1000UL);
   Serial.println(F(" seconds."));
   Serial.print(F("Stability tolerance: +/- "));
   Serial.print(SETUP_EMPTY_WEIGHT, 2);
@@ -1394,7 +1416,7 @@ void automaticCalibration() {
   Serial.println(" lbs.");
   Serial.println("Send 'q' to cancel.");
   Serial.print("Confirmation timeout: ");
-  Serial.print(USER_CONFIRM_TIMEOUT / 1000UL);
+  Serial.print(USER_CONFIRM_TIMEOUT_MS / 1000UL);
   Serial.println(" seconds.");
 
   calCtx.mode              = CalMode::AUTO;
@@ -1555,7 +1577,7 @@ void liquidLevel() {
   Serial.println("Place propane tank on scale.");
   Serial.println("Waiting for tank placement...");
   Serial.print("Load placement timeout: ");
-  Serial.print(EMPTY_CONFIRM_TIMEOUT / 1000UL);
+  Serial.print(EMPTY_CONFIRM_TIMEOUT_MS / 1000UL);
   Serial.println(" seconds.");
   Serial.println("Send 'q' to cancel.");
 }
@@ -1599,7 +1621,7 @@ void manualCalibration() {
   Serial.println(" lbs.");
   Serial.println("Send 'q' to cancel.");
   Serial.print("Confirmation timeout: ");
-  Serial.print(USER_CONFIRM_TIMEOUT / 1000UL);
+  Serial.print(USER_CONFIRM_TIMEOUT_MS / 1000UL);
   Serial.println(" seconds.");
 
   calCtx.adjustmentStep            = step;
@@ -1647,7 +1669,7 @@ void reZero() {
   Serial.println(" lbs.");
   Serial.println("Send 'q' to cancel.");
   Serial.print("Confirmation timeout: ");
-  Serial.print(USER_CONFIRM_TIMEOUT / 1000UL);
+  Serial.print(USER_CONFIRM_TIMEOUT_MS / 1000UL);
   Serial.println(" seconds.");
 
   calCtx.mode              = CalMode::REZERO;
