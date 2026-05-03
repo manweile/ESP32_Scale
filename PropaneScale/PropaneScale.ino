@@ -1253,7 +1253,7 @@ void beginTare() {
  */
 void automaticCalibration() {
   if (calCtx.state != CalState::IDLE) {
-    Serial.println("Calibration already in progress. Send 'q' to cancel first.");
+    Serial.println("Automatic calibration already in progress. Send 'q' to cancel first.");
     return;
   }
 
@@ -1336,6 +1336,26 @@ void eepromValues() {
 }
 
 /**
+ * @brief Prints the help menu with all available commands.
+ *
+ * @details Lists all the runtime commands that the user can send over serial to interact with the scale.
+ * 
+ * @return {void} No value is returned.
+ * 
+ * @throws {none} This function does not throw exceptions.
+ */
+void helpMenu() {
+  Serial.println();
+  Serial.println(CMD_AUTO_CAL_MSG);
+  Serial.println(CMD_EEPROM_MSG);
+  Serial.println(CMD_LEVEL_MSG);
+  Serial.println(CMD_MANUAL_CAL_MSG);
+  Serial.println(CMD_PROPANE_WEIGHT_MSG);
+  Serial.println(CMD_REZERO_MSG);
+  Serial.println(CMD_TANK_TARE_MSG);
+}
+
+/**
  * @brief Starts the liquid level read workflow.
  *
  * @details Validates scale readiness, measures the noise baseline to compute a
@@ -1349,7 +1369,7 @@ void eepromValues() {
  */
 void liquidLevel() {
   if (levelCtx.state != LevelState::IDLE) {
-    Serial.println("Level read already in progress. Send 'q' to cancel.");
+    Serial.println("Level read already in progress. Send 'q' to cancel first.");
     return;
   }
 
@@ -1373,26 +1393,6 @@ void liquidLevel() {
 }
 
 /**
- * @brief Prints the help menu with all available commands.
- *
- * @details Lists all the runtime commands that the user can send over serial to interact with the scale.
- * 
- * @return {void} No value is returned.
- * 
- * @throws {none} This function does not throw exceptions.
- */
-void helpMenu() {
-  Serial.println();
-  Serial.println(CMD_AUTO_CAL_MSG);
-  Serial.println(CMD_EEPROM_MSG);
-  Serial.println(CMD_LEVEL_MSG);
-  Serial.println(CMD_MANUAL_CAL_MSG);
-  Serial.println(CMD_PROPANE_WEIGHT_MSG);
-  Serial.println(CMD_REZERO_MSG);
-  Serial.println(CMD_TANK_TARE_MSG);
-}
-
-/**
  * @brief Starts the manual calibration workflow.
  *
  * @details Validates that no calibration is already running, checks scale readiness,
@@ -1406,7 +1406,7 @@ void helpMenu() {
  */
 void manualCalibration() {
   if (calCtx.state != CalState::IDLE) {
-    Serial.println("Calibration already in progress. Send 'q' to cancel first.");
+    Serial.println("Manual calibration already in progress. Send 'q' to cancel first.");
     return;
   }
 
@@ -1459,7 +1459,7 @@ void manualCalibration() {
  */
 void reZero() {
   if (calCtx.state != CalState::IDLE) {
-    Serial.println("Calibration already in progress. Send 'q' to cancel first.");
+    Serial.println("Runtime re-zero already in progress. Send 'q' to cancel first.");
     return;
   }
 
@@ -1501,7 +1501,7 @@ void reZero() {
  */
 void tankTareUpdate() {
   if (inputCtx.mode != InputMode::NONE) {
-    Serial.println("Another input workflow is already active.");
+    Serial.println("Tank tare input workflow already in progress. Send 'q' to cancel first.");
     return;
   }
 
@@ -1537,7 +1537,7 @@ void tankTareUpdate() {
  */
 void propaneWeightUpdate() {
   if (inputCtx.mode != InputMode::NONE) {
-    Serial.println("Another input workflow is already active.");
+    Serial.println("Propane weight input workflow already in progress. Send 'q' to cancel first.");
     return;
   }
 
@@ -1699,12 +1699,13 @@ void loop() {
     return;
   }
 
-  // Route one character at a time to active non-blocking input workflow.
+  // Route one character at a time to active tank tare input workflow
   if (inputCtx.mode == InputMode::TANK_TARE) {
     handleTankTareInput(temp);
     return;
   }
 
+  // Route one character at a time to active propane weight input workflow
   if (inputCtx.mode == InputMode::PROPANE_WEIGHT) {
     handlePropaneWeightInput(temp);
     return;
@@ -1712,6 +1713,8 @@ void loop() {
 
   // ignore newline characters that may be sent by the serial monitor after commands
   // need to avoid accidentally triggering multiple commands in a row
+  // MUST come after input mode handlers because user hits enter after inputting new value, 
+  // so newlines need to be processed by input handlers but ignored for general command dispatch
   if (temp == '\r' || temp == '\n') {
     return;
   }
@@ -1723,8 +1726,7 @@ void loop() {
     return;
   }
 
-  // Fell through to here, so no active calibration workflow, 
-  // time to setup for user serial input command handler
+  // Fell through to here, so no active workflows, setup for user serial input
   bool handled = true;
 
   // by having empty lower case input cases, do not need to call tolower() on the input
@@ -1766,7 +1768,6 @@ void loop() {
     case 'T':
       tankTareUpdate();
       break;
-
     default:
       handled = false;
       Serial.print("Unknown command: '");
