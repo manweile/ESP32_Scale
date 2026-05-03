@@ -45,6 +45,10 @@ constexpr float DEF_CALIBRATION_FACTOR = -10434.32f;        // collapsible water
 // Maximum time to wait for load placement during startup and calibration before giving up and returning to idle state.
 constexpr unsigned long EMPTY_CONFIRM_TIMEOUT = 15000UL;
 
+// Settle delay in milliseconds after load detection before taking a calibration measurement.
+// Prevents mid-placement reads caused by the weight still moving when the threshold is first crossed.
+constexpr unsigned long CAL_SETTLE_DELAY_MS = 2000UL;
+
 // Number of readings to average when checking for stable no-load condition during automatic/manual calibration.
 constexpr float MINIMUM_LOAD_THRESHOLD = 1000.0f;
 

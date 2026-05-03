@@ -12,21 +12,37 @@
  * @copyright Copyright (c) 2024
  */
 
-// Standard library headers
+/**
+ * @section Includes 
+ */
+
+/**
+ * @subsection Standard library headers
+ */
+
 #include <EEPROM.h>                                         // EEPROM library for persistent storage of calibration and tare values
 #include <math.h>                                           // Math helpers for fabsf and isfinite during value validation
 #include <stdlib.h>                                         // Standard library for functions like strtof for parsing floats from strings 
 
-// Third party library headers
+/**
+ * @subsection Third party library headers
+ */
 #include "HX711.h"                                          // HX711 library for interfacing with the load cell amplifier to read weight data
 
-// Local library headers
+/** 
+ * @subsection Local library headers
+ */
 #include "config.h"                                         // Local configuration header defining pin assignments, calibration constants, and EEPROM addresses
 
-// Global class variables
+/**
+ * @section Global Class Instances
+ */
 HX711 scale;                                                // HX711 instance for interacting with the load cell amplifier
 
-// Global state variables
+/** 
+ * @section Global State Variables
+ */
+
 float calibrationFactor = 0.0f;                             // Calibration factor for converting raw HX711 readings to weight in pounds
 bool eepromReady = false;                                   // Flag to track if EEPROM was successfully initialized
 float knownWeight = 0.0f;                                   // Known weight for calibration
@@ -34,10 +50,12 @@ float maxPropane = 0.0f;                                    // Maximum legal pro
 float tankTare = 0.0f;                                      // Tare weight of the empty propane tank in pounds
 
 /**
- * Global sState machine variables and constants
+ * @section Global State Machine Variables and Constants
  */
 
-// Calibration State
+/**
+ * @subsection Calibration State Machine
+ */
 
 /**
  * @enum CalMode
@@ -64,7 +82,8 @@ enum class CalState : uint8_t {
   IDLE = 0,                                                 /**< Not currently in a calibration workflow, waiting for user input to start one */
   WAIT_EMPTY = 1,                                           /**< Waiting for the scale to be empty before starting calibration */
   WAIT_LOAD = 2,                                            /**< Waiting for a known weight to be placed on the scale */
-  ADJUSTING = 3                                             /**< Adjusting the calibration factor based on user input or measurements */
+  SETTLING = 3,                                             /**< Waiting for the placed weight to mechanically settle before measuring */
+  ADJUSTING = 4                                             /**< Adjusting the calibration factor based on user input or measurements */
 };
 
 /**
@@ -93,7 +112,9 @@ struct CalContext {
 
 static CalContext calCtx;                                   /**< Calibration context instance to hold state for calibration workflows */
 
-// Input State
+/**
+ * @subsection Non-blocking Serial Input State Machine
+ */
 
 /**
  * @enum InputMode
@@ -138,8 +159,44 @@ struct InputContext {
 
 static InputContext inputCtx;                               /**< Non-blocking input context for serial workflows */
 
+/**
+ * @subsection Non-blocking Level Read State Machine
+ */
+
+/**
+ * @enum LevelState
+ *
+ * @brief Enumeration of states for the liquid level read workflow.
+ *
+ * @details Used to manage the non-blocking tank detection and measurement sequence.
+ */
+enum class LevelState : uint8_t {
+  IDLE      = 0,                                            /**< No active level read workflow */
+  WAIT_LOAD = 1,                                            /**< Polling scale until tank weight exceeds detection threshold */
+  READING   = 2                                             /**< Load detected; taking final averaged measurement */
+};
+
+/**
+ * @struct LevelContext
+ *
+ * @brief Persistent context for the non-blocking liquid level read workflow.
+ *
+ * @details Stores the detection threshold, start timestamp, and current state
+ * so each loop() tick can advance the workflow without blocking.
+ */
+struct LevelContext {
+  float         loadDetectThreshold = 0.0f;                 /**< noise-derived threshold used to detect tank placement */
+  LevelState    state               = LevelState::IDLE;     /**< current state within the level read workflow */
+  unsigned long stateStartMs        = 0;                    /**< millis() when WAIT_LOAD state was entered */
+};
+
+static LevelContext levelCtx;                               /**< Level read context instance to hold state for the level read workflow */
+
 // @todo move to config.h
-// Global EEPROM sanity limits for persisted values
+
+/**
+ * @section Global EEPROM Sanity Limit Constants
+ */
 constexpr float CAL_FACTOR_ABS_MAX = 500000.0f;             // Maximum absolute value for valid calibration factor 
 constexpr float CAL_FACTOR_ABS_MIN = 100.0f;                // Minimum absolute value for valid calibration factor 
 constexpr float MAX_PROJECT_WEIGHT_LBS = 60.0f;             // Project will never measure a propane tank above nominal 60 lbs
@@ -147,16 +204,20 @@ constexpr float MAX_PROPANE_MIN_LBS = 0.1f;                 // Minimum plausible
 constexpr float TANK_TARE_MIN_LBS = 0.0f;                   // Minimum plausible tare weight for empty propane tank
 
 // @todo move to config.h
-// Global UI strings
+
+/** 
+ * @section Global UI String Constants
+ */
+
 constexpr char APP_TITLE[] = "Propane Level Scale";
 constexpr char CALIBRATION_SAVE_FAILURE_MSG[] = "Failure saving default calibration to EEPROM.";
 constexpr char CALIBRATION_SAVE_SUCCESS_MSG[] = "Success saving default calibration to EEPROM.";
 constexpr char CMD_AUTO_CAL_MSG[] = "Send 'a' to enter automatic calibration mode";
-// constexpr char CMD_CURRENT_VALUES_MSG[] = "Send 'c' to print current runtime values";
-// constexpr char CMD_DEFAULT_EEPROM_MSG[] = "Send 'd' to reset EEPROM to default values";
+constexpr char CMD_CURRENT_VALUES_MSG[] = "Send 'c' to print current runtime values";
+constexpr char CMD_DEFAULT_EEPROM_MSG[] = "Send 'd' to reset EEPROM to default values";
 constexpr char CMD_EEPROM_MSG[] = "Send 'e' to display saved EEPROM values";
 constexpr char CMD_HELP_MSG[] = "Send 'h' to display this help menu";
-// constexpr char CMD_KNOWN_WEIGHT_MSG[] = "Send 'k' to enter known weight value for calibration mode";
+constexpr char CMD_KNOWN_WEIGHT_MSG[] = "Send 'k' to enter known weight value for calibration mode";
 constexpr char CMD_LEVEL_MSG[] = "Send 'l' to display one liquid propane percent level reading";
 constexpr char CMD_MANUAL_CAL_MSG[] = "Send 'm' to enter manual calibration mode";
 constexpr char CMD_PROPANE_WEIGHT_MSG[] = "Send 'p' to set maximum legal propane weight";
@@ -164,29 +225,30 @@ constexpr char CMD_REZERO_MSG[] = "Send 'r' to re-zero scale with no propane wei
 constexpr char CMD_TANK_TARE_MSG[] = "Send 't' to set propane tank tare";
 
 /**
- * EEPROM Workflows
+ * @section EEPROM Workflows
  */
 
 /**
- * @brief Validates a finite float against configured bounds.
- *
- * @details Optionally validates against the absolute magnitude of the value.
- * Used for calibration factor checks (absolute bounds) and direct positive-range checks.
+ * @brief Validates that a float value is finite and within specified bounds.
  * 
- * @param {float} value Value to validate.
- * @param {float} minimumValue Lower bound for validation.
- * @param {float} maximumValue Upper bound for validation.
- * @param {bool} useAbsoluteMagnitude When true, validates fabs(value) instead of value.
- * @return {bool} True when finite and inside [minimumValue, maximumValue].
+ * @details Checks if a float value is finite and within specified bounds, with an option to use absolute magnitude for the check.
+ * 
+ * @param value The float value to validate.
+ * @param minimumValue The minimum allowable value.
+ * @param maximumValue The maximum allowable value.
+ * @param useAbsoluteMagnitude If true, the absolute value of the float is used for validation.
+ * @return true if the value is valid, false otherwise.
  * 
  * @throws {none} This function does not throw exceptions.
  */
 bool isValidBoundedFloat(float value, float minimumValue, float maximumValue, bool useAbsoluteMagnitude = false) {
+  float candidate = 0.0f;                                   // Temporarily holds the value used for comparison
+
   if (!isfinite(value)) {
     return false;
   }
 
-  float candidate = useAbsoluteMagnitude ? fabsf(value) : value;
+  candidate = useAbsoluteMagnitude ? fabsf(value) : value;
   return (candidate >= minimumValue) && (candidate <= maximumValue);
 }
 
@@ -241,7 +303,7 @@ bool saveToEeprom(float value, uint32_t magic, int magicAddr, int valueAddr) {
 }
 
 /**
- * State Machine Functions
+ * @section State Machine Functions
  */
 
 /**
@@ -258,7 +320,7 @@ bool saveToEeprom(float value, uint32_t magic, int magicAddr, int valueAddr) {
  */
 void handleCalibrationInput(char serialchar) {
   // 
-  if (calCtx.state == CalState::WAIT_EMPTY || calCtx.state == CalState::WAIT_LOAD) {
+  if (calCtx.state == CalState::WAIT_EMPTY || calCtx.state == CalState::WAIT_LOAD || calCtx.state == CalState::SETTLING) {
     if (serialchar != 'q' && serialchar != 'Q') {
       if (calCtx.mode == CalMode::AUTO) {
         Serial.print("Invalid automatic calibration key: '");
@@ -692,9 +754,24 @@ void tickCalibration() {
       return; 
     }
 
-    // workflow - weight placed for automatic calibration
+    // workflow - weight placed — settle before measuring to avoid mid-placement reads
+    Serial.print("Weight detected. Settling for ");
+    Serial.print(CAL_SETTLE_DELAY_MS / 1000UL);
+    Serial.println(" seconds before measuring...");
+    calCtx.stateStartMs = millis();
+    calCtx.state        = CalState::SETTLING;
+    return;
+  }
+
+  // workflow - waiting for placed weight to stop moving before taking final measurement
+  if (calCtx.state == CalState::SETTLING) {
+    if ((millis() - calCtx.stateStartMs) < CAL_SETTLE_DELAY_MS) {
+      return;
+    }
+
+    // workflow - weight settled for automatic calibration
     if (calCtx.mode == CalMode::AUTO) {
-      Serial.println("Weight detected. Measuring stable reading...");
+      Serial.println("Measuring stable reading...");
 
       // Use more samples for the final measurement to reduce noise in the derived factor
       calCtx.measuredUnits = readAveragedUnits(CAL_SAMPLES, LIVE_SAMPLES);
@@ -708,11 +785,11 @@ void tickCalibration() {
       }
 
       // units/lb: maps raw ADC counts to pounds
-      calibrationFactor = calCtx.measuredUnits / DEF_KNOWN_WEIGHT; 
+      calibrationFactor = calCtx.measuredUnits / DEF_KNOWN_WEIGHT;
       scale.set_scale(calibrationFactor);
 
       // re-read to confirm factor produces correct output
-      float verifiedUnits = readAveragedUnits(CAL_SAMPLES, LIVE_SAMPLES); 
+      float verifiedUnits = readAveragedUnits(CAL_SAMPLES, LIVE_SAMPLES);
 
       Serial.print("Initial calibration factor estimate: ");
       Serial.println(calibrationFactor, 2);
@@ -722,7 +799,7 @@ void tickCalibration() {
       Serial.print("Automatic calibration complete, computed calibration factor: ");
       Serial.println(calibrationFactor, 2);
 
-      if(!saveToEeprom(calibrationFactor, CAL_EEPROM_MAGIC, CAL_EEPROM_MAGIC_ADDR, CAL_EEPROM_VALUE_ADDR)) {
+      if (!saveToEeprom(calibrationFactor, CAL_EEPROM_MAGIC, CAL_EEPROM_MAGIC_ADDR, CAL_EEPROM_VALUE_ADDR)) {
         Serial.println("Failed to save calibration to EEPROM.");
       } else {
         Serial.println("Calibration saved to EEPROM.");
@@ -730,12 +807,12 @@ void tickCalibration() {
 
       calCtx.state = CalState::IDLE;
       calCtx.mode  = CalMode::NONE;
-    } 
-    
-    // workflow - weight placed for manual calibration — enter interactive adjustment
+    }
+
+    // workflow - weight settled for manual calibration — enter interactive adjustment
     if (calCtx.mode == CalMode::MANUAL) {
       // serial input handled by handleCalibrationInput()
-      Serial.println("Weight detected. Adjust calibration until the reading matches the known weight.");
+      Serial.println("Adjust calibration until the reading matches the known weight.");
       Serial.println("Send '+' to increase calibration factor");
       Serial.println("Send '-' to decrease calibration factor");
       Serial.println("(step halves on direction reversal)");
@@ -743,7 +820,7 @@ void tickCalibration() {
       Serial.println("Send 'q' to cancel manual calibration without saving.");
 
       // force first print on next ADJUSTING tick
-      calCtx.hasManualDisplay = false; 
+      calCtx.hasManualDisplay = false;
       calCtx.state            = CalState::ADJUSTING;
     }
 
@@ -775,6 +852,63 @@ void tickCalibration() {
       calCtx.lastFactorHundredth   = factorHundredth;
       calCtx.lastStepTenThousandth = stepTenThousandth;
     }
+  }
+}
+
+/**
+ * @brief Advances the level read workflow on each loop() iteration.
+ *
+ * @details Called every loop() iteration when the level read workflow is active.
+ * - WAIT_LOAD: polls the scale each tick until the reading exceeds the load
+ *   detection threshold or the placement timeout expires.
+ * - READING: takes a final averaged measurement, computes and prints propane
+ *   weight and fill percentage, then resets to IDLE.
+ *
+ * @return {void} No value is returned.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+void tickLevelRead() {
+  if (levelCtx.state == LevelState::IDLE) {
+    return;
+  }
+
+  if (levelCtx.state == LevelState::WAIT_LOAD) {
+    if ((millis() - levelCtx.stateStartMs) >= EMPTY_CONFIRM_TIMEOUT) {
+      Serial.println("Tank placement timed out; cancelled.");
+      levelCtx.state = LevelState::IDLE;
+      return;
+    }
+
+    float measuredUnits = readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES);
+    if (fabsf(measuredUnits) >= levelCtx.loadDetectThreshold) {
+      levelCtx.state = LevelState::READING;
+    }
+    return;
+  }
+
+  if (levelCtx.state == LevelState::READING) {
+    Serial.println("Tank detected. Reading weight...");
+    float rawWeight = readAveragedUnits(CAL_SAMPLES, LIVE_SAMPLES);
+
+    float propaneWeight = rawWeight - tankTare - PLATEN_TARE;
+    if (propaneWeight < 0.0f) {
+      propaneWeight = 0.0f;
+    }
+
+    float propaneLevel = (maxPropane > 0.0f) ? (propaneWeight / maxPropane) * 100.0f : 0.0f;
+
+    Serial.print("Scale load: ");
+    Serial.print(rawWeight, 1);
+    Serial.print(" lbs, ");
+    Serial.print("Calculated propane: ");
+    Serial.print(propaneWeight, 1);
+    Serial.print(" lbs, ");
+    Serial.print("Propane level: ");
+    Serial.print(propaneLevel, 1);
+    Serial.println("%");
+
+    levelCtx.state = LevelState::IDLE;
   }
 }
 
@@ -836,7 +970,7 @@ static void transitionFromWaitEmpty() {
 }
 
 /**
- * Helper functions for user initiated workflows
+ * @section Helper functions for user initiated workflows
  */
 
 /**
@@ -898,6 +1032,9 @@ void flushSerialInput() {
   }
 }
 
+// @todo confirm this loop is not a problem for blocking in the web interface when that is implemented, 
+// and if so, consider refactoring to be non-blocking with a state machine and timestamp checks similar to the other workflows that wait for user input
+
 /**
  * @brief Parses a non-negative float from a null-terminated C string.
  *
@@ -933,6 +1070,8 @@ bool parseNonNegativeFloat(const char* text, float& outValue) {
   return true;
 }
 
+// @todo make non-blocking when starting web interface coding begins.
+
 /**
  * @brief Reads the average weight from the scale over multiple readings.
  * 
@@ -958,38 +1097,7 @@ float readAveragedUnits(int readings, int samplesPerReading) {
 }
 
 // @todo make non-blocking
-/**
- * @brief Waits for a load to exceed a threshold within a timeout window.
- *
- * @details Samples the scale until the absolute reading meets or exceeds the provided threshold.
- *
- * @param {float} loadDetectThreshold Minimum absolute reading required to detect a load.
- * @param {float&} measuredUnits Output receiving the last measured reading.
- * @param {const char*} timeoutMessage Message printed if the wait times out.
- * @return {bool} True when a load is detected before timeout, false otherwise.
- *
- * @throws {none} This function does not throw exceptions.
- */
-bool waitForLoadPlacement(float loadDetectThreshold, float& measuredUnits, const char* timeoutMessage) {
-  unsigned long startTimeMs = millis();                     // Timestamp marking the start of the waiting period
 
-  while ((millis() - startTimeMs) < EMPTY_CONFIRM_TIMEOUT) {
-    measuredUnits = readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES);
-    if (fabsf(measuredUnits) >= loadDetectThreshold) {
-      return true;
-    }
-  
-    // @todo query agent if this should be removed 
-    // or if it is necessary to have some delay here to avoid hammering the HX711 with continuous reads in a tight loop,  
-    // since the HX711 may have a limited sample rate and continuous reads without delay could cause issues 
-    delay(100);
-  }
-
-  Serial.println(timeoutMessage);
-  return false;
-}
-
-// @todo make non-blocking
 /**
  * @brief Waits for startup empty-scale condition with optional user override.
  *
@@ -1068,10 +1176,8 @@ bool waitForStartupEmptyScale() {
   return false;
 }
 
-
 /**
- * User initiated functions
- * These functions are called in response to user commands over serial
+ * @section User initiated functions
  */
 
 /**
@@ -1170,31 +1276,32 @@ void eepromValues() {
 }
 
 /**
- * @brief Displays the current propane weight and fill level readings.
+ * @brief Starts the liquid level read workflow.
  *
- * @details Reads the scale, applies calibration, subtracts tares, and displays
- * the raw weight, propane weight, and current fill level percentage.
+ * @details Validates scale readiness, measures the noise baseline to compute a
+ * load detection threshold, prints prompts, and sets the level context to begin
+ * polling for tank placement. The workflow continues asynchronously through
+ * tickLevelRead().
  *
  * @return {void} No value is returned.
  *
  * @throws {none} This function does not throw exceptions.
  */
 void liquidLevel() {
-  float loadDetectThreshold = 0.0f;     // Threshold to detect when a load is present on the scale, based on noise measurements
-  float measuredUnits = 0.0f;           // Current averaged reading from the scale in pounds
-  float propaneWeight = 0.0f;              // Calculated weight of the propane in pounds after subtracting tank tare and platen tare
-  float propaneLevel = 0.0f;            // Calculated fill level percentage based on propane weight and maximum legal propane weight for the tank
-  float rawWeight = 0.0f;                  // Raw weight reading from the scale in pounds before subtracting tares
+  if (levelCtx.state != LevelState::IDLE) {
+    Serial.println("Level read already in progress. Send 'q' to cancel.");
+    return;
+  }
 
   if (!ensureScaleReady("level read")) {
     return;
   }
 
-  // apply the current calibration factor to convert raw readings to weight in pounds
   scale.set_scale(calibrationFactor);
 
-  // measure baseline noise with no load to compute a detection threshold (readings are in pounds)
-  loadDetectThreshold = computeLoadDetectThreshold(MINIMUM_LOAD_WEIGHT);
+  levelCtx.loadDetectThreshold = computeLoadDetectThreshold(MINIMUM_LOAD_WEIGHT);
+  levelCtx.stateStartMs        = millis();
+  levelCtx.state               = LevelState::WAIT_LOAD;
 
   Serial.println();
   Serial.println("Place propane tank on scale.");
@@ -1202,33 +1309,7 @@ void liquidLevel() {
   Serial.print("Load placement timeout: ");
   Serial.print(EMPTY_CONFIRM_TIMEOUT / 1000UL);
   Serial.println(" seconds.");
-
-  if (!waitForLoadPlacement(loadDetectThreshold, measuredUnits, "Tank placement timed out; cancelled.")) {
-    return;
-  }
-
-  Serial.println("Tank detected. Reading weight...");
-  rawWeight = readAveragedUnits(CAL_SAMPLES, LIVE_SAMPLES);
-
-  propaneWeight = rawWeight - tankTare - PLATEN_TARE;
-
-  // if the calculated propane weight is negative, set it to zero to avoid reporting negative weight
-  if (propaneWeight < 0) {
-    propaneWeight = 0.0f; 
-  }
-
-  // calculate the fill level percentage based on the weight of the propane and the maximum legal propane weight of the tank
-  propaneLevel = (maxPropane > 0.0f) ? (propaneWeight / maxPropane) * 100.0f : 0.0f;
-  
-  Serial.print("Scale load: ");
-  Serial.print(rawWeight, 1);
-  Serial.print(" lbs, ");
-  Serial.print("Calculated propane: ");
-  Serial.print(propaneWeight, 1);
-  Serial.print(" lbs, "); 
-  Serial.print("Propane level: ");
-  Serial.print(propaneLevel, 1);
-  Serial.println("%");
+  Serial.println("Send 'q' to cancel.");
 }
 
 /**
@@ -1421,8 +1502,8 @@ void propaneWeightUpdate() {
 }
 
 /** 
- * Main setup and loop functions
-*/
+ * @section Main setup and loop functions
+ */
 
 /**
  * @brief Initializes serial output and the HX711 scale interface.
@@ -1535,16 +1616,29 @@ void setup() {
  * @throws {none} This function does not throw exceptions. 
  */
 void loop() {
-  // Must call calibration tick function first to keep advancing calibration state machine,
-  // even before a serial key is received
+  // Advance all active state machines each iteration before processing serial input
   tickCalibration();
+  tickLevelRead();
 
-  // On no serial input, need return so calibration tick can continue running until next loop iteration
+  // On no serial input, need return so state machines can continue running until next loop iteration
   if (!Serial.available()) {
     return;
   }
 
   char temp = Serial.read();
+
+  // Route 'q' cancel when level read is waiting for tank placement
+  if (levelCtx.state == LevelState::WAIT_LOAD) {
+    if (temp == 'q' || temp == 'Q') {
+      Serial.println("Level read cancelled.");
+      levelCtx.state = LevelState::IDLE;
+    } else if (temp != '\r' && temp != '\n') {
+      Serial.print("Invalid level read key: '");
+      Serial.print(temp);
+      Serial.println("'. Send 'q' to cancel.");
+    }
+    return;
+  }
 
   // Route one character at a time to active non-blocking input workflow.
   if (inputCtx.mode == InputMode::TANK_TARE) {
