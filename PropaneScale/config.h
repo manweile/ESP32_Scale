@@ -38,9 +38,9 @@ constexpr int UNLOAD_CHECK_COUNT = 3;
 constexpr float CHANGE_WARN_PCT = 0.25f;                    /**< Threshold for significant change in tank tare or max propane weight */
 
 // wire spool at 19.2 lbs: -11551.08f;
-// collapsible water jug in milk crate at 26.0 lbs: -10434.32f;
+// collapsible water jug in milk crate at 26.0 lbs: -10420.86f;
 // kitty litter jug of water at 36.8 lbs: -10422.95f
-constexpr float DEF_CALIBRATION_FACTOR = -10434.32f;        /**< Calibration factor used by HX711 conversion */
+constexpr float DEF_CALIBRATION_FACTOR = -10420.86f;        /**< Calibration factor used by HX711 conversion */
 
 // wire spool  at 19.2 lbs good for almost empty 20 lb tank
 // collapsible water jug in milk crate at 26.0 lbs (h20 @ 23 lbs + milk crate @ 3 lbs) perfect for half full 20 lb tank
@@ -49,11 +49,11 @@ constexpr float DEF_KNOWN_WEIGHT = 26.0f;                   /**< Default known w
 
 // maximum legal propane weight of 20 lb tank: 20.0 x 0.80 = 16.0 lbs
 // maximum legal propane weight of 30 lb tank: 30.0 x 0.80 = 24.0 lbs
-constexpr float DEF_MAX_PROPANE = 24.0f;                    /**< Default maximum legal propane lbs is 80% of tank capacity */
+constexpr float DEF_MAX_PROPANE = 16.0f;                    /**< Default maximum legal propane lbs is 80% of tank capacity */
 
 // Tare weight of the empty twenty lb tank in pounds is approximately 16-19 lbs
 // Tare weight of the empty thirty lb tank in pounds is typically 23-26 lbs
-constexpr float DEF_TANK_TARE = 23.0f;                      /**< Default tare weight an empty tank in pounds, subtract from readings to report weight of propane */
+constexpr float DEF_TANK_TARE = 17.5f;                      /**< Default tare weight an empty tank in pounds, subtract from readings to report weight of propane */
 
 constexpr float MINIMUM_LOAD_THRESHOLD = 1000.0f;           /**< Minimum load threshold in raw ADC units for stable no-load detection */
 

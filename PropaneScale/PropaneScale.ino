@@ -1517,6 +1517,57 @@ void automaticCalibration() {
 }
 
 /**
+ * @brief Prints current runtime values and workflow states.
+ *
+ * @details Displays the active in-memory values used by the program at runtime,
+ * including calibration factor, known calibration weight, max propane weight,
+ * and tank tare. Also prints the current state of each workflow context.
+ *
+ * @return {void} No value is returned.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+void currentRuntimeValues() {
+  Serial.println();
+  Serial.println(APP_TITLE);
+  Serial.println();
+  
+  Serial.println("Current Runtime Values");
+
+  Serial.print("EEPROM ready: ");
+  Serial.println(eepromReady ? "yes" : "no");
+
+  Serial.print("Calibration factor: ");
+  Serial.println(calibrationFactor, 2);
+
+  Serial.print("Known calibration weight: ");
+  Serial.print(knownWeight, 2);
+  Serial.println(" lbs");
+
+  Serial.print("Max propane weight: ");
+  Serial.print(maxPropane, 2);
+  Serial.println(" lbs");
+
+  Serial.print("Tank tare: ");
+  Serial.print(tankTare, 2);
+  Serial.println(" lbs");
+
+  Serial.print("Calibration workflow state: ");
+  Serial.println(static_cast<int>(calCtx.state));
+
+  Serial.print("Level workflow state: ");
+  Serial.println(static_cast<int>(levelCtx.state));
+
+  Serial.print("Startup tare state: ");
+  Serial.println(static_cast<int>(tareCtx.state));
+
+  Serial.print("Input mode/state: ");
+  Serial.print(static_cast<int>(inputCtx.mode));
+  Serial.print('/');
+  Serial.println(static_cast<int>(inputCtx.state));
+}
+
+/**
  * @brief Resets all EEPROM-persisted values to their hardcoded defaults.
  *
  * @details Overwrites calibration factor, known calibration weight, maximum legal propane
@@ -1625,6 +1676,7 @@ void eepromValues() {
 void helpMenu() {
   Serial.println();
   Serial.println(CMD_AUTO_CAL_MSG);
+  Serial.println(CMD_CURRENT_VALUES_MSG);
   Serial.println(CMD_DEFAULT_EEPROM_MSG);
   Serial.println(CMD_EEPROM_MSG);
   Serial.println(CMD_KNOWN_WEIGHT_MSG);
@@ -1895,10 +1947,6 @@ void propaneWeightUpdate() {
 void setup() {
   Serial.begin(BAUD);
 
-  Serial.println();
-  Serial.println(APP_TITLE);
-  Serial.println();
-  
   // need to check if eeprom is ready before trying to load values, and if not, use defaults and continue without eeprom functionality
   eepromReady = EEPROM.begin(EEPROM_SIZE_BYTES);
 
@@ -1922,8 +1970,6 @@ void setup() {
 
     if (loadFromEeprom(loaded, CAL_EEPROM_MAGIC_ADDR, CAL_EEPROM_MAGIC, CAL_EEPROM_VALUE_ADDR) && isValidBoundedFloat(loaded, CAL_FACTOR_ABS_MIN, CAL_FACTOR_ABS_MAX, true)) {
       calibrationFactor = loaded;
-      Serial.print("Loaded calibration factor from EEPROM: ");
-      Serial.println(calibrationFactor, 2);
     } else {
       calibrationFactor = DEF_CALIBRATION_FACTOR;
       Serial.println("Calibration factor not found or invalid; using default.");
@@ -1936,9 +1982,6 @@ void setup() {
 
     if (loadFromEeprom(loaded, KNOWN_WEIGHT_EEPROM_MAGIC_ADDR, KNOWN_WEIGHT_EEPROM_MAGIC, KNOWN_WEIGHT_EEPROM_VALUE_ADDR) && isValidBoundedFloat(loaded, MIN_PLAUSIBLE_WEIGHT, MAX_PROJECT_WEIGHT)) {
       knownWeight = loaded;
-      Serial.print("Loaded known calibration weight from EEPROM: ");
-      Serial.print(knownWeight, 2);
-      Serial.println(" lbs");
     } else {
       knownWeight = DEF_KNOWN_WEIGHT;
       Serial.println("Known calibration weight not found or invalid; using default.");
@@ -1951,9 +1994,6 @@ void setup() {
 
     if (loadFromEeprom(loaded, MAX_PROPANE_EEPROM_MAGIC_ADDR, MAX_PROPANE_EEPROM_MAGIC, MAX_PROPANE_EEPROM_VALUE_ADDR) && isValidBoundedFloat(loaded, MIN_PLAUSIBLE_WEIGHT, MAX_PROJECT_WEIGHT)) {
       maxPropane = loaded;
-      Serial.print("Loaded max propane weight from EEPROM: ");
-      Serial.print(maxPropane, 2);
-      Serial.println(" lbs");
     } else {
       maxPropane = DEF_MAX_PROPANE;
       Serial.println("Max propane weight not found or invalid; using default.");
@@ -1966,9 +2006,6 @@ void setup() {
 
     if (loadFromEeprom(loaded, TARE_EEPROM_MAGIC_ADDR, TARE_EEPROM_MAGIC, TARE_EEPROM_VALUE_ADDR) && isValidBoundedFloat(loaded, MIN_PLAUSIBLE_WEIGHT, MAX_PROJECT_WEIGHT)) {
       tankTare = loaded;
-      Serial.print("Loaded tank tare from EEPROM: ");
-      Serial.print(tankTare, 2);
-      Serial.println(" lbs");
     } else {
       tankTare = DEF_TANK_TARE;
       Serial.println("Tank tare not found or invalid; using default.");
@@ -2072,7 +2109,10 @@ void loop() {
     case 'A':
       automaticCalibration();
       break;
-    // @todo case 'c' print current runtime values (cal factor, tank tare, max legal propane weight, known tank weight) for debugging without needing to check EEPROM values
+    case 'c':
+    case 'C':
+      currentRuntimeValues();
+      break;
     case 'd':
     case 'D':
       defaultEeprom();
