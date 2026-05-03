@@ -1283,6 +1283,47 @@ void flushSerialInput() {
 }
 
 /**
+ * @brief Reads one EEPROM float and prints it.
+ *
+ * @details Attempts to read a float value from EEPROM at the specified address, 
+ * validating it against an expected magic number and bounds. 
+ * If valid, prints the label and value (with optional unit suffix). 
+ * If invalid or not set, prints the label with an invalid notice.
+ *
+ * @param label        Display label printed before the value.
+ * @param magicAddr    EEPROM address of the magic number.
+ * @param magicValue   Expected magic number for validation.
+ * @param valueAddr    EEPROM address of the float value.
+ * @param minValue     Minimum valid value.
+ * @param maxValue     Maximum valid value.
+ * @param useAbsMag    When true, validate using absolute magnitude (for signed calibration factor).
+ * @param unitSuffix   Optional unit string appended after the value (e.g. " lbs"), or nullptr.
+ * @return true if the value was valid and printed; false if invalid/not set.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+static bool printEepromField(const char* label, uint32_t magicAddr, uint32_t magicValue, uint32_t valueAddr, float minValue, float maxValue, bool useAbsMag = false, const char* unitSuffix = nullptr) {
+  float value = 0.0f;
+  
+  if (loadFromEeprom(value, magicAddr, magicValue, valueAddr) && isValidBoundedFloat(value, minValue, maxValue, useAbsMag)) {
+    Serial.print(label);
+    Serial.print(": ");
+    Serial.print(value, 2);
+
+    if (unitSuffix != nullptr && unitSuffix[0] != '\0') {
+      Serial.print(unitSuffix);
+    }
+
+    Serial.println();
+    return true;
+  }
+
+  Serial.print(label);
+  Serial.println(": <invalid or not set>");
+  return false;
+}
+
+/**
  * @brief Parses a non-negative float from a null-terminated C string.
  *
  * @details Attempts to parse a float value from the input string. 
@@ -1478,8 +1519,9 @@ void automaticCalibration() {
 /**
  * @brief Displays all saved EEPROM values with validity status.
  *
- * @details Reads each persisted record (calibration factor, tank tare, and maximum
- * legal propane weight), verifies its magic marker, and prints the stored value.
+ * @details Reads each persisted record (calibration factor, known calibration weight,
+ * maximum legal propane weight, and tank tare), verifies its magic marker and bounds,
+ * and prints the stored value or an invalid notice.
  *
  * @return {void} No value is returned.
  *
@@ -1491,50 +1533,24 @@ void eepromValues() {
     return;
   }
 
-  uint32_t magic = 0;                   // Temporary variable for reading magic numbers from EEPROM
-  float storedValue = 0.0f;             // Temporary variable for reading stored float values from EEPROM
-
   Serial.println();
   Serial.println("EEPROM Saved Values");
 
-  EEPROM.get(CAL_EEPROM_MAGIC_ADDR, magic);
-  if (magic == CAL_EEPROM_MAGIC) {
-    EEPROM.get(CAL_EEPROM_VALUE_ADDR, storedValue);
-    Serial.print("Calibration factor: ");
-    Serial.println(storedValue, 2);
-  } else {
-    Serial.println("Calibration factor: <invalid or not set>");
-  }
+  printEepromField("Calibration factor",
+                   CAL_EEPROM_MAGIC_ADDR, CAL_EEPROM_MAGIC, CAL_EEPROM_VALUE_ADDR,
+                   CAL_FACTOR_ABS_MIN, CAL_FACTOR_ABS_MAX, true);
 
-    EEPROM.get(KNOWN_WEIGHT_EEPROM_MAGIC_ADDR, magic);
-  if (magic == KNOWN_WEIGHT_EEPROM_MAGIC) {
-    EEPROM.get(KNOWN_WEIGHT_EEPROM_VALUE_ADDR, storedValue);
-    Serial.print("Known calibration weight: ");
-    Serial.print(storedValue, 2);
-    Serial.println(" lbs");
-  } else {
-    Serial.println("Known calibration weight: <invalid or not set>");
-  }
+  printEepromField("Known calibration weight",
+                   KNOWN_WEIGHT_EEPROM_MAGIC_ADDR, KNOWN_WEIGHT_EEPROM_MAGIC, KNOWN_WEIGHT_EEPROM_VALUE_ADDR,
+                   MIN_PLAUSIBLE_WEIGHT, MAX_PROJECT_WEIGHT, false, " lbs");
 
-  EEPROM.get(MAX_PROPANE_EEPROM_MAGIC_ADDR, magic);
-  if (magic == MAX_PROPANE_EEPROM_MAGIC) {
-    EEPROM.get(MAX_PROPANE_EEPROM_VALUE_ADDR, storedValue);
-    Serial.print("Max propane weight: ");
-    Serial.print(storedValue, 2);
-    Serial.println(" lbs");
-  } else {
-    Serial.println("Max propane weight: <invalid or not set>");
-  }
+  printEepromField("Max propane weight",
+                   MAX_PROPANE_EEPROM_MAGIC_ADDR, MAX_PROPANE_EEPROM_MAGIC, MAX_PROPANE_EEPROM_VALUE_ADDR,
+                   MIN_PLAUSIBLE_WEIGHT, MAX_PROJECT_WEIGHT, false, " lbs");
 
-  EEPROM.get(TARE_EEPROM_MAGIC_ADDR, magic);
-  if (magic == TARE_EEPROM_MAGIC) {
-    EEPROM.get(TARE_EEPROM_VALUE_ADDR, storedValue);
-    Serial.print("Tank tare: ");
-    Serial.print(storedValue, 2);
-    Serial.println(" lbs");
-  } else {
-    Serial.println("Tank tare: <invalid or not set>");
-  }
+  printEepromField("Tank tare",
+                   TARE_EEPROM_MAGIC_ADDR, TARE_EEPROM_MAGIC, TARE_EEPROM_VALUE_ADDR,
+                   MIN_PLAUSIBLE_WEIGHT, MAX_PROJECT_WEIGHT, false, " lbs");
 }
 
 /**
