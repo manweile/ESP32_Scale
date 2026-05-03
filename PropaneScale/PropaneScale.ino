@@ -1517,6 +1517,66 @@ void automaticCalibration() {
 }
 
 /**
+ * @brief Resets all EEPROM-persisted values to their hardcoded defaults.
+ *
+ * @details Overwrites calibration factor, known calibration weight, maximum legal propane
+ * weight, and tank tare with the compile-time defaults defined in config.h, then persists
+ * each value to EEPROM and updates the corresponding runtime globals. Reports the result
+ * of each save over serial.
+ *
+ * @return {void} No value is returned.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+void defaultEeprom() {
+  if (!eepromReady) {
+    Serial.println("EEPROM is not initialized; cannot reset to defaults.");
+    return;
+  }
+
+  Serial.println();
+  Serial.println("Resetting EEPROM to hardcoded defaults...");
+
+  calibrationFactor = DEF_CALIBRATION_FACTOR;
+  if (!saveToEeprom(calibrationFactor, CAL_EEPROM_MAGIC, CAL_EEPROM_MAGIC_ADDR, CAL_EEPROM_VALUE_ADDR)) {
+    Serial.println("Failed to save default calibration factor.");
+  } else {
+    Serial.print("Calibration factor reset to: ");
+    Serial.println(calibrationFactor, 2);
+  }
+
+  knownWeight = DEF_KNOWN_WEIGHT;
+  if (!saveToEeprom(knownWeight, KNOWN_WEIGHT_EEPROM_MAGIC, KNOWN_WEIGHT_EEPROM_MAGIC_ADDR, KNOWN_WEIGHT_EEPROM_VALUE_ADDR)) {
+    Serial.println("Failed to save default known calibration weight.");
+  } else {
+    Serial.print("Known calibration weight reset to: ");
+    Serial.print(knownWeight, 2);
+    Serial.println(" lbs");
+  }
+
+  maxPropane = DEF_MAX_PROPANE;
+  if (!saveToEeprom(maxPropane, MAX_PROPANE_EEPROM_MAGIC, MAX_PROPANE_EEPROM_MAGIC_ADDR, MAX_PROPANE_EEPROM_VALUE_ADDR)) {
+    Serial.println("Failed to save default max propane weight.");
+  } else {
+    Serial.print("Max propane weight reset to: ");
+    Serial.print(maxPropane, 2);
+    Serial.println(" lbs");
+  }
+
+  tankTare = DEF_TANK_TARE;
+  if (!saveToEeprom(tankTare, TARE_EEPROM_MAGIC, TARE_EEPROM_MAGIC_ADDR, TARE_EEPROM_VALUE_ADDR)) {
+    Serial.println("Failed to save default tank tare.");
+  } else {
+    Serial.print("Tank tare reset to: ");
+    Serial.print(tankTare, 2);
+    Serial.println(" lbs");
+  }
+
+  scale.set_scale(calibrationFactor);
+  Serial.println("EEPROM reset complete. Recalibrate before use.");
+}
+
+/**
  * @brief Displays all saved EEPROM values with validity status.
  *
  * @details Reads each persisted record (calibration factor, known calibration weight,
@@ -1565,6 +1625,7 @@ void eepromValues() {
 void helpMenu() {
   Serial.println();
   Serial.println(CMD_AUTO_CAL_MSG);
+  Serial.println(CMD_DEFAULT_EEPROM_MSG);
   Serial.println(CMD_EEPROM_MSG);
   Serial.println(CMD_KNOWN_WEIGHT_MSG);
   Serial.println(CMD_LEVEL_MSG);
@@ -2012,7 +2073,10 @@ void loop() {
       automaticCalibration();
       break;
     // @todo case 'c' print current runtime values (cal factor, tank tare, max legal propane weight, known tank weight) for debugging without needing to check EEPROM values
-    // @todo case 'd' for resetting EEPROM to default cal, known tank weight, propane tank tare, max legal propane values
+    case 'd':
+    case 'D':
+      defaultEeprom();
+      break;
     case 'e':
     case 'E':
       eepromValues();
