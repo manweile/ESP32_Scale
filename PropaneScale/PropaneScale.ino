@@ -126,7 +126,8 @@ static CalContext calCtx;                                   /**< Calibration con
 enum class InputMode : uint8_t {
   NONE = 0,                                                 /**< No active user input workflow */
   TANK_TARE = 1,                                            /**< Tank tare update workflow */
-  PROPANE_WEIGHT = 2                                        /**< Max propane weight update workflow */
+  PROPANE_WEIGHT = 2,                                       /**< Max propane weight update workflow */
+  KNOWN_WEIGHT = 3                                          /**< Known calibration weight update workflow */
 };
 
 /**
@@ -234,9 +235,8 @@ static TareContext tareCtx;                                 /**< Startup tare co
  */
 constexpr float CAL_FACTOR_ABS_MAX = 500000.0f;             // Maximum absolute value for valid calibration factor 
 constexpr float CAL_FACTOR_ABS_MIN = 100.0f;                // Minimum absolute value for valid calibration factor 
-constexpr float MAX_PROJECT_WEIGHT_LBS = 60.0f;             // Project will never measure a propane tank above nominal 60 lbs
-constexpr float MAX_PROPANE_MIN_LBS = 0.1f;                 // Minimum plausible maximum propane weight for tank
-constexpr float TANK_TARE_MIN_LBS = 0.0f;                   // Minimum plausible tare weight for empty propane tank
+constexpr float MAX_PROJECT_WEIGHT = 60.0f;                 // Project will never measure a propane tank above nominal 60 lbs
+constexpr float MIN_PLAUSIBLE_WEIGHT = 0.1f;                // Minimum plausible non-zero weight for user-entered values
 
 // @todo move to config.h
 
@@ -447,6 +447,127 @@ void handleCalibrationInput(char serialchar) {
 }
 
 /**
+ * @brief Handles user input for the known calibration weight update workflow.
+ *
+ * @details Processes one serial character per loop() iteration, preserving parse
+ * state in inputCtx so calibration tick processing remains non-blocking.
+ *
+ * @param incoming The incoming character from the serial input.
+ *
+ * @return {void} No value is returned.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+void handleKnownWeightInput(char incoming) {
+  if (incoming == '\r') {
+    return;
+  }
+
+  if (inputCtx.state == InputState::WAIT_SAVE_CONFIRM) {
+    if (incoming == '\n') {
+      return;
+    }
+
+    if (incoming == 'q' || incoming == 'Q') {
+      Serial.println("Known weight update cancelled.");
+      resetInputContext();
+      return;
+    }
+
+    if (incoming == 's' || incoming == 'S') {
+      knownWeight = inputCtx.parsedValue;
+      if (!saveToEeprom(knownWeight, KNOWN_WEIGHT_EEPROM_MAGIC, KNOWN_WEIGHT_EEPROM_MAGIC_ADDR, KNOWN_WEIGHT_EEPROM_VALUE_ADDR)) {
+        Serial.println("Failed to save known weight to EEPROM.");
+      } else {
+        Serial.print("Known weight updated: ");
+        Serial.print(knownWeight, 2);
+        Serial.println(" lbs");
+      }
+      resetInputContext();
+      return;
+    }
+
+    Serial.println("Invalid response. Send 's' to save, or 'q' to cancel.");
+    return;
+  }
+
+  if ((incoming == 'q' || incoming == 'Q') && inputCtx.index == 0) {
+    Serial.println("Known weight update cancelled.");
+    resetInputContext();
+    return;
+  }
+
+  if (incoming == '\n') {
+    inputCtx.buffer[inputCtx.index] = '\0';
+
+    if (inputCtx.index == 1 && (inputCtx.buffer[0] == 'q' || inputCtx.buffer[0] == 'Q')) {
+      Serial.println("Known weight update cancelled.");
+      resetInputContext();
+      return;
+    }
+
+    inputCtx.parsedValue = 0.0f;
+    if (parseNonNegativeFloat(inputCtx.buffer, inputCtx.parsedValue) && isValidBoundedFloat(inputCtx.parsedValue, MIN_PLAUSIBLE_WEIGHT, MAX_PROJECT_WEIGHT)) {
+      Serial.print("New known weight entered: ");
+      Serial.print(inputCtx.parsedValue, 2);
+      Serial.println(" lbs");
+      Serial.println("Send 's' to save this value to EEPROM, or 'q' to cancel.");
+      inputCtx.state = InputState::WAIT_SAVE_CONFIRM;
+      inputCtx.index = 0;
+      inputCtx.buffer[0] = '\0';
+      return;
+    }
+
+    Serial.print("Invalid known weight. Enter a number from ");
+    Serial.print(MIN_PLAUSIBLE_WEIGHT, 2);
+    Serial.print(" to ");
+    Serial.print(MAX_PROJECT_WEIGHT, 2);
+    Serial.println(" lbs, or 'q' to cancel.");
+    inputCtx.index = 0;
+    inputCtx.buffer[0] = '\0';
+    return;
+  }
+
+  if (incoming == 's' || incoming == 'S') {
+    if (inputCtx.index == 0) {
+      Serial.println("Enter a known weight first, then send 's' to save.");
+      return;
+    }
+
+    inputCtx.buffer[inputCtx.index] = '\0';
+    if (!parseNonNegativeFloat(inputCtx.buffer, inputCtx.parsedValue) || !isValidBoundedFloat(inputCtx.parsedValue, MIN_PLAUSIBLE_WEIGHT, MAX_PROJECT_WEIGHT)) {
+      Serial.print("Invalid known weight. Enter a number from ");
+      Serial.print(MIN_PLAUSIBLE_WEIGHT, 2);
+      Serial.print(" to ");
+      Serial.print(MAX_PROJECT_WEIGHT, 2);
+      Serial.println(" lbs, or 'q' to cancel.");
+      inputCtx.index = 0;
+      inputCtx.buffer[0] = '\0';
+      return;
+    }
+
+    knownWeight = inputCtx.parsedValue;
+    if (!saveToEeprom(knownWeight, KNOWN_WEIGHT_EEPROM_MAGIC, KNOWN_WEIGHT_EEPROM_MAGIC_ADDR, KNOWN_WEIGHT_EEPROM_VALUE_ADDR)) {
+      Serial.println("Failed to save known weight to EEPROM.");
+    } else {
+      Serial.print("Known weight updated: ");
+      Serial.print(knownWeight, 2);
+      Serial.println(" lbs");
+    }
+    resetInputContext();
+    return;
+  }
+
+  if (inputCtx.index < static_cast<int>(sizeof(inputCtx.buffer) - 1)) {
+    inputCtx.buffer[inputCtx.index++] = incoming;
+  } else {
+    Serial.println("Input too long. Enter a shorter number, or 'q' to cancel.");
+    inputCtx.index = 0;
+    inputCtx.buffer[0] = '\0';
+  }
+}
+
+/**
  * @brief Handles user input for the max propane weight update workflow.
  *
  * @details Processes one serial character per loop() iteration, preserving parse
@@ -507,7 +628,7 @@ void handlePropaneWeightInput(char incoming) {
     }
 
     inputCtx.parsedValue = 0.0f;
-    if (parseNonNegativeFloat(inputCtx.buffer, inputCtx.parsedValue) && isValidBoundedFloat(inputCtx.parsedValue, MAX_PROPANE_MIN_LBS, MAX_PROJECT_WEIGHT_LBS)) {
+    if (parseNonNegativeFloat(inputCtx.buffer, inputCtx.parsedValue) && isValidBoundedFloat(inputCtx.parsedValue, MIN_PLAUSIBLE_WEIGHT, MAX_PROJECT_WEIGHT)) {
       Serial.print("New max propane weight entered: ");
       Serial.print(inputCtx.parsedValue, 2);
       Serial.println(" lbs");
@@ -519,9 +640,9 @@ void handlePropaneWeightInput(char incoming) {
     }
 
     Serial.print("Invalid max propane weight. Enter a number from ");
-    Serial.print(MAX_PROPANE_MIN_LBS, 2);
+    Serial.print(MIN_PLAUSIBLE_WEIGHT, 2);
     Serial.print(" to ");
-    Serial.print(MAX_PROJECT_WEIGHT_LBS, 2);
+    Serial.print(MAX_PROJECT_WEIGHT, 2);
     Serial.println(" lbs, or 'q' to cancel.");
     inputCtx.index = 0;
     inputCtx.buffer[0] = '\0';
@@ -535,11 +656,11 @@ void handlePropaneWeightInput(char incoming) {
     }
 
     inputCtx.buffer[inputCtx.index] = '\0';
-    if (!parseNonNegativeFloat(inputCtx.buffer, inputCtx.parsedValue) || !isValidBoundedFloat(inputCtx.parsedValue, MAX_PROPANE_MIN_LBS, MAX_PROJECT_WEIGHT_LBS)) {
+    if (!parseNonNegativeFloat(inputCtx.buffer, inputCtx.parsedValue) || !isValidBoundedFloat(inputCtx.parsedValue, MIN_PLAUSIBLE_WEIGHT, MAX_PROJECT_WEIGHT)) {
       Serial.print("Invalid max propane weight. Enter a number from ");
-      Serial.print(MAX_PROPANE_MIN_LBS, 2);
+      Serial.print(MIN_PLAUSIBLE_WEIGHT, 2);
       Serial.print(" to ");
-      Serial.print(MAX_PROJECT_WEIGHT_LBS, 2);
+      Serial.print(MAX_PROJECT_WEIGHT, 2);
       Serial.println(" lbs, or 'q' to cancel.");
       inputCtx.index = 0;
       inputCtx.buffer[0] = '\0';
@@ -627,7 +748,7 @@ void handleTankTareInput(char incoming) {
       return;
     }
 
-    if (parseNonNegativeFloat(inputCtx.buffer, inputCtx.parsedValue) && isValidBoundedFloat(inputCtx.parsedValue, TANK_TARE_MIN_LBS, MAX_PROJECT_WEIGHT_LBS)) {
+    if (parseNonNegativeFloat(inputCtx.buffer, inputCtx.parsedValue) && isValidBoundedFloat(inputCtx.parsedValue, MIN_PLAUSIBLE_WEIGHT, MAX_PROJECT_WEIGHT)) {
       Serial.print("New tank tare entered: ");
       Serial.print(inputCtx.parsedValue, 2);
       Serial.println(" lbs");
@@ -639,9 +760,9 @@ void handleTankTareInput(char incoming) {
     }
 
     Serial.print("Invalid tank tare. Enter a number from ");
-    Serial.print(TANK_TARE_MIN_LBS, 2);
+    Serial.print(MIN_PLAUSIBLE_WEIGHT, 2);
     Serial.print(" to ");
-    Serial.print(MAX_PROJECT_WEIGHT_LBS, 2);
+    Serial.print(MAX_PROJECT_WEIGHT, 2);
     Serial.println(" lbs, or 'q' to cancel.");
     inputCtx.index = 0;
     inputCtx.buffer[0] = '\0';
@@ -655,11 +776,11 @@ void handleTankTareInput(char incoming) {
     }
 
     inputCtx.buffer[inputCtx.index] = '\0';
-    if (!parseNonNegativeFloat(inputCtx.buffer, inputCtx.parsedValue) || !isValidBoundedFloat(inputCtx.parsedValue, TANK_TARE_MIN_LBS, MAX_PROJECT_WEIGHT_LBS)) {
+    if (!parseNonNegativeFloat(inputCtx.buffer, inputCtx.parsedValue) || !isValidBoundedFloat(inputCtx.parsedValue, MIN_PLAUSIBLE_WEIGHT, MAX_PROJECT_WEIGHT)) {
       Serial.print("Invalid tank tare. Enter a number from ");
-      Serial.print(TANK_TARE_MIN_LBS, 2);
+      Serial.print(MIN_PLAUSIBLE_WEIGHT, 2);
       Serial.print(" to ");
-      Serial.print(MAX_PROJECT_WEIGHT_LBS, 2);
+      Serial.print(MAX_PROJECT_WEIGHT, 2);
       Serial.println(" lbs, or 'q' to cancel.");
       inputCtx.index = 0;
       inputCtx.buffer[0] = '\0';
@@ -811,7 +932,7 @@ void tickCalibration() {
       // Use more samples for the final measurement to reduce noise in the derived factor
       calCtx.measuredUnits = readAveragedUnits(CAL_SAMPLES, LIVE_SAMPLES);
 
-      if (DEF_KNOWN_WEIGHT == 0.0f || calCtx.measuredUnits == 0.0f) {
+      if (knownWeight == 0.0f || calCtx.measuredUnits == 0.0f) {
         // Guard against division by zero or a zero reading that would produce an unusable factor
         Serial.println("Automatic calibration failed: invalid known weight or reading.");
         calCtx.state = CalState::IDLE;
@@ -820,7 +941,7 @@ void tickCalibration() {
       }
 
       // units/lb: maps raw ADC counts to pounds
-      calibrationFactor = calCtx.measuredUnits / DEF_KNOWN_WEIGHT;
+      calibrationFactor = calCtx.measuredUnits / knownWeight;
       scale.set_scale(calibrationFactor);
 
       // re-read to confirm factor produces correct output
@@ -1040,7 +1161,7 @@ static void transitionFromWaitEmpty() {
   // workflow - auto calibration waiting on user to place known weight on scale after empty confirmation
   if (calCtx.mode == CalMode::AUTO) {
     Serial.print("Place the known weight on the scale: ");
-    Serial.print(DEF_KNOWN_WEIGHT, 2);
+    Serial.print(knownWeight, 2);
     Serial.println(" lbs");
   }
 
@@ -1314,14 +1435,14 @@ void eepromValues() {
     Serial.println("Calibration factor: <invalid or not set>");
   }
 
-  EEPROM.get(TARE_EEPROM_MAGIC_ADDR, magic);
-  if (magic == TARE_EEPROM_MAGIC) {
-    EEPROM.get(TARE_EEPROM_VALUE_ADDR, storedValue);
-    Serial.print("Tank tare: ");
+    EEPROM.get(KNOWN_WEIGHT_EEPROM_MAGIC_ADDR, magic);
+  if (magic == KNOWN_WEIGHT_EEPROM_MAGIC) {
+    EEPROM.get(KNOWN_WEIGHT_EEPROM_VALUE_ADDR, storedValue);
+    Serial.print("Known calibration weight: ");
     Serial.print(storedValue, 2);
     Serial.println(" lbs");
   } else {
-    Serial.println("Tank tare: <invalid or not set>");
+    Serial.println("Known calibration weight: <invalid or not set>");
   }
 
   EEPROM.get(MAX_PROPANE_EEPROM_MAGIC_ADDR, magic);
@@ -1332,6 +1453,16 @@ void eepromValues() {
     Serial.println(" lbs");
   } else {
     Serial.println("Max propane weight: <invalid or not set>");
+  }
+
+  EEPROM.get(TARE_EEPROM_MAGIC_ADDR, magic);
+  if (magic == TARE_EEPROM_MAGIC) {
+    EEPROM.get(TARE_EEPROM_VALUE_ADDR, storedValue);
+    Serial.print("Tank tare: ");
+    Serial.print(storedValue, 2);
+    Serial.println(" lbs");
+  } else {
+    Serial.println("Tank tare: <invalid or not set>");
   }
 }
 
@@ -1348,11 +1479,48 @@ void helpMenu() {
   Serial.println();
   Serial.println(CMD_AUTO_CAL_MSG);
   Serial.println(CMD_EEPROM_MSG);
+  Serial.println(CMD_KNOWN_WEIGHT_MSG);
   Serial.println(CMD_LEVEL_MSG);
   Serial.println(CMD_MANUAL_CAL_MSG);
   Serial.println(CMD_PROPANE_WEIGHT_MSG);
   Serial.println(CMD_REZERO_MSG);
   Serial.println(CMD_TANK_TARE_MSG);
+}
+
+/**
+ * @brief Initiates the known calibration weight update workflow.
+ *
+ * @details Starts a non-blocking serial workflow that prompts the user to enter a new known
+ * calibration weight, validates the input, and saves it to EEPROM if confirmed.
+ *
+ * @return {void} No value is returned.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+void knownWeightUpdate() {
+  if (inputCtx.mode != InputMode::NONE) {
+    Serial.println("Known weight input workflow already in progress. Send 'q' to cancel first.");
+    return;
+  }
+
+  flushSerialInput();
+
+  inputCtx.mode = InputMode::KNOWN_WEIGHT;
+  inputCtx.state = InputState::ENTER_VALUE;
+  inputCtx.index = 0;
+  inputCtx.parsedValue = 0.0f;
+  inputCtx.buffer[0] = '\0';
+  
+  Serial.println();
+  Serial.print("Current known calibration weight: ");
+  Serial.print(knownWeight, 2);
+  Serial.println(" lbs");
+  Serial.print("Enter new known calibration weight in lbs (");
+  Serial.print(MIN_PLAUSIBLE_WEIGHT, 2);
+  Serial.print(" to ");
+  Serial.print(MAX_PROJECT_WEIGHT, 2);
+  Serial.println("), then press Enter.");
+  Serial.println("After entry, send 's' to save or 'q' to cancel.");
 }
 
 /**
@@ -1518,9 +1686,9 @@ void tankTareUpdate() {
   Serial.print(tankTare, 2);
   Serial.println(" lbs");
   Serial.print("Enter new tank tare in lbs (");
-  Serial.print(TANK_TARE_MIN_LBS, 2);
+  Serial.print(MIN_PLAUSIBLE_WEIGHT, 2);
   Serial.print(" to ");
-  Serial.print(MAX_PROJECT_WEIGHT_LBS, 2);
+  Serial.print(MAX_PROJECT_WEIGHT, 2);
   Serial.println("), then press Enter.");
   Serial.println("After entry, send 's' to save or 'q' to cancel.");
 }
@@ -1554,9 +1722,9 @@ void propaneWeightUpdate() {
   Serial.print(maxPropane, 2);
   Serial.println(" lbs");
   Serial.print("Enter new max propane weight in lbs (");
-  Serial.print(MAX_PROPANE_MIN_LBS, 2);
+  Serial.print(MIN_PLAUSIBLE_WEIGHT, 2);
   Serial.print(" to ");
-  Serial.print(MAX_PROJECT_WEIGHT_LBS, 2);
+  Serial.print(MAX_PROJECT_WEIGHT, 2);
   Serial.println("), then press Enter.");
   Serial.println("After entry, send 's' to save or 'q' to cancel.");
 }
@@ -1583,9 +1751,6 @@ void setup() {
   Serial.println(APP_TITLE);
   Serial.println();
   
-  // @todo add known tank weight to eeprom saves and loads,
-  // and add a user command for updating the known tank weight as well,
-
   // need to check if eeprom is ready before trying to load values, and if not, use defaults and continue without eeprom functionality
   eepromReady = EEPROM.begin(EEPROM_SIZE_BYTES);
 
@@ -1595,8 +1760,9 @@ void setup() {
   if (!eepromReady) {
     Serial.println("EEPROM init failed. Using defaults.");
     calibrationFactor = DEF_CALIBRATION_FACTOR;
-    tankTare          = DEF_TANK_TARE;
+    knownWeight       = DEF_KNOWN_WEIGHT;
     maxPropane        = DEF_MAX_PROPANE;
+    tankTare          = DEF_TANK_TARE;
   } else {
     float loaded = 0.0f;
 
@@ -1620,22 +1786,22 @@ void setup() {
       }
     }
 
-    if (loadFromEeprom(loaded, TARE_EEPROM_MAGIC_ADDR, TARE_EEPROM_MAGIC, TARE_EEPROM_VALUE_ADDR) && isValidBoundedFloat(loaded, TANK_TARE_MIN_LBS, MAX_PROJECT_WEIGHT_LBS)) {
-      tankTare = loaded;
-      Serial.print("Loaded tank tare from EEPROM: ");
-      Serial.print(tankTare, 2);
+    if (loadFromEeprom(loaded, KNOWN_WEIGHT_EEPROM_MAGIC_ADDR, KNOWN_WEIGHT_EEPROM_MAGIC, KNOWN_WEIGHT_EEPROM_VALUE_ADDR) && isValidBoundedFloat(loaded, MIN_PLAUSIBLE_WEIGHT, MAX_PROJECT_WEIGHT)) {
+      knownWeight = loaded;
+      Serial.print("Loaded known calibration weight from EEPROM: ");
+      Serial.print(knownWeight, 2);
       Serial.println(" lbs");
     } else {
-      tankTare = DEF_TANK_TARE;
-      Serial.println("Tank tare not found or invalid; using default.");
-      if (!saveToEeprom(tankTare, TARE_EEPROM_MAGIC, TARE_EEPROM_MAGIC_ADDR, TARE_EEPROM_VALUE_ADDR)) {
-        Serial.println("Failure saving default tank tare to EEPROM.");
+      knownWeight = DEF_KNOWN_WEIGHT;
+      Serial.println("Known calibration weight not found or invalid; using default.");
+      if (!saveToEeprom(knownWeight, KNOWN_WEIGHT_EEPROM_MAGIC, KNOWN_WEIGHT_EEPROM_MAGIC_ADDR, KNOWN_WEIGHT_EEPROM_VALUE_ADDR)) {
+        Serial.println("Failure saving default known calibration weight to EEPROM.");
       } else {
-        Serial.println("Success saving default tank tare to EEPROM.");
+        Serial.println("Success saving default known calibration weight to EEPROM.");
       }
     }
 
-    if (loadFromEeprom(loaded, MAX_PROPANE_EEPROM_MAGIC_ADDR, MAX_PROPANE_EEPROM_MAGIC, MAX_PROPANE_EEPROM_VALUE_ADDR) && isValidBoundedFloat(loaded, MAX_PROPANE_MIN_LBS, MAX_PROJECT_WEIGHT_LBS)) {
+    if (loadFromEeprom(loaded, MAX_PROPANE_EEPROM_MAGIC_ADDR, MAX_PROPANE_EEPROM_MAGIC, MAX_PROPANE_EEPROM_VALUE_ADDR) && isValidBoundedFloat(loaded, MIN_PLAUSIBLE_WEIGHT, MAX_PROJECT_WEIGHT)) {
       maxPropane = loaded;
       Serial.print("Loaded max propane weight from EEPROM: ");
       Serial.print(maxPropane, 2);
@@ -1647,6 +1813,21 @@ void setup() {
         Serial.println("Failure saving default max propane weight to EEPROM.");
       } else {
         Serial.println("Success saving default max propane weight to EEPROM.");
+      }
+    }
+
+    if (loadFromEeprom(loaded, TARE_EEPROM_MAGIC_ADDR, TARE_EEPROM_MAGIC, TARE_EEPROM_VALUE_ADDR) && isValidBoundedFloat(loaded, MIN_PLAUSIBLE_WEIGHT, MAX_PROJECT_WEIGHT)) {
+      tankTare = loaded;
+      Serial.print("Loaded tank tare from EEPROM: ");
+      Serial.print(tankTare, 2);
+      Serial.println(" lbs");
+    } else {
+      tankTare = DEF_TANK_TARE;
+      Serial.println("Tank tare not found or invalid; using default.");
+      if (!saveToEeprom(tankTare, TARE_EEPROM_MAGIC, TARE_EEPROM_MAGIC_ADDR, TARE_EEPROM_VALUE_ADDR)) {
+        Serial.println("Failure saving default tank tare to EEPROM.");
+      } else {
+        Serial.println("Success saving default tank tare to EEPROM.");
       }
     }
   }
@@ -1711,6 +1892,12 @@ void loop() {
     return;
   }
 
+  // Route one character at a time to active known calibration weight input workflow
+  if (inputCtx.mode == InputMode::KNOWN_WEIGHT) {
+    handleKnownWeightInput(temp);
+    return;
+  }
+
   // ignore newline characters that may be sent by the serial monitor after commands
   // need to avoid accidentally triggering multiple commands in a row
   // MUST come after input mode handlers because user hits enter after inputting new value, 
@@ -1747,7 +1934,10 @@ void loop() {
     case 'H':
       helpMenu();
       break;
-    // @todo case'k' for entering known weight value for calibration mode
+    case 'k':
+    case 'K':
+      knownWeightUpdate();
+      break;
     case 'l':
     case 'L':
       liquidLevel();

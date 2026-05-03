@@ -69,6 +69,11 @@ constexpr unsigned long USER_CONFIRM_TIMEOUT = 20000UL;
  * Tank Constants
  */
 
+//  @todo if there is a 7 lb change in tank tare weight,
+// warn user they will need to update max legal propane weight
+// and known weight for calibration to maintain accuracy
+// and do a recalibration to update the calibration factor
+
 // Tare weight of the empty, used to subtract from readings to report only the weight of the propane
 // Tare weight of the empty twenty lb tank in pounds is approximately 16-19 lbs
 // Tare weight of the empty thirty lb tank in pounds is typically 23-26 lbs
@@ -95,20 +100,20 @@ constexpr uint32_t CAL_EEPROM_MAGIC = 0x43414C31;           // "CAL1" magic numb
 constexpr int CAL_EEPROM_MAGIC_ADDR = 0;                    // Calibration factor CAL1 is stored as 4 byte float
 constexpr int CAL_EEPROM_VALUE_ADDR = 4;                    // value address starts at byte 4, immediately after the magic number
 
-// EEPROM addresses and magic number for propane tank tare persistence.
-constexpr uint32_t TARE_EEPROM_MAGIC = 0x54415245;          // "TARE" magic number is to indicate valid tank tare weight stored in EEPROM
-constexpr int TARE_EEPROM_MAGIC_ADDR = 8;                   // Tank tare TARE is stored as a 4 byte float
-constexpr int TARE_EEPROM_VALUE_ADDR = 12;                  // value address starts at byte 12, immediately after the magic number
+// EEPROM addresses and magic number for known weight persistence
+constexpr uint32_t KNOWN_WEIGHT_EEPROM_MAGIC = 0x4B4E5731;  // "KNW1" magic number is to indicate valid known weight stored in EEPROM
+constexpr int KNOWN_WEIGHT_EEPROM_MAGIC_ADDR = 8;           // Known weight KNW1 is stored as 4 byte float
+constexpr int KNOWN_WEIGHT_EEPROM_VALUE_ADDR = 12;          // value address starts at byte 12, immediately after the magic number
 
 // EEPROM addresses and magic number for maximum legal propane weight persistence.
 constexpr uint32_t MAX_PROPANE_EEPROM_MAGIC = 0x4D415850;   // "MAXP" magic number is to indicate valid max propane weight stored in EEPROM
 constexpr int MAX_PROPANE_EEPROM_MAGIC_ADDR = 16;           // Max propane weight MAXP is stored as a 4 byte float
 constexpr int MAX_PROPANE_EEPROM_VALUE_ADDR = 20;           // value address starts at byte 20, immediately after the magic number
 
-// EEPROM addresses and magic number for known weight persistence
-constexpr uint32_t KNOWN_WEIGHT_EEPROM_MAGIC = 0x4B4E5731;   // "KNW1" magic number is to indicate valid known weight stored in EEPROM
-constexpr int KNOWN_WEIGHT_EEPROM_MAGIC_ADDR = 24;           // Known weight KNW1 is stored as 4 byte float
-constexpr int KNOWN_WEIGHT_EEPROM_VALUE_ADDR = 28;           // value address starts at byte 28, immediately after the magic number
+// EEPROM addresses and magic number for propane tank tare persistence.
+constexpr uint32_t TARE_EEPROM_MAGIC = 0x54415245;          // "TARE" magic number is to indicate valid tank tare weight stored in EEPROM
+constexpr int TARE_EEPROM_MAGIC_ADDR = 24;                  // Tank tare TARE is stored as a 4 byte float
+constexpr int TARE_EEPROM_VALUE_ADDR = 28;                  // value address starts at byte 28, immediately after the magic number
 
 // EEPROM size in bytes. Must be sufficient to store all calibration and tare values with their magic numbers.
 constexpr int EEPROM_SIZE_BYTES = 64;
