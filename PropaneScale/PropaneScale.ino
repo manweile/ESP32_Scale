@@ -92,7 +92,7 @@ enum class CalState : uint8_t {
  * @brief Struct to hold state for calibration workflows.
  * 
  * @details Contains variables that allow managing complex calibration workflows.
-  */
+ */
 struct CalContext {
   float         adjustmentStep     = 0.0f;                  /**< manual mode: current factor nudge size */
   bool          hasManualDisplay   = false;                 /**< manual mode: whether we have a prior display snapshot to compare against */
@@ -191,6 +191,41 @@ struct LevelContext {
 };
 
 static LevelContext levelCtx;                               /**< Level read context instance to hold state for the level read workflow */
+
+/**
+ * @subsection Non-blocking Tare State Machine
+ */
+
+/**
+ * @enum TareState
+ *
+ * @brief Enumeration of states for the startup tare workflow.
+ *
+ * @details Used to manage the non-blocking startup empty-scale detection and tare sequence.
+ */
+enum class TareState : uint8_t {
+  IDLE        = 0,                                          /**< No active startup tare workflow */
+  WAIT_STABLE = 1,                                          /**< Polling scale for stable empty reading, or user 'q' to skip */
+  TARE        = 2,                                          /**< Stable empty confirmed; apply tare and finish */
+  SKIP        = 3                                           /**< User skipped or scale unstable at timeout; skip tare */
+};
+
+/**
+ * @struct TareContext
+ *
+ * @brief Persistent context for the non-blocking startup tare workflow.
+ *
+ * @details Stores the baseline reading, stable check counter, start timestamp, and current
+ * state so each loop() tick can advance the workflow without blocking.
+ */
+struct TareContext {
+  float          baseline     = 0.0f;                       /**< Initial scale reading used as the stability reference */
+  int            stableChecks = 0;                          /**< Consecutive readings within tolerance of baseline */
+  TareState      state        = TareState::IDLE;            /**< Current state within the startup tare workflow */
+  unsigned long  stateStartMs = 0;                          /**< millis() when WAIT_STABLE state was entered */
+};
+
+static TareContext tareCtx;                                 /**< Startup tare context instance */
 
 // @todo move to config.h
 
@@ -913,6 +948,69 @@ void tickLevelRead() {
 }
 
 /**
+ * @brief Advances the non-blocking startup tare workflow one iteration.
+ *
+ * @details Called each loop() iteration. Handles the WAIT_STABLE, TARE, and SKIP
+ * states. Returns immediately when IDLE.
+ *
+ * @return {void} No value is returned.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+void tickTare() {
+  if (tareCtx.state == TareState::IDLE) return;
+
+  if (tareCtx.state == TareState::TARE) {
+    scale.tare();
+    Serial.println("Scale is tared and ready.");
+    tareCtx.state = TareState::IDLE;
+    helpMenu();
+    return;
+  }
+
+  if (tareCtx.state == TareState::SKIP) {
+    Serial.println("Continuing without startup tare.");
+    Serial.println("Remove propane weight and send 'r' to re-zero when ready.");
+    tareCtx.state = TareState::IDLE;
+    helpMenu();
+    return;
+  }
+
+  // WAIT_STABLE: check for user skip or stable scale reading
+  if (Serial.available()) {
+    char c = Serial.read();
+    if (c == 'q' || c == 'Q') {
+      Serial.println("Startup tare skipped by user.");
+      tareCtx.state = TareState::SKIP;
+      return;
+    }
+  }
+
+  if ((millis() - tareCtx.stateStartMs) >= EMPTY_CONFIRM_TIMEOUT) {
+    float m = readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES);
+    if (fabsf(m - tareCtx.baseline) <= SETUP_EMPTY_WEIGHT) {
+      Serial.println("Startup tare auto-confirmed at timeout (stable scale).");
+      tareCtx.state = TareState::TARE;
+    } else {
+      Serial.println("Startup tare timeout: scale unstable, skipping tare.");
+      tareCtx.state = TareState::SKIP;
+    }
+    return;
+  }
+
+  float m = readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES);
+  if (fabsf(m - tareCtx.baseline) <= SETUP_EMPTY_WEIGHT) {
+    tareCtx.stableChecks++;
+    if (tareCtx.stableChecks >= UNLOAD_CHECK_COUNT) {
+      Serial.println("Stable scale detected, proceeding with tare.");
+      tareCtx.state = TareState::TARE;
+    }
+  } else {
+    tareCtx.stableChecks = 0;
+  }
+}
+
+/**
  * @brief Advances the calibration context from WAIT_EMPTY to the next appropriate state.
  *
  * @details For REZERO mode, tares the scale and returns to IDLE.
@@ -1032,9 +1130,6 @@ void flushSerialInput() {
   }
 }
 
-// @todo confirm this loop is not a problem for blocking in the web interface when that is implemented, 
-// and if so, consider refactoring to be non-blocking with a state machine and timestamp checks similar to the other workflows that wait for user input
-
 /**
  * @brief Parses a non-negative float from a null-terminated C string.
  *
@@ -1058,6 +1153,9 @@ bool parseNonNegativeFloat(const char* text, float& outValue) {
     return false;
   }
 
+  // loop is not a blocking concern since strtof has already parsed the float 
+  // and we are just validating that the rest of the string is whitespace 
+  // and that the value is non-negative, which are both very fast operations
   while (*parseEnd == ' ' || *parseEnd == '\t') {
     ++parseEnd;
   }
@@ -1096,29 +1194,34 @@ float readAveragedUnits(int readings, int samplesPerReading) {
   return avgWeight;
 }
 
-// @todo make non-blocking
+/**
+ * @section Project initiated workflows
+ */
 
 /**
- * @brief Waits for startup empty-scale condition with optional user override.
+ * @brief Begins the non-blocking startup tare workflow.
  *
- * @details Checks repeated raw HX711 readings during setup and auto-confirms when the scale appears empty.
- * The user can also 'q' to skip startup tare.
+ * @details Validates scale readiness, establishes a baseline reading, prints startup
+ * prompts, and enters WAIT_STABLE state. The workflow is then advanced each loop()
+ * iteration by tickTare().
  *
- * @return {bool} True if startup tare should run; false to skip startup tare.
+ * @return {void} No value is returned.
  *
  * @throws {none} This function does not throw exceptions.
  */
-bool waitForStartupEmptyScale() {
-  float baseline = 0.0f;                // Initial baseline reading used to check for stability during startup
-  float measuredUnits = 0.0f;           // Current measured weight in pounds
-  int stableEmptyChecks = 0;            // Consecutive readings considered empty
-  unsigned long startTimeMs = millis(); // Start of waiting period
-  char temp = '\0';                     // User input from the serial interface
-
-
+void beginTare() {
   if (!ensureScaleReady("startup tare")) {
-    return false;
+    tareCtx.state = TareState::SKIP;
+    return;
   }
+
+  scale.set_scale(calibrationFactor);
+
+  // Establish baseline before tare; stability is checked relative to this reading.
+  tareCtx.baseline     = readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES);
+  tareCtx.stableChecks = 0;
+  tareCtx.stateStartMs = millis();
+  tareCtx.state        = TareState::WAIT_STABLE;
 
   Serial.println();
   Serial.println(F("Startup tare: waiting for stable scale..."));
@@ -1131,53 +1234,10 @@ bool waitForStartupEmptyScale() {
   Serial.println(F(" lbs."));
   Serial.println(F("Timeout expiry with stable scale values auto-confirms taring workflow."));
   Serial.println(F("Send 'q' to skip startup tare."));
-  
-  scale.set_scale(calibrationFactor);
-
-  // Establish baseline before tare; stability is checked relative to this reading.
-  baseline = readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES);
-  measuredUnits = baseline;
-
-  // Check for stable readings near the initial baseline to auto-confirm empty scale, but allow user to cancel with 'q'.
-  while ((millis() - startTimeMs) < EMPTY_CONFIRM_TIMEOUT) {
-    measuredUnits = readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES);
-
-    if (fabsf(measuredUnits - baseline) <= SETUP_EMPTY_WEIGHT) {
-      stableEmptyChecks++;
-      if (stableEmptyChecks >= UNLOAD_CHECK_COUNT) {
-        Serial.println("Stable scale detected, proceeding with tare.");
-        return true;
-      }
-    } else {
-      stableEmptyChecks = 0;
-    }
-
-    if (Serial.available()) {
-      temp = Serial.read();
-      if (temp == 'q' || temp == 'Q') {
-        Serial.println("Startup tare skipped by user.");
-        return false;
-      }
-    }
-
-    // @todo query agent if this should be removed 
-    // or if it is necessary to have some delay here to avoid hammering the HX711 with continuous reads in a tight loop,  
-    // since the HX711 may have a limited sample rate and continuous reads without delay could cause issues
-    delay(100);
-  }
-
-  // Timeout: auto-confirm if the reading remained near the initial baseline.
-  if (fabsf(measuredUnits - baseline) <= SETUP_EMPTY_WEIGHT) {
-    Serial.println("Startup tare auto-confirmed at timeout (stable scale).");
-    return true;
-  }
-
-  Serial.println("Startup tare timeout: scale unstable, skipping tare.");
-  return false;
 }
 
 /**
- * @section User initiated functions
+ * @section User initiated workflows
  */
 
 /**
@@ -1374,24 +1434,24 @@ void manualCalibration() {
   Serial.print(USER_CONFIRM_TIMEOUT / 1000UL);
   Serial.println(" seconds.");
 
-  calCtx.adjustmentStep    = step;
-  calCtx.hasManualDisplay  = false;
-  calCtx.lastDirection     = 0;
-  calCtx.measuredUnits     = 0.0f;
-  calCtx.minStep           = minStep;
-  calCtx.mode              = CalMode::MANUAL;
+  calCtx.adjustmentStep            = step;
+  calCtx.hasManualDisplay          = false;
+  calCtx.lastDirection             = 0;
+  calCtx.measuredUnits             = 0.0f;
+  calCtx.minStep                   = minStep;
+  calCtx.mode                      = CalMode::MANUAL;
   calCtx.originalCalibrationFactor = calibrationFactor;
-  calCtx.stableEmptyChecks = 0;
-  calCtx.state             = CalState::WAIT_EMPTY;
-  calCtx.stateStartMs      = millis();
+  calCtx.stableEmptyChecks         = 0;
+  calCtx.state                     = CalState::WAIT_EMPTY;
+  calCtx.stateStartMs              = millis();
 }
 
 /**
  * @brief Starts the runtime re-zero workflow.
  *
- * @details Validates that no calibration is in progress, checks scale readiness,
- * prints prompts, and sets the calibration context to REZERO mode waiting for
- * an empty scale. The tare is applied asynchronously via tickCalibration().
+ * @details Validates that no calibration is already running, checks scale readiness,
+ * prints the initial prompts, and sets the calibration context to begin waiting for
+ * an empty scale in REZERO mode. The workflow continues asynchronously through tickCalibration().
  *
  * @return {void} No value is returned.
  *
@@ -1502,7 +1562,7 @@ void propaneWeightUpdate() {
 }
 
 /** 
- * @section Main setup and loop functions
+ * @section Project lifecycle functions
  */
 
 /**
@@ -1595,14 +1655,7 @@ void setup() {
 
   // project not intended for continuous operation
   // always starting fresh avoids issues with long term stability issues
-  if (waitForStartupEmptyScale()) {
-    scale.tare();
-    Serial.println("Scale is tared and ready.");
-  } else {
-    Serial.println("Continuing without startup tare.");
-    Serial.println("Remove propane weight and send 'r' to re-zero when ready.");
-  }
-  helpMenu();
+  beginTare();
 }
 
 /**
@@ -1619,6 +1672,12 @@ void loop() {
   // Advance all active state machines each iteration before processing serial input
   tickCalibration();
   tickLevelRead();
+  tickTare();
+
+  // While startup tare is active, tickTare() consumes serial input; suppress all other dispatch
+  if (tareCtx.state != TareState::IDLE) {
+    return;
+  }
 
   // On no serial input, need return so state machines can continue running until next loop iteration
   if (!Serial.available()) {
