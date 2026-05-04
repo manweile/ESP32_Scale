@@ -317,7 +317,8 @@
     },
 
     // upload task using ESP32 chip, com port selected from propmpt, set speed, and merged output file from compile
-    // esptool.exe --verbose --chip esp32 --port COM4 --baud 921600 write-flash -z 0x0 D:\MyArduino\Projects\ESP32_Scale/PropaneScale/build/esp32.esp32.esp32thing/PropaneScale.ino.merged.bin
+    // esptool.exe --verbose --chip esp32 --port COM4 --baud 921600 write-flash -z 0x0 
+    // D:\MyArduino\Projects\ESP32_Scale/PropaneScale/build/esp32.esp32.esp32thing/PropaneScale.ino.merged.bin
     {
       "label": "ESPTool USB Merged Bin Upload",
       "type": "shell",
@@ -386,82 +387,7 @@
         "ESPTool USB Merged Bin Upload"
       ],
       "problemMatcher": []
-    },
-
-    // helper note for corruption-payload testing workflow
-    {
-      "label": "EEPROM Test Note: Enable Corrupt Payload Build",
-      "hide": true,
-      "type": "shell",
-      "command": "echo",
-      "args": [
-        "Enable your one-shot corruption flag in firmware (valid magic + invalid values), then run this workflow.",
-        "After first boot writes corrupt values, disable the flag and rerun normal upload to verify recovery logic."
-      ],
-      "presentation": {
-        "echo": true,
-        "reveal": "always",
-        "focus": false,
-        "panel": "shared"
-      },
-      "problemMatcher": []
-    },
-
-    // workflow 1: bad EEPROM magic / missing record path
-    {
-      "label": "EEPROM Test 1 - Bad Magic (Erase + Compile + Upload + Monitor)",
-      "dependsOrder": "sequence",
-      "dependsOn": [
-        "ESPTool Erase Flash (EEPROM Test)",
-        "Arduino-CLI Production Quick Compile",
-        "Arduino CLI USB Upload",
-        "Arduino CLI USB Serial Monitor"
-      ],
-      "problemMatcher": []
-    },
-
-    // workflow 2: valid magic + corrupt payload path (requires one-shot corruptor build)
-    {
-      "label": "EEPROM Test 2 - Valid Magic + Corrupt Value (Compile + Upload + Monitor)",
-      "dependsOrder": "sequence",
-      "dependsOn": [
-        "EEPROM Test Note: Enable Corrupt Payload Build",
-        "Arduino-CLI Production Quick Compile",
-        "Arduino CLI USB Upload",
-        "Arduino CLI USB Serial Monitor"
-      ],
-      "problemMatcher": []
-    },
-
-    // workflow 3: valid magic + valid value path
-    {
-      "label": "EEPROM Test 3 - Valid Magic + Valid Value (Compile + Upload + Monitor)",
-      "dependsOrder": "sequence",
-      "dependsOn": [
-        "Arduino-CLI Production Quick Compile",
-        "Arduino CLI USB Upload",
-        "Arduino CLI USB Serial Monitor"
-      ],
-      "problemMatcher": []
-    },
-
-    // host-side unit test for extracted EEPROM init logic using MSYS2 g++
-    {
-      "label": "Host Unit Test - EEPROM Init Logic (MSYS2)",
-      "type": "shell",
-      "command": "C:/msys64/usr/bin/bash.exe",
-      "args": [
-        "-lc",
-        "g++ -std=c++17 -O2 -Wall -Wextra -o /d/MyArduino/Projects/ESP32_Scale/PropaneScale/tests/eeprom_init_logic_test.exe /d/MyArduino/Projects/ESP32_Scale/PropaneScale/eeprom_init_logic.cpp /d/MyArduino/Projects/ESP32_Scale/PropaneScale/tests/eeprom_init_logic_test.cpp && /d/MyArduino/Projects/ESP32_Scale/PropaneScale/tests/eeprom_init_logic_test.exe"
-      ],
-      "presentation": {
-        "echo": true,
-        "reveal": "always",
-        "focus": false,
-        "panel": "shared"
-      },
-      "problemMatcher": []
-    },
+    }
 
     // task to generate a single production image using esptool.exe only
     // requires existing .bootloader.bin, .partitions.bin, and .bin artifacts
