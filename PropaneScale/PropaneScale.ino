@@ -226,7 +226,6 @@ struct TareContext {
   unsigned long  stateStartMs = 0;                          /**< millis() when WAIT_STABLE state was entered */
 };
 
-static bool startupSummaryReplayDone = false;               /**< Emits startup summary once when startup tare resolves */
 static TareContext tareCtx;                                 /**< Startup tare context instance */
 
 // @todo move to config.h
@@ -1105,10 +1104,6 @@ void tickTare() {
   if (tareCtx.state == TareState::IDLE) return;
 
   if (tareCtx.state == TareState::TARE) {
-    if (!startupSummaryReplayDone) {
-      printStartupSummary();
-      startupSummaryReplayDone = true;
-    }
     Serial.println("Stable scale detected, proceeding with tare.");
     scale.tare();
     Serial.println("Scale is tared and ready.");
@@ -1118,10 +1113,6 @@ void tickTare() {
   }
 
   if (tareCtx.state == TareState::SKIP) {
-    if (!startupSummaryReplayDone) {
-      printStartupSummary();
-      startupSummaryReplayDone = true;
-    }
     Serial.println("Continuing without startup tare.");
     Serial.println("Remove propane weight and send 'r' to re-zero when ready.");
     tareCtx.state = TareState::IDLE;
@@ -1416,7 +1407,8 @@ void beginTare() {
   tareCtx.stateStartMs = millis();
   tareCtx.state        = TareState::WAIT_STABLE;
 
-  Serial.println();
+  printStartupSummary();
+
   Serial.println(F("Startup tare: waiting for stable scale..."));
   Serial.println(F("Auto-detect is active."));
   Serial.print(F("Auto-detect timeout: "));
@@ -1455,18 +1447,7 @@ static void printStartupSummary() {
   Serial.print("Loaded tank tare from EEPROM: ");
   Serial.print(tankTare, 2);
   Serial.println(" lbs");
-
   Serial.println();
-  Serial.println("Startup tare: waiting for stable scale...");
-  Serial.println("Auto-detect is active.");
-  Serial.print("Auto-detect timeout: ");
-  Serial.print(EMPTY_CONFIRM_TIMEOUT_MS / 1000UL);
-  Serial.println(" seconds.");
-  Serial.print("Stability tolerance: +/- ");
-  Serial.print(SETUP_EMPTY_WEIGHT, 2);
-  Serial.println(" lbs.");
-  Serial.println("Timeout expiry with stable scale values auto-confirms taring workflow.");
-  Serial.println("Send 'q' to skip startup tare.");
 }
 
 /**
