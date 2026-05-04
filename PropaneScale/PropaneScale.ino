@@ -878,7 +878,7 @@ void tickCalibration() {
     if ((millis() - calCtx.stateStartMs) >= USER_CONFIRM_TIMEOUT_MS) {
       
       // take one final reading to decide auto-confirm vs. abort
-      calCtx.measuredUnits = readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES);
+      calCtx.measuredUnits = readAveragedUnits(UNLOAD_CHECK_COUNT, POLL_SAMPLES);
       
       if (fabsf(calCtx.measuredUnits) <= MINIMUM_LOAD_WEIGHT) {
         Serial.println("Empty scale auto-confirmed at timeout (stable scale).");
@@ -894,7 +894,7 @@ void tickCalibration() {
     }
 
     // Poll each tick to detect empty early (before timeout expires)
-    calCtx.measuredUnits = readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES);
+    calCtx.measuredUnits = readAveragedUnits(UNLOAD_CHECK_COUNT, POLL_SAMPLES);
 
     if (fabsf(calCtx.measuredUnits) <= MINIMUM_LOAD_WEIGHT) {
 
@@ -924,7 +924,7 @@ void tickCalibration() {
     }
 
     // Poll each tick to detect load placement as soon as possible
-    calCtx.measuredUnits = readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES);
+    calCtx.measuredUnits = readAveragedUnits(UNLOAD_CHECK_COUNT, POLL_SAMPLES);
 
     // below noise-derived threshold — no real load yet
     if (fabsf(calCtx.measuredUnits) < calCtx.loadDetectThreshold) {
@@ -1066,7 +1066,7 @@ void tickLevelRead() {
       return;
     }
 
-    float measuredUnits = readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES);
+    float measuredUnits = readAveragedUnits(UNLOAD_CHECK_COUNT, POLL_SAMPLES);
     if (fabsf(measuredUnits) >= levelCtx.loadDetectThreshold) {
       Serial.print("Tank detected. Settling for ");
       Serial.print(CAL_SETTLE_DELAY_MS / 1000UL);
@@ -1152,7 +1152,7 @@ void tickTare() {
   }
 
   if ((millis() - tareCtx.stateStartMs) >= EMPTY_CONFIRM_TIMEOUT_MS) {
-    float m = readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES);
+    float m = readAveragedUnits(UNLOAD_CHECK_COUNT, POLL_SAMPLES);
     if (fabsf(m - tareCtx.baseline) <= SETUP_EMPTY_WEIGHT) {
       Serial.println("Startup tare auto-confirmed at timeout (stable scale).");
       tareCtx.state = TareState::TARE;
@@ -1163,7 +1163,7 @@ void tickTare() {
     return;
   }
 
-  float m = readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES);
+  float m = readAveragedUnits(UNLOAD_CHECK_COUNT, POLL_SAMPLES);
   if (fabsf(m - tareCtx.baseline) <= SETUP_EMPTY_WEIGHT) {
     tareCtx.stableChecks++;
     if (tareCtx.stableChecks >= UNLOAD_CHECK_COUNT) {

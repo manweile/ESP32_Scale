@@ -20,6 +20,10 @@ constexpr long BAUD = 115200;
  * @section Sampling Constants
  */
 
+// Single sample used in polling loops (WAIT_EMPTY, WAIT_LOAD, WAIT_STABLE) to keep the
+// main loop responsive. Detection only — no accuracy needed.
+constexpr int POLL_SAMPLES = 1;
+
 // Number of samples to average during calibration reads (~500 ms at 10 SPS).
 constexpr int CAL_SAMPLES = 5;
 
