@@ -71,6 +71,9 @@ constexpr unsigned long CAL_SETTLE_DELAY_MS = 2000UL;
 // Maximum time to wait for load placement during startup and calibration before giving up and returning to idle state.
 constexpr unsigned long EMPTY_CONFIRM_TIMEOUT_MS = 15000UL;
 
+// Maximum time to wait for the HX711 to become ready during blocking reads
+constexpr unsigned long HX711_READY_TIMEOUT_MS = 120UL;
+
 // Time to wait for user confirmation during calibration workflows before auto-confirming with stable readings or cancelling if not stable.
 constexpr unsigned long USER_CONFIRM_TIMEOUT_MS = 20000UL;
 

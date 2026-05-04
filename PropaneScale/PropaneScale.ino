@@ -174,7 +174,8 @@ static InputContext inputCtx;                               /**< Non-blocking in
 enum class LevelState : uint8_t {
   IDLE      = 0,                                            /**< No active level read workflow */
   WAIT_LOAD = 1,                                            /**< Polling scale until tank weight exceeds detection threshold */
-  READING   = 2                                             /**< Load detected; taking final averaged measurement */
+  SETTLING  = 2,                                            /**< Load detected; waiting for placement motion to settle */
+  READING   = 3                                             /**< Load settled; taking final averaged measurement */
 };
 
 /**
@@ -873,18 +874,17 @@ void tickCalibration() {
   // workflow - waiting on user to remove all weight from platen
   if (calCtx.state == CalState::WAIT_EMPTY) {
     
+    // user never confirmed empty by removing weight or pressing 'q
     if ((millis() - calCtx.stateStartMs) >= USER_CONFIRM_TIMEOUT_MS) {
       
       // take one final reading to decide auto-confirm vs. abort
       calCtx.measuredUnits = readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES);
       
-      // Scale is empty at expiry — auto-confirm & transition state machine so user doesn't have to interact
       if (fabsf(calCtx.measuredUnits) <= MINIMUM_LOAD_WEIGHT) {
         Serial.println("Empty scale auto-confirmed at timeout (stable scale).");
         Serial.println();
         transitionFromWaitEmpty();
       } else {
-        // otherwise something still on platen — unsafe to tare, reset state machine and abort
         Serial.println("Confirmation timed out: scale not empty; cancelled.");
         Serial.println();
         calCtx.state = CalState::IDLE;
@@ -897,13 +897,11 @@ void tickCalibration() {
     calCtx.measuredUnits = readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES);
 
     if (fabsf(calCtx.measuredUnits) <= MINIMUM_LOAD_WEIGHT) {
-      // require N consecutive readings to suppress transient spikes
-      // gets incremented on every tick caused by loop() until it reaches the threshold for auto-confirmation,
-      // but resets to 0 if a non-empty reading occurs
+
+      // require consecutive readings to suppress transient spikes
       calCtx.stableEmptyChecks++; 
       
       if (calCtx.stableEmptyChecks >= UNLOAD_CHECK_COUNT) {
-        // Consecutive stable-empty streak met — no need to wait for timeout
         Serial.println("Empty scale auto-detected, continuing with calibration.");
         Serial.println();
         transitionFromWaitEmpty();
@@ -918,7 +916,6 @@ void tickCalibration() {
   // workflow - waiting on user to place known weight on scale after empty confirmation
   if (calCtx.state == CalState::WAIT_LOAD) {
     
-    // User never placed weight in time — abort rather than calibrate with no load
     if ((millis() - calCtx.stateStartMs) >= EMPTY_CONFIRM_TIMEOUT_MS) {
       Serial.println("Weight placement timed out; calibration cancelled.");
       calCtx.state = CalState::IDLE;
@@ -926,13 +923,14 @@ void tickCalibration() {
       return;
     }
 
+    // Poll each tick to detect load placement as soon as possible
     calCtx.measuredUnits = readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES);
+
     // below noise-derived threshold — no real load yet
     if (fabsf(calCtx.measuredUnits) < calCtx.loadDetectThreshold) {
       return; 
     }
 
-    // workflow - weight placed — settle before measuring to avoid mid-placement reads
     Serial.print("Weight detected. Settling for ");
     Serial.print(CAL_SETTLE_DELAY_MS / 1000UL);
     Serial.println(" seconds before measuring...");
@@ -942,20 +940,20 @@ void tickCalibration() {
   }
 
   // workflow - waiting for placed weight to stop moving before taking final measurement
+  // can be for auto or manual calibration depending on users choice of calibration mode
   if (calCtx.state == CalState::SETTLING) {
+
     if ((millis() - calCtx.stateStartMs) < CAL_SETTLE_DELAY_MS) {
       return;
     }
 
-    // workflow - weight settled for automatic calibration
     if (calCtx.mode == CalMode::AUTO) {
       Serial.println("Measuring stable reading...");
 
-      // Use more samples for the final measurement to reduce noise in the derived factor
+      // take final measurement to compute calibration factor
       calCtx.measuredUnits = readAveragedUnits(CAL_SAMPLES, LIVE_SAMPLES);
 
       if (knownWeight == 0.0f || calCtx.measuredUnits == 0.0f) {
-        // Guard against division by zero or a zero reading that would produce an unusable factor
         Serial.println("Automatic calibration failed: invalid known weight or reading.");
         calCtx.state = CalState::IDLE;
         calCtx.mode  = CalMode::NONE;
@@ -987,7 +985,6 @@ void tickCalibration() {
       calCtx.mode  = CalMode::NONE;
     }
 
-    // workflow - weight settled for manual calibration — enter interactive adjustment
     if (calCtx.mode == CalMode::MANUAL) {
       // serial input handled by handleCalibrationInput()
       Serial.println("Adjust calibration until the reading matches the known weight.");
@@ -1007,18 +1004,27 @@ void tickCalibration() {
 
   // workflow - interactive manual calibration adjustment
   if (calCtx.state == CalState::ADJUSTING) {
+
     // apply current factor before reading so display reflects latest adjustment
-    scale.set_scale(calibrationFactor); 
-    float readingLbs = scale.get_units();
+    scale.set_scale(calibrationFactor);
+
+    // skip the rest of the logic until the first valid reading is available after more iteration(s)
+    // guards against HX711 becoming uninitialized due to power down and/or disconnection
+    if (!scale.is_ready()) {
+      return;
+    }
+
+    float readingWeight = scale.get_units();
+
     // Quantize to integers for change detection — float comparison is unreliable across loop ticks
-    int readingTenth      = static_cast<int>(lroundf(readingLbs           * 10.0f));
-    int factorHundredth   = static_cast<int>(lroundf(calibrationFactor    * 100.0f));
+    int readingTenth      = static_cast<int>(lroundf(readingWeight         * 10.0f));
+    int factorHundredth   = static_cast<int>(lroundf(calibrationFactor     * 100.0f));
     int stepTenThousandth = static_cast<int>(lroundf(calCtx.adjustmentStep * 10000.0f));
 
     // always print once on first entry
     if (!calCtx.hasManualDisplay || readingTenth != calCtx.lastReadingTenth || factorHundredth != calCtx.lastFactorHundredth || stepTenThousandth != calCtx.lastStepTenThousandth) {
       Serial.print("Reading: ");
-      Serial.print(readingLbs, 1);
+      Serial.print(readingWeight, 1);
       Serial.print(" lbs  factor: ");
       Serial.print(calibrationFactor, 2);
       Serial.print("  step: ");
@@ -1039,6 +1045,8 @@ void tickCalibration() {
  * @details Called every loop() iteration when the level read workflow is active.
  * - WAIT_LOAD: polls the scale each tick until the reading exceeds the load
  *   detection threshold or the placement timeout expires.
+ * - SETTLING: waits a short delay after load detection to avoid measuring while
+ *   placement motion is still in progress.
  * - READING: takes a final averaged measurement, computes and prints propane
  *   weight and fill percentage, then resets to IDLE.
  *
@@ -1060,13 +1068,26 @@ void tickLevelRead() {
 
     float measuredUnits = readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES);
     if (fabsf(measuredUnits) >= levelCtx.loadDetectThreshold) {
-      levelCtx.state = LevelState::READING;
+      Serial.print("Tank detected. Settling for ");
+      Serial.print(CAL_SETTLE_DELAY_MS / 1000UL);
+      Serial.println(" seconds before final read...");
+      levelCtx.stateStartMs = millis();
+      levelCtx.state = LevelState::SETTLING;
     }
     return;
   }
 
+  if (levelCtx.state == LevelState::SETTLING) {
+    if ((millis() - levelCtx.stateStartMs) < CAL_SETTLE_DELAY_MS) {
+      return;
+    }
+
+    levelCtx.state = LevelState::READING;
+    return;
+  }
+
   if (levelCtx.state == LevelState::READING) {
-    Serial.println("Tank detected. Reading weight...");
+    Serial.println("Reading tank weight...");
     float rawWeight = readAveragedUnits(CAL_SAMPLES, LIVE_SAMPLES);
 
     float propaneWeight = rawWeight - tankTare - PLATEN_TARE;
@@ -1368,13 +1389,25 @@ bool parseNonNegativeFloat(const char* text, float& outValue) {
  */
 float readAveragedUnits(int readings, int samplesPerReading) {
   float avgWeight = 0.0f;               // Computed average weight in pounds to return at the end of the function.
-  float totalUnits = 0.0f;              // Accumulator summing weight readings across all iterations for averaging 
-
+  int   collected  = 0;                 // Number of samples actually read (may be less than requested if HX711 not ready)
+  float totalUnits = 0.0f;              // Accumulator summing weight readings across all iterations for averaging
+  
+  // Use bounded wait to avoid infinite blocking while preserving the original
+  // per-reading averaging semantics used across workflows.
   for (int readingIndex = 0; readingIndex < readings; ++readingIndex) {
+    if (!scale.wait_ready_timeout(HX711_READY_TIMEOUT_MS)) {
+      continue;
+    }
+
     totalUnits += scale.get_units(samplesPerReading);
+    collected++;
   }
 
-  avgWeight = totalUnits / readings;
+  if (collected == 0) {
+    return 0.0f;
+  }
+
+  avgWeight = totalUnits / collected;
   return avgWeight;
 }
 
@@ -2033,8 +2066,8 @@ void loop() {
 
   char temp = Serial.read();
 
-  // Route 'q' cancel when level read is waiting for tank placement
-  if (levelCtx.state == LevelState::WAIT_LOAD) {
+  // Route 'q' cancel when level read is waiting for tank placement or settling
+  if (levelCtx.state == LevelState::WAIT_LOAD || levelCtx.state == LevelState::SETTLING) {
     if (temp == 'q' || temp == 'Q') {
       Serial.println("Level read cancelled.");
       levelCtx.state = LevelState::IDLE;
