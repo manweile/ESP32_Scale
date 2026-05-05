@@ -1360,13 +1360,13 @@ bool ensureScaleReady(const char* operation) {
     return true;
   }
 
-  Serial.print(F("HX711 not ready"));
+  Serial.print("HX711 not ready");
   if (operation != nullptr && operation[0] != '\0') {
-    Serial.print(F(" during "));
+    Serial.print(" during ");
     Serial.print(operation);
   }
   Serial.println('.');
-  Serial.println(F("Check HX711 wiring, power, and data pins (DOUT/CLK)."));
+  Serial.println("Check HX711 wiring, power, and data pins (DOUT/CLK).");
   Serial.println();
   return false;
 }
