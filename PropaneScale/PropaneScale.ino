@@ -1373,7 +1373,11 @@ bool parseNonNegativeFloat(const char* text, float& outValue) {
   return true;
 }
 
-// @todo make non-blocking when starting web interface coding begins.
+// @todo readAveragedUnits() uses wait_ready_timeout() per iteration so it no longer spins
+// indefinitely, but it still blocks loop() for up to HX711_READY_TIMEOUT_MS per reading
+// (e.g. up to ~120ms per call for single-reading polling paths, more for multi-reading
+// measurement calls). Acceptable for serial-only use. When adding a web interface, refactor
+// callers to drive one reading per loop() tick via is_ready() and accumulate across ticks.
 
 /**
  * @brief Reads the average weight from the scale over multiple readings.
