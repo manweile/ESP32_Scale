@@ -43,113 +43,25 @@ Gains: latency reduction and flash wear reduction.
 Replace some float-heavy paths in polling logic with scaled integer comparisons once calibration/units are stable.
 Useful on tight loop sections, especially if you add networking.
 
-If you want, I can next provide a “no-code” optimization plan with expected latency targets (for example: keep worst-case loop under 20 ms during active polling, under 5 ms idle) and map each state to a target budget.
+suggest, but do not implement, performance enhancements predicated on serial monitor usage.
+I want to have the project at peak performance for usb connection before I start web interface version.
+The Serial monitor usage version will always be usb connected to computer.
+This will also be the case when I am developing the web interface version.
 
-provide no-code optimization plan
+Given USB is always connected and the monitor is always active, suggestions like CDC detection and compile-time stripping are irrelevant here. The relevant ones, reframed for your actual constraint:
 
-Goal
-Keep the firmware responsive under all workflows now, and ready for future web/OTA features, without changing user-visible behavior.
+1. Baud rate increase — one-liner, immediate gain
+Serial.begin(921600) in setup(). Since the host is always connected and a terminal is always open, there's no compatibility risk. Direct reduction in time Serial.print blocks waiting for the TX FIFO to drain on every call.
 
-Success Targets
+2. Tick output rate-limiting — highest loop() throughput impact
+tickCalibration() and tickLevelRead() can emit a serial write every loop() iteration during SETTLING/READING states. A static uint32_t lastPrintMs gate (e.g., 250 ms) collapses dozens of writes per second down to 4, with no perceptible difference to a human reading the monitor. The HX711 read cadence is the real bottleneck there, not the display rate.
 
-1. Idle loop latency: under 5 ms worst-case.
+3. Serial.availableForWrite() guard on large prints
+The 192-byte warnBuf strings and multi-line calibration prompts can stall loop() if the 256-byte ESP32 UART TX FIFO is already partially full. Checking Serial.availableForWrite() >= len before the print keeps the main loop from blocking. Low code complexity; directly improves responsiveness during calibration flows.
 
-2 Active polling states latency: under 20 ms worst-case.
+4. Consolidate per-loop status output into a single structured line
+Rather than emitting weight readings as prose ("Weight: 12.34 lbs\n"), emit a single fixed-format CSV or JSON line (e.g., W,12.34,45\n). One write, smaller payload, faster drain. Also directly reusable as the data format for the web interface's WebSocket push — you won't have to redesign the output format mid-port.
 
-3. Final measurement states: allowed to run longer, but no single loop step should exceed 25 ms.
+Priority order: 1 → 2 → 4 → 3. Items 1 and 2 are low-effort high-payoff. Item 4 is the most strategically valuable for the web port — doing it now avoids a refactor later.
 
-4. Cancel key responsiveness: under 100 ms from keypress to cancel acknowledgement.
-
-5. No regressions in reported weight accuracy versus your current calibrated baseline.
-
-Phase 1: Measure First (Baseline)
-
-1. Add lightweight timing instrumentation points around each loop state-machine tick and around scale read paths.
-
-2. Log min, max, and average loop duration over fixed windows (for example every 2 seconds).
-
-3. Track state occupancy percentage (how much time spent in WAIT_EMPTY, WAIT_LOAD, SETTLING, READING, ADJUSTING).
-
-4. Capture three benchmark scenarios:
-    a) Fresh boot to startup ready.
-    b) Calibration flow (auto and manual).
-    c) Level read flow including placement and settle.
-    
-5. Record current flash/RAM and serial throughput as baseline.
-
-Phase 2: Latency Budget by Workflow
-
-1. Define per-state budget:
-    a) Poll states: 5 to 20 ms per loop step.
-    b) Compute-only states: under 5 ms.
-    c) Final measurement states: chunked so each loop iteration stays under 25 ms.
-
-2. Assign each expensive operation to either:
-    a) Fast path (single sample, immediate return).
-    b) Background accumulation path (multi-sample across ticks).
-    c) One-shot finalization path (small bounded work).
-    
-Phase 3: Sampling Strategy Optimization
-
-1. Formalize two sampling profiles:
-    a)Detection profile for poll states.
-    b)Accuracy profile for final measurement states.
-    c)Replace repeated multi-read polling with one-read-per-tick accumulation logic.
-
-2.Add completion criteria for measurement windows:
-    a)Minimum samples reached.
-    b)Optional max time cap reached.
-    c)Keep current accuracy semantics by validating averaged output against baseline runs.
-    
-Phase 4: State Machine Efficiency
-
-1.Reduce repeated threshold and derived value recomputation by caching per-state-entry values.
-2.Add hysteresis bands for detect transitions to reduce oscillation and repeated work.
-3.Ensure every state transition does only necessary one-time work at entry.
-4.Keep cancel handling checked at top of each active workflow iteration.
-
-Phase 5: Serial Output Throughput
-
-1.Batch startup/menu output into fewer larger prints to reduce UART call overhead.
-2.Rate-limit high-frequency diagnostic lines in active loops.
-3.Keep detailed logs behind a debug verbosity level so production path stays light.
-
-Phase 6: Persistence and I/O Cost
-
-1.Ensure EEPROM commits happen only at explicit save points.
-2.Coalesce multi-field saves into one commit when possible.
-3.Add a persistence queue policy if future workflows need multiple writes in short bursts.
-
-Phase 7: Accuracy Guardrails
-
-1.Build a repeatable validation matrix with your known physical references (19.2 lb and 26 lb).
-2.For each optimization step, verify:
-    a)Absolute error tolerance at each reference weight.
-    b)Startup tare consistency across multiple resets.
-    c)Level percentage stability after settle delay.
-    d)Reject any optimization that improves speed but exceeds agreed error bounds.
-    
-Phase 8: Future-Proofing for Web/OTA
-
-1.Reserve loop headroom for network stack by enforcing latency budgets as a hard constraint.
-2.Move all long operations to incremental state-driven tasks.
-3.Define a watchdog-safe rule: no blocking waits inside top-level loop-driven workflows.
-
-Execution Order (Recommended)
-
-1.Instrument and baseline.
-2.Introduce latency budgets.
-3.Optimize sampling path.
-4.Optimize state-entry/transition computation.
-5.Optimize serial output behavior.
-5.Re-run full benchmark and accuracy matrix after each step.
-
-Acceptance Checklist
-
-1.Worst-case loop times meet targets in all major workflows.
-2.Cancel responsiveness is consistently under 100 ms.
-3.Weight/level outputs match current baseline within defined tolerance.
-4.Flash/RAM growth remains acceptable.
-5.No new workflow regressions in startup, calibration, tare, or level read.
-
-If you want, I can turn this into a concrete test protocol with exact trial counts, pass/fail thresholds, and a simple benchmark log format you can run after each change.
+Claude Sonnet 4.6 • 0.9x
