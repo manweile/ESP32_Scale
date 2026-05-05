@@ -1566,19 +1566,83 @@ void currentRuntimeValues() {
   Serial.print(tankTare, 2);
   Serial.println(" lbs");
 
-  Serial.print("Calibration workflow state: ");
-  Serial.println(static_cast<int>(calCtx.state));
+  const char* calModeName = "?";
+  switch (calCtx.mode) {
+    case CalMode::NONE:   calModeName = "NONE";   break;
+    case CalMode::AUTO:   calModeName = "AUTO";   break;
+    case CalMode::MANUAL: calModeName = "MANUAL"; break;
+    case CalMode::REZERO: calModeName = "REZERO"; break;
+  }
+  Serial.print("Calibration mode: ");
+  Serial.print(static_cast<int>(calCtx.mode));
+  Serial.print(" (");
+  Serial.print(calModeName);
+  Serial.println(")");
 
-  Serial.print("Level workflow state: ");
-  Serial.println(static_cast<int>(levelCtx.state));
+  const char* calStateName = "?";
+  switch (calCtx.state) {
+    case CalState::IDLE:       calStateName = "IDLE";       break;
+    case CalState::WAIT_EMPTY: calStateName = "WAIT_EMPTY"; break;
+    case CalState::WAIT_LOAD:  calStateName = "WAIT_LOAD";  break;
+    case CalState::SETTLING:   calStateName = "SETTLING";   break;
+    case CalState::ADJUSTING:  calStateName = "ADJUSTING";  break;
+  }
+  Serial.print("Calibration state: ");
+  Serial.print(static_cast<int>(calCtx.state));
+  Serial.print(" (");
+  Serial.print(calStateName);
+  Serial.println(")");
 
-  Serial.print("Startup tare state: ");
-  Serial.println(static_cast<int>(tareCtx.state));
+  const char* levelStateName = "?";
+  switch (levelCtx.state) {
+    case LevelState::IDLE:      levelStateName = "IDLE";      break;
+    case LevelState::WAIT_LOAD: levelStateName = "WAIT_LOAD"; break;
+    case LevelState::SETTLING:  levelStateName = "SETTLING";  break;
+    case LevelState::READING:   levelStateName = "READING";   break;
+  }
+  Serial.print("Level state: ");
+  Serial.print(static_cast<int>(levelCtx.state));
+  Serial.print(" (");
+  Serial.print(levelStateName);
+  Serial.println(")");
 
-  Serial.print("Input mode/state: ");
+  const char* tareStateName = "?";
+  switch (tareCtx.state) {
+    case TareState::IDLE:        tareStateName = "IDLE";        break;
+    case TareState::WAIT_STABLE: tareStateName = "WAIT_STABLE"; break;
+    case TareState::TARE:        tareStateName = "TARE";        break;
+    case TareState::SKIP:        tareStateName = "SKIP";        break;
+  }
+  Serial.print("Tare state: ");
+  Serial.print(static_cast<int>(tareCtx.state));
+  Serial.print(" (");
+  Serial.print(tareStateName);
+  Serial.println(")");
+
+  const char* inputModeName = "?";
+  switch (inputCtx.mode) {
+    case InputMode::NONE:           inputModeName = "NONE";           break;
+    case InputMode::TANK_TARE:      inputModeName = "TANK_TARE";      break;
+    case InputMode::PROPANE_WEIGHT: inputModeName = "PROPANE_WEIGHT"; break;
+    case InputMode::KNOWN_WEIGHT:   inputModeName = "KNOWN_WEIGHT";   break;
+  }
+  Serial.print("Input mode: ");
   Serial.print(static_cast<int>(inputCtx.mode));
-  Serial.print('/');
-  Serial.println(static_cast<int>(inputCtx.state));
+  Serial.print(" (");
+  Serial.print(inputModeName);
+  Serial.println(")");
+
+  const char* inputStateName = "?";
+  switch (inputCtx.state) {
+    case InputState::IDLE:              inputStateName = "IDLE";              break;
+    case InputState::ENTER_VALUE:       inputStateName = "ENTER_VALUE";       break;
+    case InputState::WAIT_SAVE_CONFIRM: inputStateName = "WAIT_SAVE_CONFIRM"; break;
+  }
+  Serial.print("Input state: ");
+  Serial.print(static_cast<int>(inputCtx.state));
+  Serial.print(" (");
+  Serial.print(inputStateName);
+  Serial.println(")");
 }
 
 /**
@@ -1693,6 +1757,7 @@ void helpMenu() {
   Serial.println(CMD_CURRENT_VALUES_MSG);
   Serial.println(CMD_DEFAULT_EEPROM_MSG);
   Serial.println(CMD_EEPROM_MSG);
+  Serial.println(CMD_HELP_MSG);
   Serial.println(CMD_KNOWN_WEIGHT_MSG);
   Serial.println(CMD_LEVEL_MSG);
   Serial.println(CMD_MANUAL_CAL_MSG);
