@@ -20,15 +20,16 @@ constexpr long BAUD = 115200;
  * @section Sampling Constants
  */
 
-// Single sample used in polling loops (WAIT_EMPTY, WAIT_LOAD, WAIT_STABLE) to keep the
-// main loop responsive. Detection only — no accuracy needed.
-constexpr int POLL_SAMPLES = 1;
 
 // Number of samples to average during calibration reads (~500 ms at 10 SPS).
 constexpr int CAL_SAMPLES = 5;
 
 // Number of samples to average for live weight readings (~1s at 10 SPS).
 constexpr int LIVE_SAMPLES = 10;
+
+// Single sample used in polling loops (WAIT_EMPTY, WAIT_LOAD, WAIT_STABLE) to keep the
+// main loop responsive. Detection only — no accuracy needed.
+constexpr int POLL_SAMPLES = 1;
 
 // Shared sample/check count used for unloaded averaging and stable-empty confirmation checks.
 constexpr int UNLOAD_CHECK_COUNT = 3;
@@ -37,9 +38,7 @@ constexpr int UNLOAD_CHECK_COUNT = 3;
  * @section Calibration & Startup Constants
  */
 
-// If tank tare or max legal propane weight changes +- more than value,
-// warn user to update max legal propane weight, known calibration weight, and recalibrate
-constexpr float CHANGE_WARN_PCT = 0.25f;                    /**< Threshold for significant change in tank tare or max propane weight */
+constexpr float CHANGE_WARN_PCT = 0.25f;                    /**< Threshold for significant change in tank tare or max propane weight warning */
 
 // wire spool at 19.2 lbs: -11551.08f;
 // collapsible water jug in milk crate at 26.0 lbs: -10420.86f;
@@ -59,10 +58,9 @@ constexpr float DEF_MAX_PROPANE = 16.0f;                    /**< Default maximum
 // Tare weight of the empty thirty lb tank in pounds is typically 23-26 lbs
 constexpr float DEF_TANK_TARE = 17.5f;                      /**< Default tare weight an empty tank in pounds, subtract from readings to report weight of propane */
 
-constexpr float MINIMUM_LOAD_THRESHOLD = 1000.0f;           /**< Minimum load threshold in raw ADC units for stable no-load detection */
-
-// Calibrated readings are in pounds so MINIMUM_LOAD_THRESHOLD (raw ADC units) cannot be used here.
 constexpr float MINIMUM_LOAD_WEIGHT = 1.0f;                 /**< Minimum load in pounds to detect tank placement during level read workflow */
+
+constexpr float MINIMUM_LOAD_THRESHOLD = 1000.0f;           /**< Minimum load threshold in raw ADC units for stable no-load detection */
 
 /**
  * @section Timing Constants for Non-blocking Workflows
@@ -95,6 +93,25 @@ constexpr float SETUP_EMPTY_WEIGHT = 1.5f;
 // Weight of the always-present platen in pounds.
 constexpr float  PLATEN_TARE = 0.33125f;                    /**< Tare weight of the scale platen in pounds, subtract from readings to report weight of the load */
 
+/** 
+ * @section UI String Constants
+ */
+
+constexpr char APP_TITLE[] = "Propane Level Scale";
+constexpr char CALIBRATION_SAVE_FAILURE_MSG[] = "Failure saving default calibration to EEPROM.";
+constexpr char CALIBRATION_SAVE_SUCCESS_MSG[] = "Success saving default calibration to EEPROM.";
+constexpr char CMD_AUTO_CAL_MSG[] = "Send 'a' to enter automatic calibration mode";
+constexpr char CMD_CURRENT_VALUES_MSG[] = "Send 'c' to print current runtime values";
+constexpr char CMD_DEFAULT_EEPROM_MSG[] = "Send 'd' to reset EEPROM to default values";
+constexpr char CMD_EEPROM_MSG[] = "Send 'e' to display saved EEPROM values";
+constexpr char CMD_HELP_MSG[] = "Send 'h' to display this help menu";
+constexpr char CMD_KNOWN_WEIGHT_MSG[] = "Send 'k' to enter known weight value for calibration mode";
+constexpr char CMD_LEVEL_MSG[] = "Send 'l' to display one liquid propane percent level reading";
+constexpr char CMD_MANUAL_CAL_MSG[] = "Send 'm' to enter manual calibration mode";
+constexpr char CMD_PROPANE_WEIGHT_MSG[] = "Send 'p' to set maximum legal propane weight";
+constexpr char CMD_REZERO_MSG[] = "Send 'r' to re-zero scale with no propane weight on it";
+constexpr char CMD_TANK_TARE_MSG[] = "Send 't' to set propane tank tare";
+
 /**
  * @section EEPROM constants
  */
@@ -121,5 +138,14 @@ constexpr int TARE_EEPROM_VALUE_ADDR = 28;                  // value address sta
 
 // EEPROM size in bytes. Must be sufficient to store all calibration and tare values with their magic numbers.
 constexpr int EEPROM_SIZE_BYTES = 64;
+
+/**
+ * @section EEPROM Sanity Limit Constants
+ */
+
+constexpr float CAL_FACTOR_ABS_MAX = 500000.0f;             // Maximum absolute value for valid calibration factor 
+constexpr float CAL_FACTOR_ABS_MIN = 100.0f;                // Minimum absolute value for valid calibration factor 
+constexpr float MAX_PROJECT_WEIGHT = 60.0f;                 // Project will never measure a propane tank above nominal 60 lbs
+constexpr float MIN_PLAUSIBLE_WEIGHT = 0.1f;                // Minimum plausible non-zero weight for user-entered values
 
 #endif // CONFIG_H

@@ -50,11 +50,7 @@ float maxPropane = 0.0f;                                    // Maximum legal pro
 float tankTare = 0.0f;                                      // Tare weight of the empty propane tank in pounds
 
 /**
- * @section Global State Machine Variables and Constants
- */
-
-/**
- * @subsection Calibration State Machine
+ * @section Calibration State Machine Enums, Structs & variables
  */
 
 /**
@@ -113,7 +109,7 @@ struct CalContext {
 static CalContext calCtx;                                   /**< Calibration context instance to hold state for calibration workflows */
 
 /**
- * @subsection Non-blocking Serial Input State Machine
+ * @section Serial Input State Machine Enums, structs & variables
  */
 
 /**
@@ -161,7 +157,7 @@ struct InputContext {
 static InputContext inputCtx;                               /**< Non-blocking input context for serial workflows */
 
 /**
- * @subsection Non-blocking Level Read State Machine
+ * @section Level Read State Machine Enums, Structs & variables
  */
 
 /**
@@ -195,7 +191,7 @@ struct LevelContext {
 static LevelContext levelCtx;                               /**< Level read context instance to hold state for the level read workflow */
 
 /**
- * @subsection Non-blocking Tare State Machine
+ * @section Tare State Machine Enums, Structs & variables
  */
 
 /**
@@ -228,37 +224,6 @@ struct TareContext {
 };
 
 static TareContext tareCtx;                                 /**< Startup tare context instance */
-
-// @todo move to config.h
-
-/**
- * @section Global EEPROM Sanity Limit Constants
- */
-constexpr float CAL_FACTOR_ABS_MAX = 500000.0f;             // Maximum absolute value for valid calibration factor 
-constexpr float CAL_FACTOR_ABS_MIN = 100.0f;                // Minimum absolute value for valid calibration factor 
-constexpr float MAX_PROJECT_WEIGHT = 60.0f;                 // Project will never measure a propane tank above nominal 60 lbs
-constexpr float MIN_PLAUSIBLE_WEIGHT = 0.1f;                // Minimum plausible non-zero weight for user-entered values
-
-// @todo move to config.h
-
-/** 
- * @section Global UI String Constants
- */
-
-constexpr char APP_TITLE[] = "Propane Level Scale";
-constexpr char CALIBRATION_SAVE_FAILURE_MSG[] = "Failure saving default calibration to EEPROM.";
-constexpr char CALIBRATION_SAVE_SUCCESS_MSG[] = "Success saving default calibration to EEPROM.";
-constexpr char CMD_AUTO_CAL_MSG[] = "Send 'a' to enter automatic calibration mode";
-constexpr char CMD_CURRENT_VALUES_MSG[] = "Send 'c' to print current runtime values";
-constexpr char CMD_DEFAULT_EEPROM_MSG[] = "Send 'd' to reset EEPROM to default values";
-constexpr char CMD_EEPROM_MSG[] = "Send 'e' to display saved EEPROM values";
-constexpr char CMD_HELP_MSG[] = "Send 'h' to display this help menu";
-constexpr char CMD_KNOWN_WEIGHT_MSG[] = "Send 'k' to enter known weight value for calibration mode";
-constexpr char CMD_LEVEL_MSG[] = "Send 'l' to display one liquid propane percent level reading";
-constexpr char CMD_MANUAL_CAL_MSG[] = "Send 'm' to enter manual calibration mode";
-constexpr char CMD_PROPANE_WEIGHT_MSG[] = "Send 'p' to set maximum legal propane weight";
-constexpr char CMD_REZERO_MSG[] = "Send 'r' to re-zero scale with no propane weight on it";
-constexpr char CMD_TANK_TARE_MSG[] = "Send 't' to set propane tank tare";
 
 /**
  * @section EEPROM Workflows
