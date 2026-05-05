@@ -22,6 +22,7 @@
 
 #include <EEPROM.h>                                         // EEPROM library for persistent storage of calibration and tare values
 #include <math.h>                                           // Math helpers for fabsf and isfinite during value validation
+#include <stdio.h>                                          // snprintf for batched serial output to reduce print fragmentation
 #include <stdlib.h>                                         // Standard library for functions like strtof for parsing floats from strings 
 
 /**
@@ -1411,16 +1412,21 @@ void beginTare() {
 
   printStartupSummary();
 
-  Serial.println(F("Startup tare: waiting for stable scale..."));
-  Serial.println(F("Auto-detect is active."));
-  Serial.print(F("Auto-detect timeout: "));
-  Serial.print(EMPTY_CONFIRM_TIMEOUT_MS / 1000UL);
-  Serial.println(F(" seconds."));
-  Serial.print(F("Stability tolerance: +/- "));
-  Serial.print(SETUP_EMPTY_WEIGHT, 2);
-  Serial.println(F(" lbs."));
-  Serial.println(F("Timeout expiry with stable scale values auto-confirms taring workflow."));
-  Serial.println(F("Send 'q' to skip startup tare."));
+  char startupPrompt[320];
+  int startupPromptLen = snprintf(startupPrompt,
+                                  sizeof(startupPrompt),
+                                  "Startup tare: waiting for stable scale...\n"
+                                  "Auto-detect is active.\n"
+                                  "Auto-detect timeout: %lu seconds.\n"
+                                  "Stability tolerance: +/- %.2f lbs.\n"
+                                  "Timeout expiry with stable scale values auto-confirms taring workflow.\n"
+                                  "Send 'q' to skip startup tare.\n",
+                                  static_cast<unsigned long>(EMPTY_CONFIRM_TIMEOUT_MS / 1000UL),
+                                  SETUP_EMPTY_WEIGHT);
+
+  if (startupPromptLen > 0) {
+    Serial.print(startupPrompt);
+  }
 }
 
 /**
@@ -1434,22 +1440,23 @@ void beginTare() {
  * @throws {none} This function does not throw exceptions.
  */
 static void printStartupSummary() {
-  Serial.println();
-  Serial.println(APP_TITLE);
-  Serial.println();
+  char startupSummary[384];
+  int startupSummaryLen = snprintf(startupSummary,
+                                   sizeof(startupSummary),
+                                   "\n%s\n\n"
+                                   "Loaded calibration factor from EEPROM: %.2f\n"
+                                   "Loaded known calibration weight from EEPROM: %.2f lbs\n"
+                                   "Loaded max propane weight from EEPROM: %.2f lbs\n"
+                                   "Loaded tank tare from EEPROM: %.2f lbs\n\n",
+                                   APP_TITLE,
+                                   calibrationFactor,
+                                   knownWeight,
+                                   maxPropane,
+                                   tankTare);
 
-  Serial.print("Loaded calibration factor from EEPROM: ");
-  Serial.println(calibrationFactor, 2);
-  Serial.print("Loaded known calibration weight from EEPROM: ");
-  Serial.print(knownWeight, 2);
-  Serial.println(" lbs");
-  Serial.print("Loaded max propane weight from EEPROM: ");
-  Serial.print(maxPropane, 2);
-  Serial.println(" lbs");
-  Serial.print("Loaded tank tare from EEPROM: ");
-  Serial.print(tankTare, 2);
-  Serial.println(" lbs");
-  Serial.println();
+  if (startupSummaryLen > 0) {
+    Serial.print(startupSummary);
+  }
 }
 
 /**
@@ -1721,18 +1728,25 @@ void eepromValues() {
  * @throws {none} This function does not throw exceptions.
  */
 void helpMenu() {
-  Serial.println();
-  Serial.println(CMD_AUTO_CAL_MSG);
-  Serial.println(CMD_CURRENT_VALUES_MSG);
-  Serial.println(CMD_DEFAULT_EEPROM_MSG);
-  Serial.println(CMD_EEPROM_MSG);
-  Serial.println(CMD_HELP_MSG);
-  Serial.println(CMD_KNOWN_WEIGHT_MSG);
-  Serial.println(CMD_LEVEL_MSG);
-  Serial.println(CMD_MANUAL_CAL_MSG);
-  Serial.println(CMD_PROPANE_WEIGHT_MSG);
-  Serial.println(CMD_REZERO_MSG);
-  Serial.println(CMD_TANK_TARE_MSG);
+  char helpText[768];
+  int helpTextLen = snprintf(helpText,
+                             sizeof(helpText),
+                             "\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n",
+                             CMD_AUTO_CAL_MSG,
+                             CMD_CURRENT_VALUES_MSG,
+                             CMD_DEFAULT_EEPROM_MSG,
+                             CMD_EEPROM_MSG,
+                             CMD_HELP_MSG,
+                             CMD_KNOWN_WEIGHT_MSG,
+                             CMD_LEVEL_MSG,
+                             CMD_MANUAL_CAL_MSG,
+                             CMD_PROPANE_WEIGHT_MSG,
+                             CMD_REZERO_MSG,
+                             CMD_TANK_TARE_MSG);
+
+  if (helpTextLen > 0) {
+    Serial.print(helpText);
+  }
 }
 
 /**
