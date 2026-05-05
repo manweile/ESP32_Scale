@@ -1,0 +1,173 @@
+ESP32 PropaneScale Manual Refactor Guide (Chunk 2)
+Goal: Extract serial input workflows to dedicated files while keeping command routing in PropaneScale.ino.
+
+Prerequisite:
+- Chunk 1 is complete and compiling.
+
+IMPORTANT RULES
+1) Keep all function signatures unchanged.
+2) Keep all serial messages unchanged.
+3) Do not change command behavior in loop().
+4) Compile after every numbered step.
+
+Current source file:
+- PropaneScale/PropaneScale.ino
+
+Suggested destination files:
+- PropaneScale/src/workflows/input_known_weight.h
+- PropaneScale/src/workflows/input_known_weight.cpp
+- PropaneScale/src/workflows/input_propane_weight.h
+- PropaneScale/src/workflows/input_propane_weight.cpp
+- PropaneScale/src/workflows/input_tank_tare.h
+- PropaneScale/src/workflows/input_tank_tare.cpp
+- PropaneScale/src/workflows/input_context.h
+
+------------------------------------------------------------
+STEP 0 - Baseline compile
+------------------------------------------------------------
+1) Compile before starting and confirm success.
+
+------------------------------------------------------------
+STEP 1 - Create shared input context header
+------------------------------------------------------------
+Create PropaneScale/src/workflows/input_context.h and move declarations only:
+- enum class InputMode
+- enum class InputState
+- struct InputContext
+
+For chunk 2, keep global storage in PropaneScale.ino:
+- static InputContext inputCtx;
+
+In input_context.h, add extern declaration:
+- extern InputContext inputCtx;
+
+Then in PropaneScale.ino:
+1) Include "src/workflows/input_context.h".
+2) Remove duplicate enum/struct definitions from PropaneScale.ino.
+3) Keep the single global definition: InputContext inputCtx.
+4) Compile.
+
+------------------------------------------------------------
+STEP 2 - Extract known weight workflow
+------------------------------------------------------------
+Create input_known_weight.h declarations:
+- void knownWeightUpdate();
+- void handleKnownWeightInput(char incoming);
+
+Create input_known_weight.cpp and move exact function bodies:
+- knownWeightUpdate
+- handleKnownWeightInput
+
+Dependencies to include in input_known_weight.cpp:
+- <Arduino.h>
+- <math.h>
+- <stdio.h>
+- "config.h"
+- "src/workflows/input_context.h"
+- "src/parsing_utils.h"
+- "src/eeprom_store.h"
+- "src/scale_io.h"  (for flushSerialInput)
+
+For chunk 2, use extern declarations for globals used by these functions:
+- extern float knownWeight;
+- extern void resetInputContext();
+
+Then in PropaneScale.ino:
+1) Add include for input_known_weight.h.
+2) Remove moved function bodies.
+3) Compile.
+
+------------------------------------------------------------
+STEP 3 - Extract max propane workflow
+------------------------------------------------------------
+Create input_propane_weight.h declarations:
+- void propaneWeightUpdate();
+- void handlePropaneWeightInput(char incoming);
+
+Create input_propane_weight.cpp and move exact function bodies:
+- propaneWeightUpdate
+- handlePropaneWeightInput
+
+Dependencies to include in input_propane_weight.cpp:
+- <Arduino.h>
+- <math.h>
+- <stdio.h>
+- "config.h"
+- "src/workflows/input_context.h"
+- "src/parsing_utils.h"
+- "src/eeprom_store.h"
+- "src/scale_io.h"
+
+Externs for chunk 2:
+- extern float maxPropane;
+- extern void resetInputContext();
+
+Then in PropaneScale.ino:
+1) Add include for input_propane_weight.h.
+2) Remove moved function bodies.
+3) Compile.
+
+------------------------------------------------------------
+STEP 4 - Extract tank tare workflow
+------------------------------------------------------------
+Create input_tank_tare.h declarations:
+- void tankTareUpdate();
+- void handleTankTareInput(char incoming);
+
+Create input_tank_tare.cpp and move exact function bodies:
+- tankTareUpdate
+- handleTankTareInput
+
+Dependencies to include in input_tank_tare.cpp:
+- <Arduino.h>
+- <math.h>
+- <stdio.h>
+- "config.h"
+- "src/workflows/input_context.h"
+- "src/parsing_utils.h"
+- "src/eeprom_store.h"
+- "src/scale_io.h"
+
+Externs for chunk 2:
+- extern float tankTare;
+- extern void resetInputContext();
+
+Then in PropaneScale.ino:
+1) Add include for input_tank_tare.h.
+2) Remove moved function bodies.
+3) Compile.
+
+------------------------------------------------------------
+STEP 5 - Keep loop routing unchanged
+------------------------------------------------------------
+1) Verify loop() still routes exactly as before:
+- InputMode::TANK_TARE -> handleTankTareInput
+- InputMode::PROPANE_WEIGHT -> handlePropaneWeightInput
+- InputMode::KNOWN_WEIGHT -> handleKnownWeightInput
+2) Compile.
+
+------------------------------------------------------------
+STEP 6 - Serial behavior sanity check
+------------------------------------------------------------
+1) Test command flows manually:
+- k then numeric entry then s/q
+- p then numeric entry then s/q
+- t then numeric entry then s/q
+2) Confirm prompts and warnings match previous behavior exactly.
+
+------------------------------------------------------------
+Expected result after Chunk 2
+------------------------------------------------------------
+1) All three input workflows are out of PropaneScale.ino.
+2) loop() dispatch remains simple and unchanged.
+3) Behavior remains identical.
+
+------------------------------------------------------------
+Common failure points
+------------------------------------------------------------
+1) Missing include for InputMode/InputState/InputContext.
+2) Missing extern for resetInputContext or data globals.
+3) Header signature mismatch vs implementation.
+4) Default arguments duplicated in both .h and .cpp (default only in .h).
+
+End of Chunk 2 guide.

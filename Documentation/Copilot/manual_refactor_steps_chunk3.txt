@@ -1,0 +1,171 @@
+ESP32 PropaneScale Manual Refactor Guide (Chunk 3)
+Goal: Extract calibration, level read, and startup tare state-machine workflows.
+
+Prerequisite:
+- Chunk 1 and Chunk 2 are complete and compiling.
+
+IMPORTANT RULES
+1) Keep function signatures unchanged where possible.
+2) Keep serial message text unchanged.
+3) Keep setup() and loop() in PropaneScale.ino for now.
+4) Compile after every numbered step.
+
+Current source file:
+- PropaneScale/PropaneScale.ino
+
+Suggested destination files:
+- PropaneScale/src/workflows/calibration_workflow.h
+- PropaneScale/src/workflows/calibration_workflow.cpp
+- PropaneScale/src/workflows/level_workflow.h
+- PropaneScale/src/workflows/level_workflow.cpp
+- PropaneScale/src/workflows/startup_tare_workflow.h
+- PropaneScale/src/workflows/startup_tare_workflow.cpp
+- PropaneScale/src/workflows/workflow_contexts.h
+
+------------------------------------------------------------
+STEP 0 - Baseline compile
+------------------------------------------------------------
+1) Compile and confirm current baseline.
+
+------------------------------------------------------------
+STEP 1 - Consolidate workflow type/context declarations
+------------------------------------------------------------
+Create PropaneScale/src/workflows/workflow_contexts.h and move declarations only:
+- CalMode, CalState, CalContext
+- LevelState, LevelContext
+- TareState, TareContext
+
+For this chunk, keep global storage in PropaneScale.ino:
+- CalContext calCtx;
+- LevelContext levelCtx;
+- TareContext tareCtx;
+
+Add extern declarations in workflow_contexts.h for these globals.
+Then in PropaneScale.ino:
+1) Include workflow_contexts.h.
+2) Remove duplicate enum/struct definitions.
+3) Keep global definitions.
+4) Compile.
+
+------------------------------------------------------------
+STEP 2 - Extract level workflow
+------------------------------------------------------------
+Create level_workflow.h declarations:
+- void liquidLevel();
+- void tickLevelRead();
+
+Create level_workflow.cpp and move exact function bodies:
+- liquidLevel
+- tickLevelRead
+
+Dependencies in level_workflow.cpp:
+- <Arduino.h>
+- <math.h>
+- <stdio.h>
+- "config.h"
+- "src/workflows/workflow_contexts.h"
+- "src/scale_io.h"
+
+Externs used by this workflow:
+- extern float calibrationFactor;
+- extern float tankTare;
+- extern float maxPropane;
+- extern bool ensureScaleReady(const char* operation);
+
+Then in PropaneScale.ino:
+1) Include level_workflow.h.
+2) Remove moved function bodies.
+3) Compile.
+
+------------------------------------------------------------
+STEP 3 - Extract startup tare workflow
+------------------------------------------------------------
+Create startup_tare_workflow.h declarations:
+- void beginTare();
+- void tickTare();
+
+Create startup_tare_workflow.cpp and move exact function bodies:
+- beginTare
+- tickTare
+
+Dependencies in startup_tare_workflow.cpp:
+- <Arduino.h>
+- <math.h>
+- <stdio.h>
+- "config.h"
+- "src/workflows/workflow_contexts.h"
+- "src/scale_io.h"
+
+Externs used by this workflow:
+- extern float calibrationFactor;
+- extern void helpMenu();
+- extern void printStartupSummary();  (or keep summary in same module; pick one and stay consistent)
+
+Then in PropaneScale.ino:
+1) Include startup_tare_workflow.h.
+2) Remove moved function bodies.
+3) Compile.
+
+------------------------------------------------------------
+STEP 4 - Extract calibration workflow
+------------------------------------------------------------
+Create calibration_workflow.h declarations:
+- void automaticCalibration();
+- void manualCalibration();
+- void reZero();
+- void tickCalibration();
+- void handleCalibrationInput(char serialchar);
+
+Create calibration_workflow.cpp and move exact function bodies:
+- automaticCalibration
+- manualCalibration
+- reZero
+- tickCalibration
+- handleCalibrationInput
+- transitionFromWaitEmpty (keep internal static in .cpp)
+
+Dependencies in calibration_workflow.cpp:
+- <Arduino.h>
+- <math.h>
+- <stdio.h>
+- "config.h"
+- "src/workflows/workflow_contexts.h"
+- "src/scale_io.h"
+- "src/eeprom_store.h"
+
+Externs commonly needed:
+- extern float calibrationFactor;
+- extern float knownWeight;
+- extern const char* CALIBRATION_SAVE_FAILURE_MSG;
+- extern const char* CALIBRATION_SAVE_SUCCESS_MSG;
+
+Then in PropaneScale.ino:
+1) Include calibration_workflow.h.
+2) Remove moved function bodies.
+3) Compile.
+
+------------------------------------------------------------
+STEP 5 - Cross-workflow command sanity
+------------------------------------------------------------
+1) Verify these still work:
+- a, m, r flows and cancel behavior
+- l flow and cancel behavior
+- startup tare auto/skip behavior
+2) Compile after tests.
+
+------------------------------------------------------------
+Expected result after Chunk 3
+------------------------------------------------------------
+1) All state-machine workflow logic moved out of PropaneScale.ino.
+2) PropaneScale.ino now mostly contains setup/loop and utility/output functions.
+3) Runtime behavior preserved.
+
+------------------------------------------------------------
+Common failure points
+------------------------------------------------------------
+1) Missing extern for globals used by extracted workflows.
+2) Missing include for context enums after moving declarations.
+3) Internal static helper moved but still referenced from old file.
+4) Circular include from workflow headers; keep headers minimal.
+
+End of Chunk 3 guide.

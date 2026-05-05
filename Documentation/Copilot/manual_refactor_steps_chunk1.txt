@@ -1,0 +1,150 @@
+ESP32 PropaneScale Manual Refactor Guide (Chunk 1)
+Goal: Extract low-risk helper and service functions out of PropaneScale.ino without changing behavior.
+
+IMPORTANT RULES
+1) Do not change any function signatures in this chunk.
+2) Do not change serial message text in this chunk.
+3) Compile after every numbered step.
+4) If compile fails, revert only the most recent step.
+
+Current source file:
+- PropaneScale/PropaneScale.ino
+
+Suggested destination files for this chunk:
+- PropaneScale/src/parsing_utils.h
+- PropaneScale/src/parsing_utils.cpp
+- PropaneScale/src/eeprom_store.h
+- PropaneScale/src/eeprom_store.cpp
+- PropaneScale/src/scale_io.h
+- PropaneScale/src/scale_io.cpp
+
+------------------------------------------------------------
+STEP 0 - Baseline compile
+------------------------------------------------------------
+1) Run compile before any refactor and note flash/RAM.
+2) Confirm baseline succeeds.
+
+------------------------------------------------------------
+STEP 1 - Create parsing module
+------------------------------------------------------------
+Create PropaneScale/src/parsing_utils.h with:
+- include guard or #pragma once
+- declaration:
+  bool isValidBoundedFloat(float value, float minimumValue, float maximumValue, bool useAbsoluteMagnitude = false);
+  bool parseNonNegativeFloat(const char* text, float& outValue);
+
+Create PropaneScale/src/parsing_utils.cpp with:
+- #include <math.h>
+- #include <stdlib.h>
+- #include "parsing_utils.h"
+- move exact function bodies from PropaneScale.ino:
+  - isValidBoundedFloat
+  - parseNonNegativeFloat
+
+Then in PropaneScale.ino:
+1) Add #include "src/parsing_utils.h" near other includes.
+2) Remove the two moved function bodies from PropaneScale.ino.
+3) Compile.
+
+------------------------------------------------------------
+STEP 2 - Create EEPROM module
+------------------------------------------------------------
+Create PropaneScale/src/eeprom_store.h with declarations:
+- bool loadFromEeprom(float& value, uint32_t magicAddr, uint32_t magicValue, uint32_t valueAddr);
+- bool saveToEeprom(float value, uint32_t magic, int magicAddr, int valueAddr);
+- bool printEepromField(const char* label, uint32_t magicAddr, uint32_t magicValue, uint32_t valueAddr, float minValue, float maxValue, bool useAbsMag = false, const char* unitSuffix = nullptr);
+
+Create PropaneScale/src/eeprom_store.cpp with:
+- #include <EEPROM.h>
+- #include <Arduino.h>
+- #include "config.h"
+- #include "parsing_utils.h"
+- #include "eeprom_store.h"
+
+NOTE: saveToEeprom currently depends on global eepromReady in PropaneScale.ino.
+For chunk 1, keep behavior unchanged by declaring external linkage in eeprom_store.cpp:
+- extern bool eepromReady;
+
+Move exact function bodies from PropaneScale.ino:
+- loadFromEeprom
+- saveToEeprom
+- printEepromField
+
+Then in PropaneScale.ino:
+1) Add #include "src/eeprom_store.h".
+2) Remove the three moved function bodies.
+3) Compile.
+
+------------------------------------------------------------
+STEP 3 - Create scale I/O module
+------------------------------------------------------------
+Create PropaneScale/src/scale_io.h with declarations:
+- float readAveragedUnits(int readings, int samplesPerReading);
+- float computeLoadDetectThreshold(float minimumThresholdLbs);
+- bool ensureScaleReady(const char* operation);
+- void flushSerialInput();
+
+Create PropaneScale/src/scale_io.cpp with:
+- #include <Arduino.h>
+- #include <math.h>
+- #include "HX711.h"
+- #include "config.h"
+- #include "scale_io.h"
+
+NOTE: these functions currently depend on global scale instance from PropaneScale.ino.
+For chunk 1, keep behavior unchanged by declaring external linkage in scale_io.cpp:
+- extern HX711 scale;
+
+Move exact function bodies from PropaneScale.ino:
+- readAveragedUnits
+- computeLoadDetectThreshold
+- ensureScaleReady
+- flushSerialInput
+
+Then in PropaneScale.ino:
+1) Add #include "src/scale_io.h".
+2) Remove the four moved function bodies.
+3) Compile.
+
+------------------------------------------------------------
+STEP 4 - Include cleanup and order checks
+------------------------------------------------------------
+1) In PropaneScale.ino, remove now-unused standard includes if any are no longer needed there.
+2) Keep includes stable if unsure; cleanup can wait.
+3) Compile.
+
+------------------------------------------------------------
+STEP 5 - Runtime sanity checks over serial
+------------------------------------------------------------
+1) Boot and verify startup messages still print.
+2) Test commands:
+- h
+- e
+- c
+- l then q
+- k then q
+- p then q
+- t then q
+3) Verify no message text changed unexpectedly.
+
+------------------------------------------------------------
+Expected result after Chunk 1
+------------------------------------------------------------
+1) PropaneScale.ino is shorter and easier to scan.
+2) No workflow behavior changes.
+3) setup() and loop() still in PropaneScale.ino.
+4) Build output remains close to baseline.
+
+------------------------------------------------------------
+If something fails
+------------------------------------------------------------
+1) Revert only the latest step.
+2) Rebuild.
+3) Check for one of these common issues:
+- Missing #include in new .cpp
+- Function still declared static in .ino but moved out
+- Missing extern for scale or eepromReady
+- Header declaration signature mismatch with .cpp
+- Default argument specified in both .h and .cpp (keep default only in .h)
+
+End of Chunk 1 guide.

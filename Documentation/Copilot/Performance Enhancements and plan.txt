@@ -65,3 +65,21 @@ Rather than emitting weight readings as prose ("Weight: 12.34 lbs\n"), emit a si
 Priority order: 1 → 2 → 4 → 3. Items 1 and 2 are low-effort high-payoff. Item 4 is the most strategically valuable for the web port — doing it now avoids a refactor later.
 
 Claude Sonnet 4.6 • 0.9x
+
+follow manual refactor text files
+
+Given your current code in PropaneScale.ino, I’d use this order instead:
+
+Do #1 now.
+Change baud to 921600 and verify your monitor/tooling is stable.
+
+Continue your manual refactor chunks next.
+Keep behavior changes and structural refactor separate so debugging stays clean.
+
+Do #4 after chunked refactor, before web UI work.
+Structured output is strategically valuable, but it is a protocol/UX change, so better done once code is modular.
+
+Do #3 only if you measure blocking from serial writes.
+It is useful, but lower ROI unless profiling shows write pressure during busy states.
+
+#2 is lower priority than it seemed for your current implementation.

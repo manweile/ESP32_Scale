@@ -1,0 +1,140 @@
+ESP32 PropaneScale Manual Refactor Guide (Chunk 4)
+Goal: Finish cleanup so PropaneScale.ino becomes a thin entry file with orchestration only.
+
+Prerequisite:
+- Chunk 1, 2, and 3 are complete and compiling.
+
+IMPORTANT RULES
+1) No behavior changes in this chunk.
+2) Keep setup() and loop() function names and semantics.
+3) Compile after every numbered step.
+
+Current source file:
+- PropaneScale/PropaneScale.ino
+
+Suggested additional files:
+- PropaneScale/src/app_startup.h
+- PropaneScale/src/app_startup.cpp
+- PropaneScale/src/commands.h
+- PropaneScale/src/commands.cpp
+- PropaneScale/src/runtime_report.h
+- PropaneScale/src/runtime_report.cpp
+
+------------------------------------------------------------
+STEP 0 - Baseline compile
+------------------------------------------------------------
+1) Compile and confirm baseline after Chunk 3.
+
+------------------------------------------------------------
+STEP 1 - Extract startup summary and runtime reporting
+------------------------------------------------------------
+Create runtime_report.h declarations:
+- void printStartupSummary();
+- void currentRuntimeValues();
+- void eepromValues();
+- void helpMenu();
+
+Create runtime_report.cpp and move exact bodies for those functions.
+Dependencies:
+- <Arduino.h>
+- <stdio.h>
+- "config.h"
+- relevant workflow/context headers
+- "src/eeprom_store.h"
+
+Then in PropaneScale.ino:
+1) Include runtime_report.h.
+2) Remove moved function bodies.
+3) Compile.
+
+------------------------------------------------------------
+STEP 2 - Extract EEPROM reset command implementation
+------------------------------------------------------------
+Create commands.h declaration:
+- void defaultEeprom();
+
+Create commands.cpp and move exact body for defaultEeprom.
+Dependencies:
+- <Arduino.h>
+- "config.h"
+- "src/eeprom_store.h"
+
+Then in PropaneScale.ino:
+1) Include commands.h.
+2) Remove moved body.
+3) Compile.
+
+------------------------------------------------------------
+STEP 3 - Extract setup initialization helper
+------------------------------------------------------------
+Create app_startup.h declaration:
+- void initializeApp();
+
+Create app_startup.cpp to hold the body that currently exists in setup() except Serial.begin and final beginTare call split as desired.
+Recommended pattern:
+- setup() stays in PropaneScale.ino and calls:
+  Serial.begin(BAUD);
+  initializeApp();
+
+Dependencies in app_startup.cpp:
+- <Arduino.h>
+- <EEPROM.h>
+- "config.h"
+- "src/eeprom_store.h"
+- "src/runtime_report.h"
+- "src/workflows/startup_tare_workflow.h"
+
+Then in PropaneScale.ino:
+1) Keep setup() thin and call initializeApp().
+2) Compile.
+
+------------------------------------------------------------
+STEP 4 - Keep loop as orchestrator only
+------------------------------------------------------------
+Target loop responsibilities only:
+1) tick calls
+- tickCalibration
+- tickLevelRead
+- tickTare
+2) serial read and command dispatch
+3) no workflow internals in loop
+
+If any workflow logic still remains in loop besides dispatch checks, move it now into appropriate modules.
+Compile.
+
+------------------------------------------------------------
+STEP 5 - Final include and dependency cleanup
+------------------------------------------------------------
+1) Remove no-longer-used includes from PropaneScale.ino.
+2) Keep module includes grouped and minimal.
+3) Verify no duplicate function definitions remain.
+4) Compile.
+
+------------------------------------------------------------
+STEP 6 - Final validation pass
+------------------------------------------------------------
+1) Exercise full command set:
+- h, c, e, d
+- a, m, r
+- l
+- k, p, t
+2) Verify startup tare behavior.
+3) Verify no serial message regressions.
+4) Confirm flash/RAM are in expected range.
+
+------------------------------------------------------------
+Expected end-state
+------------------------------------------------------------
+1) PropaneScale.ino is a thin entry/orchestration file.
+2) Workflows live under src/workflows.
+3) Helpers/services live under src.
+4) Manual navigation/readability is significantly improved.
+
+------------------------------------------------------------
+Optional next improvement after Chunk 4
+------------------------------------------------------------
+1) Replace extern globals with a single AppState struct passed by reference.
+2) This reduces hidden coupling and makes unit testing easier.
+3) Do this only after behavior is stable post-refactor.
+
+End of Chunk 4 guide.
