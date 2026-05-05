@@ -6,13 +6,21 @@ Top performance enhancements to consider next, ranked by impact:
 Create a true non-blocking HX711 sampler that takes at most one sample per loop tick (is_ready() gated), accumulates into a small state object, and reports “done” when target sample count reached.
 Biggest gain: keeps loop latency low for serial, future web server, OTA, and watchdog health.
 
+NB this is 
+// @todo readAveragedUnits() uses wait_ready_timeout() per iteration so it no longer spins
+// indefinitely, but it still blocks loop() for up to HX711_READY_TIMEOUT_MS per reading
+// (e.g. up to ~120ms per call for single-reading polling paths, more for multi-reading
+// measurement calls). Acceptable for serial-only use. When adding a web interface, refactor
+// callers to drive one reading per loop() tick via is_ready() and accumulate across ticks.
+
 2. Replace repeated switch-to-string logic in runtime prints with lookup tables
 Your enum-name printing is clear, but multiple switch blocks add flash and branch cost.
 Use compact const char* tables indexed by enum value for faster, smaller diagnostics paths.
 
-3. Reduce Serial.print fragmentation for startup/banner paths
+3. Reduce Serial.print fragmentation
 Many small prints create UART overhead and timing sensitivity.
 Build fewer, larger lines or short buffered chunks for startup summaries and menus to reduce transmit churn and startup jitter.
+IMPLEMENTED
 
 4. Make detection thresholds adaptive with hysteresis + debounce windows
 Instead of frequent repeated reads plus hard cutoffs, use a filtered signal with hysteresis.
