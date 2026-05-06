@@ -46,6 +46,7 @@ Then in PropaneScale.ino:
 2) Remove the two moved function bodies from PropaneScale.ino.
 3) Compile.
 
+COMPLETED AND TESTED
 ------------------------------------------------------------
 STEP 2 - Create EEPROM module
 ------------------------------------------------------------

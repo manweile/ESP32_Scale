@@ -6,6 +6,7 @@
       "includePath": [
         "${workspaceFolder}/PropaneScale",
         "${workspaceFolder}/PropaneScale/**",
+        "${workspaceFolder}/PropaneScale/src/**",
         "C:/Users/gmanw/AppData/Local/Arduino15/packages/esp32/hardware/esp32/3.3.4/cores/esp32",
         "C:/Users/gmanw/AppData/Local/Arduino15/packages/esp32/hardware/esp32/3.3.4/variants/esp32thing",
         "C:/Users/gmanw/AppData/Local/Arduino15/packages/esp32/hardware/esp32/3.3.4/libraries/EEPROM/src",

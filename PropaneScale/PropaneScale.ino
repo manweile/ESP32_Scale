@@ -9,7 +9,7 @@
  * 
  * @version 0.1
  * @date 2024-06-01
- * @copyright Copyright (c) 2024
+ * @copyright Copyright (c) 2024 Gerald Manweiler
  */
 
 /**
@@ -34,6 +34,7 @@
  * @subsection Local library headers
  */
 #include "config.h"                                         // Local configuration header defining pin assignments, calibration constants, and EEPROM addresses
+#include "src/parsing_utils.h"
 
 /**
  * @section Global Class Instances
@@ -230,29 +231,29 @@ static TareContext tareCtx;                                 /**< Startup tare co
  * @section EEPROM Workflows
  */
 
-/**
- * @brief Validates that a float value is finite and within specified bounds.
- * 
- * @details Checks if a float value is finite and within specified bounds, with an option to use absolute magnitude for the check.
- * 
- * @param value The float value to validate.
- * @param minimumValue The minimum allowable value.
- * @param maximumValue The maximum allowable value.
- * @param useAbsoluteMagnitude If true, the absolute value of the float is used for validation.
- * @return true if the value is valid, false otherwise.
- * 
- * @throws {none} This function does not throw exceptions.
- */
-bool isValidBoundedFloat(float value, float minimumValue, float maximumValue, bool useAbsoluteMagnitude = false) {
-  float candidate = 0.0f;                                   // Temporarily holds the value used for comparison
+// /**
+//  * @brief Validates that a float value is finite and within specified bounds.
+//  * 
+//  * @details Checks if a float value is finite and within specified bounds, with an option to use absolute magnitude for the check.
+//  * 
+//  * @param value The float value to validate.
+//  * @param minimumValue The minimum allowable value.
+//  * @param maximumValue The maximum allowable value.
+//  * @param useAbsoluteMagnitude If true, the absolute value of the float is used for validation.
+//  * @return true if the value is valid, false otherwise.
+//  * 
+//  * @throws {none} This function does not throw exceptions.
+//  */
+// bool isValidBoundedFloat(float value, float minimumValue, float maximumValue, bool useAbsoluteMagnitude = false) {
+//   float candidate = 0.0f;                                   // Temporarily holds the value used for comparison
 
-  if (!isfinite(value)) {
-    return false;
-  }
+//   if (!isfinite(value)) {
+//     return false;
+//   }
 
-  candidate = useAbsoluteMagnitude ? fabsf(value) : value;
-  return (candidate >= minimumValue) && (candidate <= maximumValue);
-}
+//   candidate = useAbsoluteMagnitude ? fabsf(value) : value;
+//   return (candidate >= minimumValue) && (candidate <= maximumValue);
+// }
 
 /**
  * @brief Loads a float value from EEPROM if the magic number is valid.
@@ -1427,43 +1428,43 @@ static bool printEepromField(const char* label, uint32_t magicAddr, uint32_t mag
   return false;
 }
 
-/**
- * @brief Parses a non-negative float from a null-terminated C string.
- *
- * @details Attempts to parse a float value from the input string. 
- * Validates that the entire string is a valid float representation and that the parsed value is non-negative.
- * 
- * @param {const char*} text Input text to parse.
- * @param {float&} outValue Parsed output value on success.
- * @return {bool} True if parsing succeeds and the value is non-negative.
- * 
- * @throws {none} This function does not throw exceptions.
- */
-bool parseNonNegativeFloat(const char* text, float& outValue) {
-  char* parseEnd = nullptr;                                 // Pointer used by strtof to indicate where parsing stopped
-  float parsed;                                             // Parsed float value from the input text
+// /**
+//  * @brief Parses a non-negative float from a null-terminated C string.
+//  *
+//  * @details Attempts to parse a float value from the input string. 
+//  * Validates that the entire string is a valid float representation and that the parsed value is non-negative.
+//  * 
+//  * @param {const char*} text Input text to parse.
+//  * @param {float&} outValue Parsed output value on success.
+//  * @return {bool} True if parsing succeeds and the value is non-negative.
+//  * 
+//  * @throws {none} This function does not throw exceptions.
+//  */
+// bool parseNonNegativeFloat(const char* text, float& outValue) {
+//   char* parseEnd = nullptr;                                 // Pointer used by strtof to indicate where parsing stopped
+//   float parsed;                                             // Parsed float value from the input text
   
-  // strtof will set parseEnd to point to the first character after the parsed float.
-  parsed = strtof(text, &parseEnd);                   
+//   // strtof will set parseEnd to point to the first character after the parsed float.
+//   parsed = strtof(text, &parseEnd);                   
 
-  if (parseEnd == text) {
-    return false;
-  }
+//   if (parseEnd == text) {
+//     return false;
+//   }
 
-  // loop is not a blocking concern since strtof has already parsed the float 
-  // and we are just validating that the rest of the string is whitespace 
-  // and that the value is non-negative, which are both very fast operations
-  while (*parseEnd == ' ' || *parseEnd == '\t') {
-    ++parseEnd;
-  }
+//   // loop is not a blocking concern since strtof has already parsed the float 
+//   // and we are just validating that the rest of the string is whitespace 
+//   // and that the value is non-negative, which are both very fast operations
+//   while (*parseEnd == ' ' || *parseEnd == '\t') {
+//     ++parseEnd;
+//   }
 
-  if (*parseEnd != '\0' || parsed < 0.0f) {
-    return false;
-  }
+//   if (*parseEnd != '\0' || parsed < 0.0f) {
+//     return false;
+//   }
 
-  outValue = parsed;
-  return true;
-}
+//   outValue = parsed;
+//   return true;
+// }
 
 // @todo readAveragedUnits() uses wait_ready_timeout() per iteration so it no longer spins
 // indefinitely, but it still blocks loop() for up to HX711_READY_TIMEOUT_MS per reading
