@@ -299,7 +299,7 @@
     // helper task that uploads selected merged binary using esptool.exe
     // esptool.exe --verbose --chip esp32 --port COM4 --baud 921600 write-flash -z 0x0 D:\MyArduino\Projects\ESP32_Scale/build/esp32.esp32.esp32thing/PropaneScale.ino.merged.bin
     {
-      "label": "ESPTool USB Select Bin Upload",
+      "label": "ESPTool USB Select Com, Speed, & Merged Bin Flash",
       "hide": true,
       "type": "shell",
       "command": "${env:LOCALAPPDATA}/Arduino15/packages/esp32/tools/esptool_py/5.1.0/esptool.exe",
@@ -312,6 +312,27 @@
         "-z",
         "0x0",
         "${input:openMergedBinDialog}"
+      ],
+      "problemMatcher": []
+    },
+
+    // helper task that uploads merged binary using esptool.exe
+    // the com port is automatically detected by list_ports.py with no user input needed
+    // hardcoded to ESP32 Thing board and PropaneScale.ino sketch
+    // esptool.exe --verbose --chip esp32 --port COM4 --baud 921600 write-flash -z 0x0 D:\MyArduino\Projects\ESP32_Scale/build/esp32.esp32.esp32thing/PropaneScale.ino.merged.bin
+    {
+      "label": "ESPTool Quick Flash",
+      "type": "shell",  
+      "command": "${env:LOCALAPPDATA}/Arduino15/packages/esp32/tools/esptool_py/5.1.0/esptool.exe",
+      "args": [
+        "--verbose",
+        "--chip", "esp32",
+        "--port", "${input:COMPort}",
+        "--baud", "921600",
+        "write-flash",
+        "-z",
+        "0x0",
+        "${workspaceFolder}/PropaneScale/build/esp32.esp32.esp32thing/PropaneScale.ino.merged.bin"
       ],
       "problemMatcher": []
     },
@@ -362,7 +383,7 @@
       "dependsOrder": "sequence",
       "dependsOn": [
         "ESPTool Select FQBNDIR with Bin Warning",
-        "ESPTool USB Select Bin Upload"
+        "ESPTool USB Select Com, Speed, & Merged Bin Flash"
       ],
       "problemMatcher": []
     },
