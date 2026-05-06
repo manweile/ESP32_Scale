@@ -1007,12 +1007,19 @@ void tickCalibration() {
 
   // workflow - waiting on user to place known weight on scale after empty confirmation
   if (calCtx.state == CalState::WAIT_LOAD) {
-    
-    if ((millis() - calCtx.stateStartMs) >= EMPTY_CONFIRM_TIMEOUT_MS) {
-      Serial.println("Weight placement timed out; calibration cancelled.");
-      calCtx.state = CalState::IDLE;
-      calCtx.mode  = CalMode::NONE;
-      return;
+    unsigned long elapsedMs = millis() - calCtx.stateStartMs;
+
+    // If the computed threshold is too strict, progressively relax it through
+    // the wait window so a valid placed load can still trigger.
+    float midWindowThreshold = MINIMUM_LOAD_THRESHOLD * 0.5f;
+    float lateWindowThreshold = MINIMUM_LOAD_THRESHOLD * 0.25f;
+
+    if (elapsedMs >= ((EMPTY_CONFIRM_TIMEOUT_MS * 3UL) / 4UL) &&
+        calCtx.loadDetectThreshold > lateWindowThreshold) {
+      calCtx.loadDetectThreshold = lateWindowThreshold;
+    } else if (elapsedMs >= (EMPTY_CONFIRM_TIMEOUT_MS / 2UL) &&
+               calCtx.loadDetectThreshold > midWindowThreshold) {
+      calCtx.loadDetectThreshold = midWindowThreshold;
     }
 
     // Poll each tick to detect load placement as soon as possible
@@ -1020,6 +1027,11 @@ void tickCalibration() {
 
     // below noise-derived threshold — no real load yet
     if (fabsf(calCtx.measuredUnits) < calCtx.loadDetectThreshold) {
+      if (elapsedMs >= EMPTY_CONFIRM_TIMEOUT_MS) {
+        Serial.println("Weight placement timed out; calibration cancelled.");
+        calCtx.state = CalState::IDLE;
+        calCtx.mode  = CalMode::NONE;
+      }
       return; 
     }
 
@@ -1290,6 +1302,12 @@ static void transitionFromWaitEmpty() {
   scale.set_scale();
   scale.tare();
   calCtx.loadDetectThreshold = computeLoadDetectThreshold(MINIMUM_LOAD_THRESHOLD);
+  if (!isfinite(calCtx.loadDetectThreshold) || calCtx.loadDetectThreshold < MINIMUM_LOAD_THRESHOLD) {
+    calCtx.loadDetectThreshold = MINIMUM_LOAD_THRESHOLD;
+  }
+  if (calCtx.loadDetectThreshold > (MINIMUM_LOAD_THRESHOLD * 8.0f)) {
+    calCtx.loadDetectThreshold = MINIMUM_LOAD_THRESHOLD * 8.0f;
+  }
 
   // workflow - auto calibration waiting on user to place known weight on scale after empty confirmation
   if (calCtx.mode == CalMode::AUTO) {

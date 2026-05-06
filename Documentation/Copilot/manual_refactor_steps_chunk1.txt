@@ -21,111 +21,335 @@ Suggested destination files for this chunk:
 ------------------------------------------------------------
 STEP 0 - Baseline compile
 ------------------------------------------------------------
-1) Run compile before any refactor and note flash/RAM.
-2) Confirm baseline succeeds.
+Purpose:
+- Capture known-good behavior before Chunk 1 extraction.
+- Use this exact checklist as the comparison baseline after each refactor step.
+
+Preconditions:
+- Board connected and powered.
+- Serial monitor at 115200.
+- Known calibration weight available (26.0 lbs).
+
+Run order (do not skip):
+1) Compile and record size.
+  Pass if compile succeeds and prints both lines:
+  - Sketch uses ... bytes
+  - Global variables use ... bytes
+
+2) Upload and boot smoke test.
+  Pass if startup output includes app banner/help and no reset loop.
+  PASS
+
+3) EEPROM reset baseline.
+  Send: d
+  Pass if output includes all snippets:
+  - Resetting EEPROM to hardcoded defaults...
+  - Calibration factor reset to: -10420.86
+  - Known calibration weight reset to: 26.00 lbs
+  - Max propane weight reset to: 16.00 lbs
+  - Tank tare reset to: 17.50 lbs
+  - EEPROM reset complete. Recalibrate before use.
+  Pass
+
+4) Runtime re-zero baseline.
+  Send: r
+  Pass if output includes all snippets in order:
+  - Runtime re-zero requested.
+  - Remove all weight from scale.
+  - Auto-detect is active.
+  - Send 'q' to cancel.
+  - Empty scale auto-detected, continuing with calibration.
+  - Scale re-zero complete.
+    Pass
+    
+5) Automatic calibration baseline.
+  Send: a
+  Keep scale empty until prompted, then place 26.0 lb weight.
+  Pass if output includes key snippets:
+  - Automatic calibration mode
+  - Empty scale confirmed. Taring now...
+  - Place the known weight on the scale: 26.00 lbs
+  - Waiting for weight placement on scale...
+  - Weight detected. Settling for ... seconds before measuring...
+  - Measuring stable reading...
+  - Automatic calibration complete, computed calibration factor: ...
+  - Calibration saved to EEPROM.
+  Fail if timeout appears:
+  - Weight placement timed out; calibration cancelled.
+    Pass
+    
+6) EEPROM readback baseline.
+  Send: e
+  Pass if output prints all fields and numeric values:
+  - Calibration factor: ...
+  - Known calibration weight: ... lbs
+  - Max propane weight: ... lbs
+  - Tank tare: ... lbs
+    PASS
+    
+7) Level read baseline.
+  Send: l, then place tank.
+  Pass if output includes:
+  - Place propane tank on scale.
+  - Waiting for tank placement...
+  - Tank detected. Settling for ... seconds before final read...
+  - Reading tank weight...
+  - Scale load: ... lbs, Calculated propane: ... lbs, Propane level: ...%
+    Pass
+    
+8) Timeout and cancel behavior baseline.
+  Start: l and do not place tank.
+  Pass if timeout output appears and prompt remains responsive:
+  - Tank placement timed out; cancelled.
+  Then send: h
+  Pass if help menu prints normally.
+  PASS
+
+Record this baseline data (copy values):
+- Compile: Sketch uses 314963 bytes, Global variables use 21000 bytes
+- Calibration factor after auto-cal: -10417.32
+- EEPROM values (e): cal=-10417.32 known=26.00 max=16.00 tare=17.50
+- One level output line: Scale load=26.0 propane=8.2 level=51.1
+
+Baseline acceptance criteria:
+- All 8 run-order checks pass.
+- No crashes, hangs, WDT resets, or serial lockups.
+- Message text for key workflow lines matches snippets above.
 
 ------------------------------------------------------------
 STEP 1 - Create parsing module
 ------------------------------------------------------------
-Create PropaneScale/src/parsing_utils.h with:
-- include guard or #pragma once
-- declaration:
-  bool isValidBoundedFloat(float value, float minimumValue, float maximumValue, bool useAbsoluteMagnitude = false);
-  bool parseNonNegativeFloat(const char* text, float& outValue);
+Purpose:
+- Extract pure parsing/validation helpers with zero runtime behavior changes.
 
-Create PropaneScale/src/parsing_utils.cpp with:
-- #include <math.h>
-- #include <stdlib.h>
-- #include "parsing_utils.h"
-- move exact function bodies from PropaneScale.ino:
+Preconditions:
+- Step 0 baseline completed and recorded.
+- Working tree clean enough to isolate this step's diffs.
+
+Run order (do not skip):
+1) Create PropaneScale/src/parsing_utils.h.
+  Required declarations:
+  - bool isValidBoundedFloat(float value, float minimumValue, float maximumValue, bool useAbsoluteMagnitude = false);
+  - bool parseNonNegativeFloat(const char* text, float& outValue);
+  Pass if header has include guard or #pragma once and declarations match exactly.
+
+2) Create PropaneScale/src/parsing_utils.cpp.
+  Required includes:
+  - #include <math.h>
+  - #include <stdlib.h>
+  - #include "parsing_utils.h"
+  Move exact bodies only:
   - isValidBoundedFloat
   - parseNonNegativeFloat
+  Pass if moved functions compile from the new file with unchanged signatures.
 
-Then in PropaneScale.ino:
-1) Add #include "src/parsing_utils.h" near other includes.
-2) Remove the two moved function bodies from PropaneScale.ino.
-3) Compile.
+3) Update PropaneScale.ino.
+  - Add #include "src/parsing_utils.h"
+  - Remove the two moved function bodies
+  Pass if no duplicate symbol or missing symbol errors.
 
+4) Compile gate.
+  Pass if compile succeeds and prints:
+  - Sketch uses ... bytes
+  - Global variables use ... bytes
+
+5) Quick runtime gate (no full regression yet).
+  Send: k
+  Enter: 26.0
+  Send: s
+  Pass if prompt path still works and save/cancel messages are normal.
+
+Step 1 acceptance criteria:
+- Compile passes.
+- No message text changes observed in quick runtime gate.
+- Build size delta is small and explainable.
 ------------------------------------------------------------
 STEP 2 - Create EEPROM module
 ------------------------------------------------------------
-Create PropaneScale/src/eeprom_store.h with declarations:
-- bool loadFromEeprom(float& value, uint32_t magicAddr, uint32_t magicValue, uint32_t valueAddr);
-- bool saveToEeprom(float value, uint32_t magic, int magicAddr, int valueAddr);
-- bool printEepromField(const char* label, uint32_t magicAddr, uint32_t magicValue, uint32_t valueAddr, float minValue, float maxValue, bool useAbsMag = false, const char* unitSuffix = nullptr);
+Purpose:
+- Extract EEPROM persistence and display helpers without changing save/load semantics.
 
-Create PropaneScale/src/eeprom_store.cpp with:
-- #include <EEPROM.h>
-- #include <Arduino.h>
-- #include "config.h"
-- #include "parsing_utils.h"
-- #include "eeprom_store.h"
+Preconditions:
+- Step 1 complete and green.
 
-NOTE: saveToEeprom currently depends on global eepromReady in PropaneScale.ino.
-For chunk 1, keep behavior unchanged by declaring external linkage in eeprom_store.cpp:
-- extern bool eepromReady;
+Run order (do not skip):
+1) Create PropaneScale/src/eeprom_store.h.
+  Required declarations:
+  - bool loadFromEeprom(float& value, uint32_t magicAddr, uint32_t magicValue, uint32_t valueAddr);
+  - bool saveToEeprom(float value, uint32_t magic, int magicAddr, int valueAddr);
+  - bool printEepromField(const char* label, uint32_t magicAddr, uint32_t magicValue, uint32_t valueAddr, float minValue, float maxValue, bool useAbsMag = false, const char* unitSuffix = nullptr);
 
-Move exact function bodies from PropaneScale.ino:
-- loadFromEeprom
-- saveToEeprom
-- printEepromField
+2) Create PropaneScale/src/eeprom_store.cpp.
+  Required includes:
+  - #include <EEPROM.h>
+  - #include <Arduino.h>
+  - #include "config.h"
+  - #include "parsing_utils.h"
+  - #include "eeprom_store.h"
+  Required external linkage:
+  - extern bool eepromReady;
+  Move exact bodies only:
+  - loadFromEeprom
+  - saveToEeprom
+  - printEepromField
 
-Then in PropaneScale.ino:
-1) Add #include "src/eeprom_store.h".
-2) Remove the three moved function bodies.
-3) Compile.
+3) Update PropaneScale.ino.
+  - Add #include "src/eeprom_store.h"
+  - Remove moved function bodies
+  Pass if no unresolved externals and no duplicate definitions.
+
+4) Compile gate.
+  Pass if compile succeeds and prints size lines.
+
+5) Runtime EEPROM gate.
+  Send: d
+  Expected output snippets:
+  - Resetting EEPROM to hardcoded defaults...
+  - EEPROM reset complete. Recalibrate before use.
+  Send: e
+  Expected output snippets:
+  - Calibration factor: ...
+  - Known calibration weight: ... lbs
+  - Max propane weight: ... lbs
+  - Tank tare: ... lbs
+  Power cycle, send: e again.
+  Pass if values persist across reboot.
+
+Step 2 acceptance criteria:
+- Compile passes.
+- d/e behavior and text unchanged.
+- EEPROM values persist after reboot.
 
 ------------------------------------------------------------
 STEP 3 - Create scale I/O module
 ------------------------------------------------------------
-Create PropaneScale/src/scale_io.h with declarations:
-- float readAveragedUnits(int readings, int samplesPerReading);
-- float computeLoadDetectThreshold(float minimumThresholdLbs);
-- bool ensureScaleReady(const char* operation);
-- void flushSerialInput();
+Purpose:
+- Extract HX711 I/O helpers while preserving timing, readiness checks, and serial behavior.
 
-Create PropaneScale/src/scale_io.cpp with:
-- #include <Arduino.h>
-- #include <math.h>
-- #include "HX711.h"
-- #include "config.h"
-- #include "scale_io.h"
+Preconditions:
+- Step 2 complete and green.
 
-NOTE: these functions currently depend on global scale instance from PropaneScale.ino.
-For chunk 1, keep behavior unchanged by declaring external linkage in scale_io.cpp:
-- extern HX711 scale;
+Run order (do not skip):
+1) Create PropaneScale/src/scale_io.h.
+  Required declarations:
+  - float readAveragedUnits(int readings, int samplesPerReading);
+  - float computeLoadDetectThreshold(float minimumThresholdLbs);
+  - bool ensureScaleReady(const char* operation);
+  - void flushSerialInput();
 
-Move exact function bodies from PropaneScale.ino:
-- readAveragedUnits
-- computeLoadDetectThreshold
-- ensureScaleReady
-- flushSerialInput
+2) Create PropaneScale/src/scale_io.cpp.
+  Required includes:
+  - #include <Arduino.h>
+  - #include <math.h>
+  - #include "HX711.h"
+  - #include "config.h"
+  - #include "scale_io.h"
+  Required external linkage:
+  - extern HX711 scale;
+  Move exact bodies only:
+  - readAveragedUnits
+  - computeLoadDetectThreshold
+  - ensureScaleReady
+  - flushSerialInput
 
-Then in PropaneScale.ino:
-1) Add #include "src/scale_io.h".
-2) Remove the four moved function bodies.
-3) Compile.
+3) Update PropaneScale.ino.
+  - Add #include "src/scale_io.h"
+  - Remove moved function bodies
+
+4) Compile gate.
+  Pass if compile succeeds and prints size lines.
+
+5) Runtime behavior gate (strict subset of Step 0).
+  Test A - serial flush:
+  - Type junk keys, then send c
+  - Pass if calibration prompt is clean and not polluted by previous input.
+  Test B - ensureScaleReady:
+  - Temporarily disconnect HX711 data/clock, reboot
+  - Pass if output includes HX711 not ready... and workflow exits without hang.
+  Test C - load detect:
+  - Run a or l and place weight/tank
+  - Pass if detection occurs before timeout under normal conditions.
+
+Step 3 acceptance criteria:
+- Compile passes.
+- Tests A/B/C pass with unchanged message text.
+- Pass/fail behavior matches Step 0 baseline.
 
 ------------------------------------------------------------
 STEP 4 - Include cleanup and order checks
 ------------------------------------------------------------
-1) In PropaneScale.ino, remove now-unused standard includes if any are no longer needed there.
-2) Keep includes stable if unsure; cleanup can wait.
-3) Compile.
+Purpose:
+- Remove dead includes only when proven unused, with zero functional changes.
+
+Preconditions:
+- Step 3 complete and green.
+
+Run order (do not skip):
+1) Identify includes in PropaneScale.ino no longer needed after extraction.
+2) Remove one include at a time.
+3) Compile after each removal.
+  Pass only if compile remains clean.
+4) Stop when the next removal causes any missing symbol/build break.
+  Restore the last removed include and continue.
+
+Step 4 acceptance criteria:
+- Final compile is clean.
+- No runtime logic or messages changed.
+- Only include-list diffs in this step.
 
 ------------------------------------------------------------
 STEP 5 - Runtime sanity checks over serial
 ------------------------------------------------------------
-1) Boot and verify startup messages still print.
-2) Test commands:
-- h
-- e
-- c
-- l then q
-- k then q
-- p then q
-- t then q
-3) Verify no message text changed unexpectedly.
+Purpose:
+- Confirm end-to-end command workflows still match baseline after Chunk 1 extraction.
+
+Preconditions:
+- Steps 1-4 complete and green.
+
+Run order (do not skip):
+1) Boot sanity.
+  Pass if startup summary/help path appears and no reset loop occurs.
+
+2) Command matrix.
+  Send commands in this exact order:
+  - h
+  - e
+  - c
+  - l then q
+  - k then q
+  - p then q
+  - t then q
+
+3) Expected output snippets by command.
+  h:
+  - Send 'h' to display this help menu
+  e:
+  - Calibration factor:
+  - Known calibration weight:
+  - Max propane weight:
+  - Tank tare:
+  l then q:
+  - Waiting for tank placement...
+  - Send 'q' to cancel.
+  - Level read cancelled.
+  k/p/t then q:
+  - After entry, send 's' to save or 'q' to cancel.
+  - ... cancelled (for that workflow)
+
+4) Non-regression checks.
+  Pass if all are true:
+  - No command hangs.
+  - No unexpected reboots.
+  - No changed wording in key status lines.
+
+5) Final compile confirmation.
+  Compile once more and record size.
+  Pass if compile succeeds and size remains close to Step 0 baseline.
+
+Step 5 acceptance criteria:
+- Full command matrix passes.
+- Key message text unchanged.
+- Final compile clean.
 
 ------------------------------------------------------------
 Expected result after Chunk 1
