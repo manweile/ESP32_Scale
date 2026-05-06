@@ -1,5 +1,18 @@
-#ifndef CONFIG_H
-#define CONFIG_H
+/**
+ * @file config.h
+ * @author Gerald Manweiler
+ * 
+ * @brief Configuration constants for the ESP32-based propane level scale.
+ * 
+ * @details Defines pin assignments, calibration constants, EEPROM addresses, timing constants for non-blocking workflows, and other configuration parameters used throughout the PropaneScale application.
+ * 
+ * @version 0.1
+ * @date 2026-05-06
+ * 
+ * @copyright Copyright (c) 2026 Gerald Manweiler
+ * 
+ */
+#pragma once
 
 /**
  * @section ESP32 Hardware Constants
@@ -148,4 +161,3 @@ constexpr float CAL_FACTOR_ABS_MIN = 100.0f;                // Minimum absolute 
 constexpr float MAX_PROJECT_WEIGHT = 60.0f;                 // Project will never measure a propane tank above nominal 60 lbs
 constexpr float MIN_PLAUSIBLE_WEIGHT = 0.1f;                // Minimum plausible non-zero weight for user-entered values
 
-#endif // CONFIG_H
