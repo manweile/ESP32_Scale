@@ -3,15 +3,19 @@ suggest, but do not implement, performance enhancements.
 Top performance enhancements to consider next, ranked by impact:
 
 1. Split blocking measurement from async acquisition
-Create a true non-blocking HX711 sampler that takes at most one sample per loop tick (is_ready() gated), accumulates into a small state object, and reports “done” when target sample count reached.
+Create a true non-blocking HX711 sampler that takes at most one sample per loop tick (is_ready() gated), 
+accumulates into a small state object, and reports “done” when target sample count reached.
 Biggest gain: keeps loop latency low for serial, future web server, OTA, and watchdog health.
 
-NB this is 
-// @todo readAveragedUnits() uses wait_ready_timeout() per iteration so it no longer spins
-// indefinitely, but it still blocks loop() for up to HX711_READY_TIMEOUT_MS per reading
-// (e.g. up to ~120ms per call for single-reading polling paths, more for multi-reading
-// measurement calls). Acceptable for serial-only use. When adding a web interface, refactor
-// callers to drive one reading per loop() tick via is_ready() and accumulate across ticks.
+this is:
+@todo readAveragedUnits() uses wait_ready_timeout() per iteration so it no longer spins
+indefinitely, but it still blocks loop() for up to HX711_READY_TIMEOUT_MS per reading
+(e.g. up to ~120ms per call for single-reading polling paths, more for multi-reading measurement calls). 
+Acceptable for serial-only use. 
+When adding a web interface, refactor
+callers to drive one reading per loop() tick via is_ready() and accumulate across ticks.
+
+This is first ticket in web interface refactor.
 
 2. Replace repeated switch-to-string logic in runtime prints with lookup tables
 Your enum-name printing is clear, but multiple switch blocks add flash and branch cost.
@@ -32,7 +36,8 @@ Final measurement states: larger averages.
 You already moved in this direction; formalizing profiles can trim average loop time further.
 
 6. Cache rarely changing computed values
-Values like effective tare combinations and threshold multipliers can be precomputed when configuration changes instead of recomputed across ticks.
+Values like effective tare combinations and threshold multipliers can be precomputed 
+when configuration changes instead of recomputed across ticks.
 Small but consistent CPU savings.
 
 7. Minimize EEPROM commit frequency and batch writes
@@ -48,38 +53,84 @@ I want to have the project at peak performance for usb connection before I start
 The Serial monitor usage version will always be usb connected to computer.
 This will also be the case when I am developing the web interface version.
 
-Given USB is always connected and the monitor is always active, suggestions like CDC detection and compile-time stripping are irrelevant here. The relevant ones, reframed for your actual constraint:
+Given USB is always connected and the monitor is always active, 
+suggestions like CDC detection and compile-time stripping are irrelevant here. 
+The relevant ones, reframed for your actual constraint:
 
-1. Baud rate increase — one-liner, immediate gain
-Serial.begin(921600) in setup(). Since the host is always connected and a terminal is always open, there's no compatibility risk. Direct reduction in time Serial.print blocks waiting for the TX FIFO to drain on every call.
-
-2. Tick output rate-limiting — highest loop() throughput impact
-tickCalibration() and tickLevelRead() can emit a serial write every loop() iteration during SETTLING/READING states. A static uint32_t lastPrintMs gate (e.g., 250 ms) collapses dozens of writes per second down to 4, with no perceptible difference to a human reading the monitor. The HX711 read cadence is the real bottleneck there, not the display rate.
-
-3. Serial.availableForWrite() guard on large prints
-The 192-byte warnBuf strings and multi-line calibration prompts can stall loop() if the 256-byte ESP32 UART TX FIFO is already partially full. Checking Serial.availableForWrite() >= len before the print keeps the main loop from blocking. Low code complexity; directly improves responsiveness during calibration flows.
-
-4. Consolidate per-loop status output into a single structured line
-Rather than emitting weight readings as prose ("Weight: 12.34 lbs\n"), emit a single fixed-format CSV or JSON line (e.g., W,12.34,45\n). One write, smaller payload, faster drain. Also directly reusable as the data format for the web interface's WebSocket push — you won't have to redesign the output format mid-port.
-
-Priority order: 1 → 2 → 4 → 3. Items 1 and 2 are low-effort high-payoff. Item 4 is the most strategically valuable for the web port — doing it now avoids a refactor later.
-
-Claude Sonnet 4.6 • 0.9x
-
-follow manual refactor text files
-
-Given your current code in PropaneScale.ino, I’d use this order instead:
-
-Do #1 now.
+9. Baud rate increase — one-liner, immediate gain
+Serial.begin(921600) in setup(). 
+Since the host is always connected and a terminal is always open, there's no compatibility risk. 
+Direct reduction in time Serial.print blocks waiting for the TX FIFO to drain on every call.
 Change baud to 921600 and verify your monitor/tooling is stable.
 
-Continue your manual refactor chunks next.
-Keep behavior changes and structural refactor separate so debugging stays clean.
+Not worth it. ESP32 reset/boot hard codes in ROM defaults to 115200.
+Therefore, will never be able to change it, and setup is 2nd bootloader, which runs AFTER,
+so cannot change programatically either.
 
-Do #4 after chunked refactor, before web UI work.
-Structured output is strategically valuable, but it is a protocol/UX change, so better done once code is modular.
+10. Tick output rate-limiting — highest loop() throughput impact
+tickCalibration() and tickLevelRead() can emit a serial write every loop() iteration during SETTLING/READING states. 
+A static uint32_t lastPrintMs gate (e.g., 250 ms) collapses dozens of writes per second down to 4, 
+with no perceptible difference to a human reading the monitor. 
+The HX711 read cadence is the real bottleneck there, not the display rate.
 
-Do #3 only if you measure blocking from serial writes.
-It is useful, but lower ROI unless profiling shows write pressure during busy states.
+11. Serial.availableForWrite() guard on large prints
+The 192-byte warnBuf strings and multi-line calibration prompts can stall loop() if the 256-byte ESP32 UART TX FIFO is already partially full. 
+Checking Serial.availableForWrite() >= len before the print keeps the main loop from blocking. 
+Low code complexity; directly improves responsiveness during calibration flows.
 
-#2 is lower priority than it seemed for your current implementation.
+12. Consolidate per-loop status output into a single structured line
+Rather than emitting weight readings as prose ("Weight: 12.34 lbs\n"), 
+emit a single fixed-format CSV or JSON line (e.g., W,12.34,45\n). 
+One write, smaller payload, faster drain. 
+Also directly reusable as the data format for the web interface's WebSocket push
+— you won't have to redesign the output format mid-port.
+
+
+Update:
+Priority order for your current situation:
+
+Manual refactor chunks
+Why first: this is the biggest enabler. It reduces risk and makes every later performance change easier to implement, test, and roll back.
+
+item 12
+Consolidate per-loop status output into a single structured line
+Why here: strong payoff now and directly reusable for web telemetry later. It also reduces serial overhead by standardizing to one compact line format.
+
+item 10
+Tick output rate-limiting
+Why next: high impact when output is periodic. Apply only to truly repetitive status paths so you keep important event messages immediate.
+
+item 11
+Serial.availableForWrite() guard on large prints
+Why after rate limiting: good protection against loop stalls, but mainly useful once high-frequency output is already trimmed.
+
+item 2
+Replace repeated switch-to-string logic in runtime prints with lookup tables
+Why mid-pack: clean and slightly smaller/faster diagnostics path, but lower impact than serial traffic shaping.
+
+item 4
+Make detection thresholds adaptive with hysteresis + debounce windows
+Why later: can improve robustness/noise behavior, but introduces behavior tuning complexity. Better after code is modular and baseline behavior is stable.
+ item 5
+Add fast/slow sampling profiles per state
+Why later: useful, but it overlaps with your planned web-first non-blocking acquisition redesign, so avoid spending too much on pre-redesign tuning.
+
+item 6
+Cache rarely changing computed values
+Why low priority: likely micro-gains only in this codebase compared with serial and acquisition flow changes.
+
+Dropped as inapplicable for now:
+
+item 7
+Minimize EEPROM commit frequency and batch writes
+Why dropped: in your current flow, EEPROM writes are already user-driven save events, not high-frequency loop writes. This is not a meaningful runtime performance bottleneck right now.
+Notes reflected from your constraints:
+
+item 3
+Reduce Serial.print fragmentation: already done, so excluded.
+
+item 9
+Baud rate increase: intentionally excluded per your ROM boot visibility requirement.
+
+item 1
+True non-blocking HX711 sampler: already reserved as first step in web-interface phase, so this ordering avoids conflicting rework before that.
