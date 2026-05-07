@@ -143,55 +143,6 @@
       "problemMatcher": []
     },
 
-    // ESP32 Thing Quick Compile
-    // arduino-cli compile task for ESP32 Thing with verbose output and clean build,
-    // uses the esp32:esp32:esp32thing FQBN to specify the board configuration
-    // command line: arduino-cli compile -v --clean --fqbn esp32:esp32:esp32thing D:/MyArduino/Projects/ESP32_Scale/PropaneScale
-    {
-      "label": "ESP32 Thing Quick Compile",
-      "type": "shell",
-      "command": "arduino-cli",
-      "args": [
-        "compile",
-        "-v",
-        "--fqbn",
-        "esp32:esp32:esp32thing",
-        "${workspaceFolder}/PropaneScale"
-      ],
-      "presentation": {
-        "echo": true,
-        "reveal": "always",
-        "focus": false,
-        "panel": "shared"
-      },
-      "problemMatcher": []
-    },
-
-    // ESP32 Thing Clean Rebuild
-    // arduino-cli compile task for ESP32 Thing with verbose output and clean build,
-    // uses the esp32:esp32:esp32thing FQBN to specify the board configuration,
-    // command line: arduino-cli compile -v --clean --fqbn esp32:esp32:esp32thing D:/MyArduino/Projects/ESP32_Scale/PropaneScale
-    {
-      "label": "ESP32 Thing Clean Rebuild",
-      "type": "shell",
-      "command": "arduino-cli",
-      "args": [
-        "compile",
-        "-v",
-        "--clean",
-        "--fqbn",
-        "esp32:esp32:esp32thing",
-        "${workspaceFolder}/PropaneScale"
-      ],
-      "presentation": {
-        "echo": true,
-        "reveal": "always",
-        "focus": false,
-        "panel": "shared"
-      },
-      "problemMatcher": []
-    },
-
     // FQBN Production Clean Rebuild
     // arduino-cli compile task with verbose output and clean build, 
     // uses the FQBN input to specify the board configuration, 
@@ -288,6 +239,56 @@
       "problemMatcher": []
     },
 
+    // Arduino-CLI for ESP32 Thing tasks
+    // ESP32 Thing Quick Compile
+    // arduino-cli compile task for ESP32 Thing with verbose output and clean build,
+    // uses the esp32:esp32:esp32thing FQBN to specify the board configuration
+    // command line: arduino-cli compile -v --clean --fqbn esp32:esp32:esp32thing D:/MyArduino/Projects/ESP32_Scale/PropaneScale
+    {
+      "label": "ESP32 Thing Quick Compile",
+      "type": "shell",
+      "command": "arduino-cli",
+      "args": [
+        "compile",
+        "-v",
+        "--fqbn",
+        "esp32:esp32:esp32thing",
+        "${workspaceFolder}/PropaneScale"
+      ],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+
+    // ESP32 Thing Clean Rebuild
+    // arduino-cli compile task for ESP32 Thing with verbose output and clean build,
+    // uses the esp32:esp32:esp32thing FQBN to specify the board configuration,
+    // command line: arduino-cli compile -v --clean --fqbn esp32:esp32:esp32thing D:/MyArduino/Projects/ESP32_Scale/PropaneScale
+    {
+      "label": "ESP32 Thing Clean Rebuild",
+      "type": "shell",
+      "command": "arduino-cli",
+      "args": [
+        "compile",
+        "-v",
+        "--clean",
+        "--fqbn",
+        "esp32:esp32:esp32thing",
+        "${workspaceFolder}/PropaneScale"
+      ],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    
     // Powershell tasks
     
     // ESP32 Thing Quick Flash
