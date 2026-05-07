@@ -4,7 +4,7 @@
  * 
  * @brief Utility functions for parsing and validating input values.
  * 
- * @details Provides functions for validating that float values are within expected bounds and for parsing non-negative floats from strings, with robust error handling and no exceptions.
+ * @details Declares functions for validating & parsing float values.
  * 
  * @version 0.1
  * @date 2026-05-06

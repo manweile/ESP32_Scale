@@ -116,6 +116,10 @@ Baseline acceptance criteria:
 - No crashes, hangs, WDT resets, or serial lockups.
 - Message text for key workflow lines matches snippets above.
 
+EDITS COMPLETED
+CLEAN Compile
+TEST SUCCESFUL
+
 ------------------------------------------------------------
 STEP 1 - Create parsing module
 ------------------------------------------------------------
@@ -163,6 +167,11 @@ Step 1 acceptance criteria:
 - Compile passes.
 - No message text changes observed in quick runtime gate.
 - Build size delta is small and explainable.
+
+EDITS COMPLETED
+CLEAN Compile
+TEST SUCCESFUL
+
 ------------------------------------------------------------
 STEP 2 - Create EEPROM module
 ------------------------------------------------------------
@@ -278,6 +287,12 @@ Step 3 acceptance criteria:
 - Compile passes.
 - Tests A/B/C pass with unchanged message text.
 - Pass/fail behavior matches Step 0 baseline.
+
+EDITS COMPLETED
+CLEAN Compile
+Sketch uses 315419s bytes (24%)
+Global variables use 21000 bytes (6%)
+TEST Pass
 
 ------------------------------------------------------------
 STEP 4 - Include cleanup and order checks

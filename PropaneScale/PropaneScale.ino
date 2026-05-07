@@ -36,6 +36,7 @@
 #include "config.h"                                         // Configuration constants for the ESP32-based propane level scale
 #include "src/eeprom_store.h"                               // EEPROM storage functions
 #include "src/parsing_utils.h"                              // Utility functions for validating and parsing input values
+#include "src/scale_io.h"                                   // Input/output functions for user workflows and HX711 interactions
 
 /**
  * @section Global Class Instances
@@ -896,6 +897,14 @@ void tickCalibration() {
       // take one final reading to decide auto-confirm vs. abort
       calCtx.measuredUnits = readAveragedUnits(1, POLL_SAMPLES);
       
+      if (!isfinite(calCtx.measuredUnits)) {
+        printScaleNotReadyDiagnostic("empty-scale confirmation");
+        Serial.println("Calibration cancelled.");
+        calCtx.state = CalState::IDLE;
+        calCtx.mode  = CalMode::NONE;
+        return;
+      }
+
       if (fabsf(calCtx.measuredUnits) <= MINIMUM_LOAD_WEIGHT) {
         Serial.println("Empty scale auto-confirmed at timeout (stable scale).");
         Serial.println();
@@ -911,6 +920,14 @@ void tickCalibration() {
 
     // Poll each tick to detect empty early (before timeout expires)
     calCtx.measuredUnits = readAveragedUnits(1, POLL_SAMPLES);
+
+    if (!isfinite(calCtx.measuredUnits)) {
+      printScaleNotReadyDiagnostic("empty-scale confirmation");
+      Serial.println("Calibration cancelled.");
+      calCtx.state = CalState::IDLE;
+      calCtx.mode  = CalMode::NONE;
+      return;
+    }
 
     if (fabsf(calCtx.measuredUnits) <= MINIMUM_LOAD_WEIGHT) {
 
@@ -948,6 +965,14 @@ void tickCalibration() {
 
     // Poll each tick to detect load placement as soon as possible
     calCtx.measuredUnits = readAveragedUnits(1, POLL_SAMPLES);
+
+    if (!isfinite(calCtx.measuredUnits)) {
+      printScaleNotReadyDiagnostic("weight placement detection");
+      Serial.println("Calibration cancelled.");
+      calCtx.state = CalState::IDLE;
+      calCtx.mode  = CalMode::NONE;
+      return;
+    }
 
     // below noise-derived threshold — no real load yet
     if (fabsf(calCtx.measuredUnits) < calCtx.loadDetectThreshold) {
@@ -1095,6 +1120,13 @@ void tickLevelRead() {
     }
 
     float measuredUnits = readAveragedUnits(1, POLL_SAMPLES);
+    if (!isfinite(measuredUnits)) {
+      printScaleNotReadyDiagnostic("tank placement detection");
+      Serial.println("Level read cancelled.");
+      levelCtx.state = LevelState::IDLE;
+      return;
+    }
+
     if (fabsf(measuredUnits) >= levelCtx.loadDetectThreshold) {
       char buf[80];
       unsigned long settleSeconds = CAL_SETTLE_DELAY_MS / 1000UL;
@@ -1119,6 +1151,13 @@ void tickLevelRead() {
   if (levelCtx.state == LevelState::READING) {
     Serial.println("Reading tank weight...");
     float rawWeight = readAveragedUnits(CAL_SAMPLES, LIVE_SAMPLES);
+
+    if (!isfinite(rawWeight)) {
+      printScaleNotReadyDiagnostic("final tank reading");
+      Serial.println("Level read cancelled.");
+      levelCtx.state = LevelState::IDLE;
+      return;
+    }
 
     float propaneWeight = rawWeight - tankTare - PLATEN_TARE;
     if (propaneWeight < 0.0f) {
@@ -1179,6 +1218,12 @@ void tickTare() {
 
   if ((millis() - tareCtx.stateStartMs) >= EMPTY_CONFIRM_TIMEOUT_MS) {
     float m = readAveragedUnits(1, POLL_SAMPLES);
+    if (!isfinite(m)) {
+      printScaleNotReadyDiagnostic("startup tare");
+      tareCtx.state = TareState::SKIP;
+      return;
+    }
+
     if (fabsf(m - tareCtx.baseline) <= SETUP_EMPTY_WEIGHT) {
       Serial.println("Startup tare auto-confirmed at timeout (stable scale).");
       tareCtx.state = TareState::TARE;
@@ -1190,6 +1235,12 @@ void tickTare() {
   }
 
   float m = readAveragedUnits(1, POLL_SAMPLES);
+  if (!isfinite(m)) {
+    printScaleNotReadyDiagnostic("startup tare");
+    tareCtx.state = TareState::SKIP;
+    return;
+  }
+
   if (fabsf(m - tareCtx.baseline) <= SETUP_EMPTY_WEIGHT) {
     tareCtx.stableChecks++;
     if (tareCtx.stableChecks >= UNLOAD_CHECK_COUNT) {
@@ -1265,68 +1316,68 @@ static void transitionFromWaitEmpty() {
   calCtx.state        = CalState::WAIT_LOAD;
 }
 
-/**
- * @section Helper functions for user initiated workflows
- */
+// /**
+//  * @section Helper functions for user initiated workflows
+//  */
 
-/**
- * @brief Computes the load-detection threshold from measured noise.
- *
- * @details Reads the current unloaded noise from the scale, multiplies it by 20
- * as a signal-to-noise margin, then clamps to minimumThresholdLbs so a very
- * quiet scale still responds to a real load.
- *
- * @param {float} minimumThresholdLbs Floor value for the returned threshold in pounds.
- * @return {float} Computed threshold in pounds: max(noise * 20, minimumThresholdLbs).
- *
- * @throws {none} This function does not throw exceptions.
- */
-float computeLoadDetectThreshold(float minimumThresholdLbs) {
-  float noise = fabsf(readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES));
-  float threshold = noise * 20.0f;
-  return (threshold >= minimumThresholdLbs) ? threshold : minimumThresholdLbs;
-}
+// /**
+//  * @brief Computes the load-detection threshold from measured noise.
+//  *
+//  * @details Reads the current unloaded noise from the scale, multiplies it by 20
+//  * as a signal-to-noise margin, then clamps to minimumThresholdLbs so a very
+//  * quiet scale still responds to a real load.
+//  *
+//  * @param {float} minimumThresholdLbs Floor value for the returned threshold in pounds.
+//  * @return {float} Computed threshold in pounds: max(noise * 20, minimumThresholdLbs).
+//  *
+//  * @throws {none} This function does not throw exceptions.
+//  */
+// float computeLoadDetectThreshold(float minimumThresholdLbs) {
+//   float noise = fabsf(readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES));
+//   float threshold = noise * 20.0f;
+//   return (threshold >= minimumThresholdLbs) ? threshold : minimumThresholdLbs;
+// }
 
-/**
- * @brief Ensures the HX711 is ready before attempting reads or tare.
- *
- * @details Checks the amplifier readiness and prints a field-diagnostic message when it is not ready so workflows can exit early instead of blocking.
- *
- * @param {const char*} operation Short workflow label used in the error message.
- * @return {bool} True when HX711 is ready; false otherwise.
- *
- * @throws {none} This function does not throw exceptions.
- */
-bool ensureScaleReady(const char* operation) {
-  if (scale.is_ready()) {
-    return true;
-  }
+// /**
+//  * @brief Ensures the HX711 is ready before attempting reads or tare.
+//  *
+//  * @details Checks the amplifier readiness and prints a field-diagnostic message when it is not ready so workflows can exit early instead of blocking.
+//  *
+//  * @param {const char*} operation Short workflow label used in the error message.
+//  * @return {bool} True when HX711 is ready; false otherwise.
+//  *
+//  * @throws {none} This function does not throw exceptions.
+//  */
+// bool ensureScaleReady(const char* operation) {
+//   if (scale.is_ready()) {
+//     return true;
+//   }
 
-  Serial.print("HX711 not ready");
-  if (operation != nullptr && operation[0] != '\0') {
-    Serial.print(" during ");
-    Serial.print(operation);
-  }
-  Serial.println('.');
-  Serial.println("Check HX711 wiring, power, and data pins (DOUT/CLK).");
-  Serial.println();
-  return false;
-}
+//   Serial.print("HX711 not ready");
+//   if (operation != nullptr && operation[0] != '\0') {
+//     Serial.print(" during ");
+//     Serial.print(operation);
+//   }
+//   Serial.println('.');
+//   Serial.println("Check HX711 wiring, power, and data pins (DOUT/CLK).");
+//   Serial.println();
+//   return false;
+// }
 
-/**
- * @brief Flushes any buffered serial input.
- *
- * @details Reads and discards any available serial input to ensure that subsequent serial reads start with fresh input from the user.
- * 
- * @return {void} No value is returned.
- * 
- * @throws {none} This function does not throw exceptions.
- */
-void flushSerialInput() {
-  while (Serial.available()) {
-    Serial.read();
-  }
-}
+// /**
+//  * @brief Flushes any buffered serial input.
+//  *
+//  * @details Reads and discards any available serial input to ensure that subsequent serial reads start with fresh input from the user.
+//  * 
+//  * @return {void} No value is returned.
+//  * 
+//  * @throws {none} This function does not throw exceptions.
+//  */
+// void flushSerialInput() {
+//   while (Serial.available()) {
+//     Serial.read();
+//   }
+// }
 
 // @todo readAveragedUnits() uses wait_ready_timeout() per iteration so it no longer spins
 // indefinitely, but it still blocks loop() for up to HX711_READY_TIMEOUT_MS per reading
@@ -1334,41 +1385,41 @@ void flushSerialInput() {
 // measurement calls). Acceptable for serial-only use. When adding a web interface, refactor
 // callers to drive one reading per loop() tick via is_ready() and accumulate across ticks.
 
-/**
- * @brief Reads the average weight from the scale over multiple readings.
- * 
- * @details Takes multiple readings from the scale, averages them, and returns the result in pounds.
- * Useful for smoothing out noise in the scale readings and getting a more stable weight measurement.
- * 
- * @param {int} readings Number of readings to average.
- * @param {int} samplesPerReading Number of samples per reading.
- * @return {float} avgWeight The average weight in pounds. 
- * 
- * @throws {none} This function does not throw exceptions.
- */
-float readAveragedUnits(int readings, int samplesPerReading) {
-  float avgWeight = 0.0f;               // Computed average weight in pounds to return at the end of the function.
-  int   collected  = 0;                 // Number of samples actually read (may be less than requested if HX711 not ready)
-  float totalUnits = 0.0f;              // Accumulator summing weight readings across all iterations for averaging
+// /**
+//  * @brief Reads the average weight from the scale over multiple readings.
+//  * 
+//  * @details Takes multiple readings from the scale, averages them, and returns the result in pounds.
+//  * Useful for smoothing out noise in the scale readings and getting a more stable weight measurement.
+//  * 
+//  * @param {int} readings Number of readings to average.
+//  * @param {int} samplesPerReading Number of samples per reading.
+//  * @return {float} avgWeight The average weight in pounds. 
+//  * 
+//  * @throws {none} This function does not throw exceptions.
+//  */
+// float readAveragedUnits(int readings, int samplesPerReading) {
+//   float avgWeight = 0.0f;               // Computed average weight in pounds to return at the end of the function.
+//   int   collected  = 0;                 // Number of samples actually read (may be less than requested if HX711 not ready)
+//   float totalUnits = 0.0f;              // Accumulator summing weight readings across all iterations for averaging
   
-  // Use bounded wait to avoid infinite blocking while preserving the original
-  // per-reading averaging semantics used across workflows.
-  for (int readingIndex = 0; readingIndex < readings; ++readingIndex) {
-    if (!scale.wait_ready_timeout(HX711_READY_TIMEOUT_MS)) {
-      continue;
-    }
+//   // Use bounded wait to avoid infinite blocking while preserving the original
+//   // per-reading averaging semantics used across workflows.
+//   for (int readingIndex = 0; readingIndex < readings; ++readingIndex) {
+//     if (!scale.wait_ready_timeout(HX711_READY_TIMEOUT_MS)) {
+//       continue;
+//     }
 
-    totalUnits += scale.get_units(samplesPerReading);
-    collected++;
-  }
+//     totalUnits += scale.get_units(samplesPerReading);
+//     collected++;
+//   }
 
-  if (collected == 0) {
-    return 0.0f;
-  }
+//   if (collected == 0) {
+//     return 0.0f;
+//   }
 
-  avgWeight = totalUnits / collected;
-  return avgWeight;
-}
+//   avgWeight = totalUnits / collected;
+//   return avgWeight;
+// }
 
 /**
  * @section Project initiated workflows
@@ -1395,6 +1446,12 @@ void beginTare() {
 
   // Establish baseline before tare; stability is checked relative to this reading.
   tareCtx.baseline     = readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES);
+  if (!isfinite(tareCtx.baseline)) {
+    printScaleNotReadyDiagnostic("startup tare");
+    tareCtx.state = TareState::SKIP;
+    return;
+  }
+
   tareCtx.stableChecks = 0;
   tareCtx.stateStartMs = millis();
   tareCtx.state        = TareState::WAIT_STABLE;

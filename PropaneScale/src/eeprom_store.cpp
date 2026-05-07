@@ -4,7 +4,7 @@
  * 
  * @brief EEPROM storage functions for the propane scale project.
  * 
- * @details Implements functions to save and load calibration factors, known weights, maximum propane weight, and tank tare to and from EEPROM, with validation and error handling.
+ * @details Implements eeprom functions to load, save & validate calibration factors, known weights, maximum propane weight, and tank tare.
  * 
  * @version 0.1
  * @date 2026-05-06
@@ -12,7 +12,7 @@
  * @copyright Copyright (c) 2026 Gerald Manweiler
  */
 
- /**
+/**
  * @section Standard library headers
  */
 #include <Arduino.h>
