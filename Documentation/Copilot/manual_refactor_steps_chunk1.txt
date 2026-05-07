@@ -290,7 +290,7 @@ Step 3 acceptance criteria:
 
 EDITS COMPLETED
 CLEAN Compile
-Sketch uses 315419s bytes (24%)
+Sketch uses 315419 bytes (24%)
 Global variables use 21000 bytes (6%)
 TEST Pass
 
@@ -315,6 +315,12 @@ Step 4 acceptance criteria:
 - Final compile is clean.
 - No runtime logic or messages changed.
 - Only include-list diffs in this step.
+
+EDITS complete
+CLEAN compile
+Sketch uses 315419 bytes (24%)
+Global variables use 21000 bytes (6%)
+TESTS PASS
 
 ------------------------------------------------------------
 STEP 5 - Runtime sanity checks over serial
@@ -369,6 +375,12 @@ Step 5 acceptance criteria:
 - Full command matrix passes.
 - Key message text unchanged.
 - Final compile clean.
+
+EDITS complete
+CLEAN compile
+Sketch uses 315419 bytes (24%)
+Global variables use 21000 bytes (6%)
+TESTS PASS
 
 ------------------------------------------------------------
 Expected result after Chunk 1
