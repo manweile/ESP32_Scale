@@ -13,25 +13,18 @@
  */
 
 /**
- * @section Includes 
- */
-
-/**
- * @subsection Standard library headers
+ * @section Standard library headers
  */
 
 #include <EEPROM.h>                                         // EEPROM library for persistent storage of calibration and tare values
-#include <math.h>                                           // Math helpers for fabsf and isfinite during value validation
-#include <stdio.h>                                          // snprintf for batched serial output to reduce print fragmentation
-#include <stdlib.h>                                         // Standard library for functions like strtof for parsing floats from strings 
 
 /**
- * @subsection Third party library headers
+ * @section Third party library headers
  */
 #include "HX711.h"                                          // HX711 library for interfacing with the load cell amplifier to read weight data
 
 /** 
- * @subsection Local library headers
+ * @section Local library headers
  */
 #include "config.h"                                         // Configuration constants for the ESP32-based propane level scale
 #include "src/eeprom_store.h"                               // EEPROM storage functions
