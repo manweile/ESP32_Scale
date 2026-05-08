@@ -25,8 +25,11 @@
 #include "eeprom_store.h"
 #include "parsing_utils.h"
 
+/**
+ * @section External Global State Variables
+ */
 
- extern bool eepromReady;                                   // Flag to track if EEPROM was successfully initialized
+extern bool eepromReady;                                   // Flag to track if EEPROM was successfully initialized
 
 bool loadFromEeprom(float& value, uint32_t magicAddr, uint32_t magicValue, uint32_t valueAddr) {
     uint32_t magic = 0;                                       // Magic number read from EEPROM for validation

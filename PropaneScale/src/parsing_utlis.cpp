@@ -15,12 +15,14 @@
 /**
  * @section Standard library headers
  */
+
 #include <math.h>
 #include <stdlib.h>
 
 /** 
  * @section Local library headers
  */
+
 #include "parsing_utils.h"
 
 bool isValidBoundedFloat(float value, float minimumValue, float maximumValue, bool useAbsoluteMagnitude) {
