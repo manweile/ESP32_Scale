@@ -93,6 +93,21 @@ Then in PropaneScale.ino:
 2) Remove moved function bodies.
 3) Compile.
 
+Test Criteria:
+Send h and verify the k command still appears in help.
+Send k and verify the prompt text is unchanged.
+Enter a valid value like 26 and confirm the save/cancel prompt appears exactly as before.
+Send s and verify knownWeight updates and persists.
+Run e or c and confirm the updated value is shown.
+Repeat with q and verify cancellation leaves the old value unchanged.
+Repeat with invalid input like negative text or out-of-range value and confirm the rejection message is unchanged.
+
+EDITS complete
+TESTS pass
+Clean Compile
+Sketch uses 315447 bytes (24%)
+Global variables use 21000 bytes (6%)
+
 ------------------------------------------------------------
 STEP 3 - Extract max propane workflow
 ------------------------------------------------------------
@@ -122,6 +137,13 @@ Then in PropaneScale.ino:
 1) Add include for input_propane_weight.h.
 2) Remove moved function bodies.
 3) Compile.
+
+Test Criteria:
+Send p and verify the prompt is unchanged.
+Enter a valid value like 16 and send s.
+Verify with e or c that maxPropane changed.
+Repeat with q and verify the previous value remains.
+Repeat with invalid input and confirm the rejection path is unchanged.
 
 ------------------------------------------------------------
 STEP 4 - Extract tank tare workflow
@@ -153,6 +175,13 @@ Then in PropaneScale.ino:
 2) Remove moved function bodies.
 3) Compile.
 
+Test Criteria:
+Send t and verify the prompt is unchanged.
+Enter a valid tare like 17.5 and send s.
+Verify with e or c that tankTare changed.
+Repeat with q and verify cancel behavior.
+Repeat with invalid input and confirm rejection behavior is unchanged.
+
 ------------------------------------------------------------
 STEP 5 - Keep loop routing unchanged
 ------------------------------------------------------------
@@ -161,6 +190,12 @@ STEP 5 - Keep loop routing unchanged
 - InputMode::PROPANE_WEIGHT -> handlePropaneWeightInput
 - InputMode::KNOWN_WEIGHT -> handleKnownWeightInput
 2) Compile.
+
+Test Criteria:
+Send k and make sure only the known-weight workflow starts.
+Send p and make sure only the propane-weight workflow starts.
+Send t and make sure only the tank-tare workflow starts.
+While one workflow is active, send unrelated characters and verify they do not jump into another workflow.
 
 ------------------------------------------------------------
 STEP 6 - Serial behavior sanity check
@@ -171,12 +206,28 @@ STEP 6 - Serial behavior sanity check
 - t then numeric entry then s/q
 2) Confirm prompts and warnings match previous behavior exactly.
 
+Test Criteria:
+k → valid number → s
+p → valid number → s
+t → valid number → s
+Then reboot the board and run e.
+Pass criteria:
+All three saved values persist across reboot.
+Prompt text and warning text match pre-refactor behavior.
+No workflow gets stuck in WAIT_SAVE_CONFIRM or leaves inputCtx in a bad state.
+
 ------------------------------------------------------------
 Expected result after Chunk 2
 ------------------------------------------------------------
 1) All three input workflows are out of PropaneScale.ino.
 2) loop() dispatch remains simple and unchanged.
 3) Behavior remains identical.
+
+Test Criteria:
+Missing externs for resetInputContext or the data globals.
+Loop routing still calling old handlers or wrong handlers.
+Save works but cancel no longer restores prior state.
+Prompt text changes accidentally during extraction.
 
 ------------------------------------------------------------
 Common failure points

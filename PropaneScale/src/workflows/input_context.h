@@ -61,3 +61,4 @@ struct InputContext {
 };
 
 extern InputContext inputCtx;                               /**< Non-blocking input context for serial workflows */
+extern void resetInputContext();                            /**< Resets input context to idle state */
