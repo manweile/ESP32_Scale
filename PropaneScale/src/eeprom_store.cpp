@@ -32,44 +32,44 @@
 extern bool eepromReady;                                   // Flag to track if EEPROM was successfully initialized
 
 bool loadFromEeprom(float& value, uint32_t magicAddr, uint32_t magicValue, uint32_t valueAddr) {
-    uint32_t magic = 0;                                       // Magic number read from EEPROM for validation
+  uint32_t magic = 0;                                       // Magic number read from EEPROM for validation
 
-    EEPROM.get(magicAddr, magic);
-    if (magic != magicValue) {
-        return false;
-    }
+  EEPROM.get(magicAddr, magic);
+  if (magic != magicValue) {
+    return false;
+  }
 
-    EEPROM.get(valueAddr, value);
-    return true;
+  EEPROM.get(valueAddr, value);
+  return true;
 }
 
 bool saveToEeprom(float value, uint32_t magic, int magicAddr, int valueAddr) {
-    if (!eepromReady) {
-        return false;
-    }
+  if (!eepromReady) {
+    return false;
+  }
 
-    EEPROM.put(magicAddr, magic);
-    EEPROM.put(valueAddr, value);
-    return EEPROM.commit();
+  EEPROM.put(magicAddr, magic);
+  EEPROM.put(valueAddr, value);
+  return EEPROM.commit();
 }
 
 bool printEepromField(const char* label, uint32_t magicAddr, uint32_t magicValue, uint32_t valueAddr, float minValue, float maxValue, bool useAbsMag, const char* unitSuffix) {
-    float value = 0.0f;
+  float value = 0.0f;
 
-    if (loadFromEeprom(value, magicAddr, magicValue, valueAddr) && isValidBoundedFloat(value, minValue, maxValue, useAbsMag)) {
-        Serial.print(label);
-        Serial.print(": ");
-        Serial.print(value, 2);
+  if (loadFromEeprom(value, magicAddr, magicValue, valueAddr) && isValidBoundedFloat(value, minValue, maxValue, useAbsMag)) {
+    Serial.print(label);
+    Serial.print(": ");
+    Serial.print(value, 2);
 
-        if (unitSuffix != nullptr && unitSuffix[0] != '\0') {
-            Serial.print(unitSuffix);
-        }
-
-        Serial.println();
-        return true;
+    if (unitSuffix != nullptr && unitSuffix[0] != '\0') {
+      Serial.print(unitSuffix);
     }
 
-    Serial.print(label);
-    Serial.println(": <invalid or not set>");
-    return false;
+    Serial.println();
+    return true;
+  }
+
+  Serial.print(label);
+  Serial.println(": <invalid or not set>");
+  return false;
 }

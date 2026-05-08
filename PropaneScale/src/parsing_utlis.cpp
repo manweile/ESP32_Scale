@@ -26,38 +26,38 @@
 #include "parsing_utils.h"
 
 bool isValidBoundedFloat(float value, float minimumValue, float maximumValue, bool useAbsoluteMagnitude) {
-    float candidate = 0.0f;                                   // Temporarily holds the value used for comparison
+  float candidate = 0.0f;                                   // Temporarily holds the value used for comparison
 
-    if (!isfinite(value)) {
-        return false;
-    }
+  if (!isfinite(value)) {
+    return false;
+  }
 
-    candidate = useAbsoluteMagnitude ? fabsf(value) : value;
-    return (candidate >= minimumValue) && (candidate <= maximumValue);
+  candidate = useAbsoluteMagnitude ? fabsf(value) : value;
+  return (candidate >= minimumValue) && (candidate <= maximumValue);
 }
 
 bool parseNonNegativeFloat(const char* text, float& outValue) {
-    char* parseEnd = nullptr;                                 // Pointer used by strtof to indicate where parsing stopped
-    float parsed;                                             // Parsed float value from the input text
+  char* parseEnd = nullptr;                                 // Pointer used by strtof to indicate where parsing stopped
+  float parsed;                                             // Parsed float value from the input text
 
-    // strtof will set parseEnd to point to the first character after the parsed float.
-    parsed = strtof(text, &parseEnd);                   
+  // strtof will set parseEnd to point to the first character after the parsed float.
+  parsed = strtof(text, &parseEnd);                   
 
-    if (parseEnd == text) {
-        return false;
-    }
+  if (parseEnd == text) {
+    return false;
+  }
 
-    // loop is not a blocking concern since strtof has already parsed the float 
-    // and we are just validating that the rest of the string is whitespace 
-    // and that the value is non-negative, which are both very fast operations
-    while (*parseEnd == ' ' || *parseEnd == '\t') {
-        ++parseEnd;
-    }
+  // loop is not a blocking concern since strtof has already parsed the float 
+  // and we are just validating that the rest of the string is whitespace 
+  // and that the value is non-negative, which are both very fast operations
+  while (*parseEnd == ' ' || *parseEnd == '\t') {
+    ++parseEnd;
+  }
 
-    if (*parseEnd != '\0' || parsed < 0.0f) {
-        return false;
-    }
+  if (*parseEnd != '\0' || parsed < 0.0f) {
+    return false;
+  }
 
-    outValue = parsed;
-    return true;
+  outValue = parsed;
+  return true;
 }
