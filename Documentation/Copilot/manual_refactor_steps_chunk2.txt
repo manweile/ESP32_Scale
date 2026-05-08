@@ -27,6 +27,11 @@ STEP 0 - Baseline compile
 ------------------------------------------------------------
 1) Compile before starting and confirm success.
 
+CLEAN COMPILE
+Sketch uses 315419 bytes (24%)
+Global variables use 21000 bytes (6%)
+SAME as Chunk1 final
+
 ------------------------------------------------------------
 STEP 1 - Create shared input context header
 ------------------------------------------------------------
@@ -46,6 +51,17 @@ Then in PropaneScale.ino:
 2) Remove duplicate enum/struct definitions from PropaneScale.ino.
 3) Keep the single global definition: InputContext inputCtx.
 4) Compile.
+
+Test Criteria:
+No duplicate definition errors for InputMode, InputState, or InputContext.
+No missing type errors for uint8_t.
+No multiple-definition error for inputCtx.
+
+EDITS complete
+CLEAN Compile
+Sketch uses 315419 bytes (24%)
+Global variables use 21000 bytes (6%)
+TESTS Pass
 
 ------------------------------------------------------------
 STEP 2 - Extract known weight workflow
