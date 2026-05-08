@@ -156,26 +156,28 @@ Global variables use 21000 bytes (6%)
 STEP 4 - Extract tank tare workflow
 ------------------------------------------------------------
 Create input_tank_tare.h declarations:
-- void tankTareUpdate();
 - void handleTankTareInput(char incoming);
+- void tankTareUpdate();
 
 Create input_tank_tare.cpp and move exact function bodies:
-- tankTareUpdate
 - handleTankTareInput
+- tankTareUpdate
 
 Dependencies to include in input_tank_tare.cpp:
 - <Arduino.h>
 - <math.h>
 - <stdio.h>
+
 - "config.h"
-- "src/workflows/input_context.h"
-- "src/parsing_utils.h"
 - "src/eeprom_store.h"
+- "src/parsing_utils.h"
 - "src/scale_io.h"
+- "src/workflows/input_context.h"
 
 Externs for chunk 2:
-- extern float tankTare;
 - extern void resetInputContext();
+- extern float tankTare;
+
 
 Then in PropaneScale.ino:
 1) Add include for input_tank_tare.h.
@@ -188,6 +190,12 @@ Enter a valid tare like 17.5 and send s.
 Verify with e or c that tankTare changed.
 Repeat with q and verify cancel behavior.
 Repeat with invalid input and confirm rejection behavior is unchanged.
+
+edits complete
+clean compile
+Sketch uses 315499 bytes (24%)
+Global variables use 21000 bytes (6%)
+tests pass
 
 ------------------------------------------------------------
 STEP 5 - Keep loop routing unchanged
