@@ -27,10 +27,16 @@ STEP 0 - Baseline compile
 ------------------------------------------------------------
 1) Compile and confirm current baseline.
 
+edits: complete
+compile: clean
+Sketch uses 315499 bytes (24%)
+Global variables use 21000 bytes (6%)
+baseline pass
+
 ------------------------------------------------------------
 STEP 1 - Consolidate workflow type/context declarations
 ------------------------------------------------------------
-Create PropaneScale/src/workflows/workflow_contexts.h and move declarations only:
+Create PropaneScale/src/workflows/workflows_contexts.h and move declarations only:
 - CalMode, CalState, CalContext
 - LevelState, LevelContext
 - TareState, TareContext
@@ -47,6 +53,53 @@ Then in PropaneScale.ino:
 3) Keep global definitions.
 4) Compile.
 
+Test Criteria:
+Header contains all workflow type declarations
+Test: Inspect workflows_contexts.h.
+Pass criteria: It declares CalMode, CalState, CalContext, LevelState, LevelContext, TareState, and TareContext.
+Fail criteria: Any of these types are missing.
+
+Sketch no longer duplicates moved type declarations
+Test: Inspect PropaneScale.ino.
+Pass criteria: No local enum/struct declarations for the 7 moved types remain.
+Fail criteria: Any duplicate enum/struct still exists in the sketch.
+
+Context globals remain defined in the sketch
+Test: Inspect PropaneScale.ino.
+Pass criteria: Exactly one definition each for calCtx, levelCtx, and tareCtx exists in the sketch.
+Fail criteria: Missing definition, duplicate definition, or moved definition to another file.
+
+Header exposes externs for all three context globals
+Test: Inspect workflows_contexts.h.
+Pass criteria: extern declarations exist for calCtx, levelCtx, and tareCtx.
+Fail criteria: Any extern is missing or type mismatch exists.
+
+Linkage compatibility check for shared globals
+Test: Verify definitions in PropaneScale.ino are not static if declared extern in header.
+Pass criteria: calCtx/levelCtx/tareCtx definitions use external linkage (no static).
+Fail criteria: static is used with matching extern declarations, which breaks cross-TU visibility.
+
+Include wiring is correct
+Test: Inspect include list in PropaneScale.ino.
+Pass criteria: The contexts header is included once and used by sketch types/variables.
+Fail criteria: Missing include, duplicate include confusion, or stale include names.
+
+Header name consistency test
+Test: Search project includes for both workflow_contexts.h and workflows_contexts.h.
+Pass criteria: One canonical filename is used consistently everywhere.
+Fail criteria: Mixed singular/plural header names (high risk of include breakage during extraction steps).
+
+Step gate compile test
+Test: Run clean rebuild task ESP32 Thing Clean Rebuild.
+Pass criteria: Compile and link succeed with no new type/symbol errors from context migration.
+Fail criteria: Any compile/link error related to missing types, duplicate definitions, or undefined context symbols.
+
+EDITS complete
+clean compile
+Sketch uses 315499 bytes (24%)
+Global variables use 21000 bytes (6%)
+tests pass
+
 ------------------------------------------------------------
 STEP 2 - Extract level workflow
 ------------------------------------------------------------
@@ -62,15 +115,16 @@ Dependencies in level_workflow.cpp:
 - <Arduino.h>
 - <math.h>
 - <stdio.h>
+
 - "config.h"
-- "src/workflows/workflow_contexts.h"
 - "src/scale_io.h"
+- "src/workflows/workflow_contexts.h"
 
 Externs used by this workflow:
 - extern float calibrationFactor;
+- extern bool ensureScaleReady(const char* operation);
 - extern float tankTare;
 - extern float maxPropane;
-- extern bool ensureScaleReady(const char* operation);
 
 Then in PropaneScale.ino:
 1) Include level_workflow.h.

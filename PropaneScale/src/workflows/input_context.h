@@ -11,11 +11,12 @@
  * @copyright Copyright (c) 2026 Gerald Manweiler
  */
 
-#pragma once
+#pragma once */
 
 /**
  * @section Standard library headers
  */
+
 #include <cstdint>
 
 /**
@@ -59,6 +60,10 @@ struct InputContext {
   float     parsedValue  = 0.0f;                            /**< Last parsed numeric value pending save */
   InputState state       = InputState::IDLE;                /**< Current parse state for active mode */
 };
+
+/**
+ * @section External Global State Variables and Functions
+ */
 
 extern InputContext inputCtx;                               /**< Non-blocking input context for serial workflows */
 extern void resetInputContext();                            /**< Resets input context to idle state */
