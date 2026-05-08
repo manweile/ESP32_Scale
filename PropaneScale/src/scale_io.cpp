@@ -15,22 +15,39 @@
 /**
  * @section Standard library headers
  */
+
 #include <Arduino.h>
 #include <math.h>
 
 /**
  * @subsection Third party library headers
  */
+
 #include "HX711.h"                                          // HX711 library for interfacing with the load cell amplifier to read weight data
 
 /** 
  * @section Local library headers
  */
+
 #include "config.h"
 #include "scale_io.h"
 
+/**
+ * @section External Global State Variables
+ */
+
 extern HX711 scale;                                         // HX711 instance for interacting with the load cell amplifier
 
+/**
+ * @brief Probes the HX711 with multiple reads to determine if it is producing a responsive signal.
+ * 
+ * @details Secondary check to detect if HX711 is powered but not properly connected.
+ * Intentionally private implementation detail, only used as part of the scale ready workflow.
+ * 
+ * @return true if the HX711 is producing a responsive signal with variability across multiple reads; false otherwise.
+ * 
+ * @throws none This function does not throw exceptions.
+ */
 static bool hasResponsiveHx711Signal() {
   const int probeReads = 6;
   bool haveSample = false;
