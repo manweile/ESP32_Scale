@@ -103,7 +103,7 @@ tests pass
 ------------------------------------------------------------
 STEP 2 - Extract level workflow
 ------------------------------------------------------------
-Create level_workflow.h declarations:
+Create PropaneScale/src/workflows/level_workflow.h declarations:
 - void liquidLevel();
 - void tickLevelRead();
 
@@ -118,7 +118,7 @@ Dependencies in level_workflow.cpp:
 
 - "config.h"
 - "src/scale_io.h"
-- "src/workflows/workflow_contexts.h"
+- "src/workflows/workflows_contexts.h"
 
 Externs used by this workflow:
 - extern float calibrationFactor;
@@ -131,10 +131,57 @@ Then in PropaneScale.ino:
 2) Remove moved function bodies.
 3) Compile.
 
+Test criteria:
+Public API declarations exist in the new level workflow header
+Test: Inspect the new header for exactly two declarations: liquidLevel and tickLevelRead.
+Pass criteria: Both declarations exist with void return and no parameter changes.
+Fail criteria: Missing declaration or signature drift.
+
+Function bodies are moved out of the sketch
+Test: Inspect PropaneScale.ino for full definitions of liquidLevel and tickLevelRead.
+Pass criteria: Sketch no longer contains those function bodies.
+Fail criteria: Either full body still exists in sketch (duplicate definition risk).
+
+Sketch includes the new level workflow header
+Test: Inspect include section in PropaneScale.ino.
+Pass criteria: New level workflow header is included once.
+Fail criteria: Missing include or duplicate/conflicting include.
+
+Moved implementation keeps required dependencies
+Test: Inspect the new level workflow source includes.
+Pass criteria: It includes Arduino.h, math.h, stdio.h, config.h, scale_io.h, and workflows_contexts.h.
+Fail criteria: Missing include causing compile/type errors.
+
+Cross-module globals/functions are declared with extern in the moved source
+Test: Inspect new level workflow source for extern declarations used by the moved code.
+Pass criteria: calibrationFactor, tankTare, maxPropane, and ensureScaleReady are available without redefining ownership.
+Fail criteria: Missing externs, duplicate definitions, or linker errors.
+
+Behavior text and command flow are unchanged
+Test: Run the level command path over serial and compare outputs against pre-refactor behavior.
+Pass criteria: Same prompts/messages and same cancel/finish behavior.
+Fail criteria: Message changes, state timing regressions, or command behavior differences.
+
+No new warnings/errors in compile gate
+Test: Run clean rebuild task ESP32 Thing Clean Rebuild.
+Pass criteria: Compile/link succeeds with no undefined references or duplicate symbol errors tied to liquidLevel/tickLevelRead.
+Fail criteria: Any compile/link failure from extraction.
+
+Functional smoke test for level read workflow
+Test: On hardware, trigger level read with no tank, then with tank/load, then cancel path.
+Pass criteria: WAIT_LOAD, settling, and final read path still execute correctly; cancel returns to idle cleanly.
+Fail criteria: Stuck state, incorrect transition, or failure to return to idle.
+
+EDITS complete
+clean compile
+Sketch uses 315515 bytes (24%)
+Global variables use 21000 bytes (6%)
+tests pass
+
 ------------------------------------------------------------
 STEP 3 - Extract startup tare workflow
 ------------------------------------------------------------
-Create startup_tare_workflow.h declarations:
+Create PropaneScale/src/workflows/startup_tare_workflow.h declarations:
 - void beginTare();
 - void tickTare();
 
@@ -163,7 +210,7 @@ Then in PropaneScale.ino:
 ------------------------------------------------------------
 STEP 4 - Extract calibration workflow
 ------------------------------------------------------------
-Create calibration_workflow.h declarations:
+Create PropaneScale/src/workflows/calibration_workflow.h declarations:
 - void automaticCalibration();
 - void manualCalibration();
 - void reZero();

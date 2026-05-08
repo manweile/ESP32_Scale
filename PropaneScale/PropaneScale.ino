@@ -21,11 +21,13 @@
 /**
  * @section Third party library headers
  */
+
 #include "HX711.h"                                          // HX711 library for interfacing with the load cell amplifier to read weight data
 
 /** 
  * @section Local library headers
  */
+
 #include "config.h"                                         // Configuration constants for the ESP32-based propane level scale
 #include "src/eeprom_store.h"                               // EEPROM storage functions
 #include "src/parsing_utils.h"                              // Utility functions for validating and parsing input values
@@ -34,11 +36,13 @@
 #include "src/workflows/input_known_weight.h"               // Handlers for the known weight update workflow
 #include "src/workflows/input_propane_weight.h"             // Handlers for the max propane weight update workflow
 #include "src/workflows/input_tank_tare.h"                  // Handlers for the tank tare weight update workflow
+#include "src/workflows/level_workflow.h"                   // Functions for the liquid level read workflow
 #include "src/workflows/workflows_contexts.h"               // Context definitions for non-blocking workflows
 
 /**
  * @section Global Class Instances
  */
+
 HX711 scale;                                                // HX711 instance for interacting with the load cell amplifier
 
 /** 
@@ -415,90 +419,6 @@ void tickCalibration() {
       calCtx.lastFactorHundredth   = factorHundredth;
       calCtx.lastStepTenThousandth = stepTenThousandth;
     }
-  }
-}
-
-/**
- * @brief Advances the level read workflow on each loop() iteration.
- *
- * @details Called every loop() iteration when the level read workflow is active.
- * - WAIT_LOAD: polls the scale each tick until the reading exceeds the load
- *   detection threshold or the placement timeout expires.
- * - SETTLING: waits a short delay after load detection to avoid measuring while
- *   placement motion is still in progress.
- * - READING: takes a final averaged measurement, computes and prints propane
- *   weight and fill percentage, then resets to IDLE.
- *
- * @return {void} No value is returned.
- *
- * @throws {none} This function does not throw exceptions.
- */
-void tickLevelRead() {
-  if (levelCtx.state == LevelState::IDLE) {
-    return;
-  }
-
-  if (levelCtx.state == LevelState::WAIT_LOAD) {
-    if ((millis() - levelCtx.stateStartMs) >= EMPTY_CONFIRM_TIMEOUT_MS) {
-      Serial.println("Tank placement timed out; cancelled.");
-      levelCtx.state = LevelState::IDLE;
-      return;
-    }
-
-    float measuredUnits = readAveragedUnits(1, POLL_SAMPLES);
-    if (!isfinite(measuredUnits)) {
-      printScaleNotReadyDiagnostic("tank placement detection");
-      Serial.println("Level read cancelled.");
-      levelCtx.state = LevelState::IDLE;
-      return;
-    }
-
-    if (fabsf(measuredUnits) >= levelCtx.loadDetectThreshold) {
-      char buf[80];
-      unsigned long settleSeconds = CAL_SETTLE_DELAY_MS / 1000UL;
-      snprintf(buf, sizeof(buf), "Tank detected. Settling for %lu seconds before final read...\n",
-               settleSeconds);
-      Serial.print(buf);
-      levelCtx.stateStartMs = millis();
-      levelCtx.state = LevelState::SETTLING;
-    }
-    return;
-  }
-
-  if (levelCtx.state == LevelState::SETTLING) {
-    if ((millis() - levelCtx.stateStartMs) < CAL_SETTLE_DELAY_MS) {
-      return;
-    }
-
-    levelCtx.state = LevelState::READING;
-    return;
-  }
-
-  if (levelCtx.state == LevelState::READING) {
-    Serial.println("Reading tank weight...");
-    float rawWeight = readAveragedUnits(CAL_SAMPLES, LIVE_SAMPLES);
-
-    if (!isfinite(rawWeight)) {
-      printScaleNotReadyDiagnostic("final tank reading");
-      Serial.println("Level read cancelled.");
-      levelCtx.state = LevelState::IDLE;
-      return;
-    }
-
-    float propaneWeight = rawWeight - tankTare - PLATEN_TARE;
-    if (propaneWeight < 0.0f) {
-      propaneWeight = 0.0f;
-    }
-
-    float propaneLevel = (maxPropane > 0.0f) ? (propaneWeight / maxPropane) * 100.0f : 0.0f;
-
-    char buf[96];
-    snprintf(buf, sizeof(buf),
-             "Scale load: %.1f lbs, Calculated propane: %.1f lbs, Propane level: %.1f%%\n",
-             rawWeight, propaneWeight, propaneLevel);
-    Serial.print(buf);
-
-    levelCtx.state = LevelState::IDLE;
   }
 }
 
@@ -1014,45 +934,6 @@ void helpMenu() {
   if (helpTextLen > 0) {
     Serial.print(helpText);
   }
-}
-
-/**
- * @brief Starts the liquid level read workflow.
- *
- * @details Validates scale readiness, measures the noise baseline to compute a
- * load detection threshold, prints prompts, and sets the level context to begin
- * polling for tank placement. The workflow continues asynchronously through
- * tickLevelRead().
- *
- * @return {void} No value is returned.
- *
- * @throws {none} This function does not throw exceptions.
- */
-void liquidLevel() {
-  if (levelCtx.state != LevelState::IDLE) {
-    Serial.println("Level read already in progress. Send 'q' to cancel first.");
-    return;
-  }
-
-  if (!ensureScaleReady("level read")) {
-    return;
-  }
-
-  scale.set_scale(calibrationFactor);
-
-  levelCtx.loadDetectThreshold = computeLoadDetectThreshold(MINIMUM_LOAD_WEIGHT);
-  levelCtx.stateStartMs        = millis();
-  levelCtx.state               = LevelState::WAIT_LOAD;
-
-  char levelPrompt[128];
-  unsigned long loadDetectSeconds = EMPTY_CONFIRM_TIMEOUT_MS / 1000UL;
-  snprintf(levelPrompt, sizeof(levelPrompt),
-           "\nPlace propane tank on scale.\n"
-           "Waiting for tank placement...\n"
-           "Load placement timeout: %lu seconds.\n"
-           "Send 'q' to cancel.\n",
-           loadDetectSeconds);
-  Serial.print(levelPrompt);
 }
 
 /**
