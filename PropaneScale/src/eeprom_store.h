@@ -11,6 +11,7 @@
  * 
  * @copyright Copyright (c) 2026 Gerald Manweiler
  */
+
 #pragma once
 
 /**

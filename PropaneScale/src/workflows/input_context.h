@@ -11,6 +11,8 @@
  * @copyright Copyright (c) 2026 Gerald Manweiler
  */
 
+#pragma once
+
 /**
  * @section Standard library headers
  */
