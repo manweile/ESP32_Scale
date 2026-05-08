@@ -212,6 +212,12 @@ Send p and make sure only the propane-weight workflow starts.
 Send t and make sure only the tank-tare workflow starts.
 While one workflow is active, send unrelated characters and verify they do not jump into another workflow.
 
+edits: complete
+compile: clean
+Sketch uses 315499 bytes (24%)
+Global variables use 21000 bytes (6%)
+tests pass
+
 ------------------------------------------------------------
 STEP 6 - Serial behavior sanity check
 ------------------------------------------------------------
@@ -230,6 +236,12 @@ Pass criteria:
 All three saved values persist across reboot.
 Prompt text and warning text match pre-refactor behavior.
 No workflow gets stuck in WAIT_SAVE_CONFIRM or leaves inputCtx in a bad state.
+
+edits: complete
+compile: clean
+Sketch uses 315499 bytes (24%)
+Global variables use 21000 bytes (6%)
+tests pass
 
 ------------------------------------------------------------
 Expected result after Chunk 2
