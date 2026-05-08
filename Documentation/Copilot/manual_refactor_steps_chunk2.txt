@@ -112,22 +112,23 @@ Global variables use 21000 bytes (6%)
 STEP 3 - Extract max propane workflow
 ------------------------------------------------------------
 Create input_propane_weight.h declarations:
-- void propaneWeightUpdate();
 - void handlePropaneWeightInput(char incoming);
+- void propaneWeightUpdate();
 
 Create input_propane_weight.cpp and move exact function bodies:
-- propaneWeightUpdate
 - handlePropaneWeightInput
+- propaneWeightUpdate
 
 Dependencies to include in input_propane_weight.cpp:
 - <Arduino.h>
 - <math.h>
 - <stdio.h>
+
 - "config.h"
-- "src/workflows/input_context.h"
-- "src/parsing_utils.h"
 - "src/eeprom_store.h"
+- "src/parsing_utils.h"
 - "src/scale_io.h"
+- "src/workflows/input_context.h"
 
 Externs for chunk 2:
 - extern float maxPropane;
@@ -144,6 +145,12 @@ Enter a valid value like 16 and send s.
 Verify with e or c that maxPropane changed.
 Repeat with q and verify the previous value remains.
 Repeat with invalid input and confirm the rejection path is unchanged.
+
+EDITS COMPLETE
+Tests pass
+clean compile
+Sketch uses 315471 bytes (24%)
+Global variables use 21000 bytes (6%)
 
 ------------------------------------------------------------
 STEP 4 - Extract tank tare workflow
