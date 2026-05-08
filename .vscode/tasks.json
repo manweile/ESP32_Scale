@@ -240,17 +240,17 @@
     },
 
     // Arduino-CLI for ESP32 Thing tasks
+
     // ESP32 Thing Quick Compile
     // arduino-cli compile task for ESP32 Thing with verbose output and clean build,
     // uses the esp32:esp32:esp32thing FQBN to specify the board configuration
-    // command line: arduino-cli compile -v --clean --fqbn esp32:esp32:esp32thing D:/MyArduino/Projects/ESP32_Scale/PropaneScale
+    // command line: arduino-cli compile --clean --fqbn esp32:esp32:esp32thing D:/MyArduino/Projects/ESP32_Scale/PropaneScale
     {
       "label": "ESP32 Thing Quick Compile",
       "type": "shell",
       "command": "arduino-cli",
       "args": [
         "compile",
-        "-v",
         "--fqbn",
         "esp32:esp32:esp32thing",
         "${workspaceFolder}/PropaneScale"
@@ -305,8 +305,10 @@
         "-NoProfile",
         "-ExecutionPolicy",
         "Bypass",
-        "-Command",
-        "$port = python '${workspaceFolder}/PropaneScale/list_ports.py'; if (-not $port) { Write-Error 'No COM port returned from list_ports.py'; exit 1 }; & '${env:LOCALAPPDATA}/Arduino15/packages/esp32/tools/esptool_py/5.1.0/esptool.exe' --verbose --chip esp32 --port $port --baud 921600 write-flash -z 0x0 '${workspaceFolder}/PropaneScale/build/esp32.esp32.esp32thing/PropaneScale.ino.merged.bin'"
+        "-File",
+        "${workspaceFolder}/.vscode/esp32-thing-quick-flash.ps1",
+        "-WorkspaceFolder",
+        "${workspaceFolder}"
       ],
       "problemMatcher": []
     },
