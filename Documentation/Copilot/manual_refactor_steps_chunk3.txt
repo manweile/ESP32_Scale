@@ -194,8 +194,8 @@ Dependencies in startup_tare_workflow.cpp:
 - <math.h>
 - <stdio.h>
 - "config.h"
-- "src/workflows/workflow_contexts.h"
 - "src/scale_io.h"
+- "src/workflows/workflow_contexts.h"
 
 Externs used by this workflow:
 - extern float calibrationFactor;
@@ -206,6 +206,45 @@ Then in PropaneScale.ino:
 1) Include startup_tare_workflow.h.
 2) Remove moved function bodies.
 3) Compile.
+
+test criteria:
+Startup auto-tare success path
+Power on with the scale in its expected empty condition.
+Pass: startup tare begins automatically, detects stable empty scale, applies tare, and continues to normal operation without user intervention.
+
+Startup skip path
+Power on with weight on scale (causes the startup tare wait state), then send the skip input (q) if your workflow supports it.
+Pass: startup tare exits cleanly and system proceeds to the same post-startup state as before the refactor.
+
+Startup timeout path
+Power on with the scale not meeting the empty/stable condition and do not send input.
+Pass: workflow times out exactly as before, prints the same timeout/skip guidance, and returns control without hanging.
+
+Unstable scale path
+Power on while the scale reading is noisy or changing.
+Pass: startup tare stays in the waiting logic until stable, skipped, or timed out; it does not falsely tare during unstable readings.
+
+HX711 not-ready path
+Start with HX711 disconnected, unpowered, or otherwise not ready.
+Pass: workflow reports the same diagnostics/cancel behavior as before and does not lock up.
+
+Post-tare normal operation
+After a successful startup tare, run a normal command such as level read or another existing serial command.
+Pass: system behaves normally, confirming startup tare left state cleanly initialized.
+
+Reboot repeatability
+Power cycle and repeat startup tare multiple times under the same empty-scale setup.
+Pass: behavior is consistent across runs, with no intermittent stuck state or missed transition.
+
+Message parity check
+Compare serial output during success, skip, and timeout runs against pre-refactor behavior.
+Pass: user-visible prompts and results are unchanged unless you intentionally modified them.
+
+EDITS complete
+clean compile
+Sketch uses 317059 bytes (24%)
+Global variables use 21000 bytes (6%)
+tests pass
 
 ------------------------------------------------------------
 STEP 4 - Extract calibration workflow

@@ -93,11 +93,30 @@ constexpr unsigned long HX711_READY_TIMEOUT_MS = 120UL;
 constexpr unsigned long USER_CONFIRM_TIMEOUT_MS = 20000UL;
 
 /**
- * @section Startup Tare Constants
+ * @section Startup Tare Constants & Functions
  */
 
 // Tolerance in pounds for detecting stable empty condition during startup calibration.
 constexpr float SETUP_EMPTY_WEIGHT = 1.5f;
+
+// Margin added above configured full-tank weight when deciding startup not-empty condition.
+constexpr float STARTUP_NOT_EMPTY_MARGIN_LBS = 2.0f;
+
+/**
+ * @brief Computes the startup not-empty threshold.
+ * 
+ * @details Calculates threshold in pounds above which the scale is considered to have a load on it during startup tare.
+ * Provides single source of truth logic tied to constants in this file and avoids linker errors.
+ * 
+ * @param tankTareLbs Tare weight of the empty tank in pounds.
+ * @param maxPropaneLbs Maximum legal propane weight in pounds.
+ * @return constexpr float Startup not-empty threshold in pounds.
+ * 
+ * @throws {none} This function does not throw exceptions.
+ */
+constexpr float computeStartupNotEmptyThreshold(float tankTareLbs, float maxPropaneLbs) {
+	return tankTareLbs + maxPropaneLbs + STARTUP_NOT_EMPTY_MARGIN_LBS;
+}
 
 /**
  * @section Scale Physical Components Constants
@@ -148,6 +167,11 @@ constexpr int MAX_PROPANE_EEPROM_VALUE_ADDR = 20;           // value address sta
 constexpr uint32_t TARE_EEPROM_MAGIC = 0x54415245;          // "TARE" magic number is to indicate valid tank tare weight stored in EEPROM
 constexpr int TARE_EEPROM_MAGIC_ADDR = 24;                  // Tank tare TARE is stored as a 4 byte float
 constexpr int TARE_EEPROM_VALUE_ADDR = 28;                  // value address starts at byte 28, immediately after the magic number
+
+// EEPROM addresses and magic number for persisted HX711 runtime tare offset.
+constexpr uint32_t HX711_OFFSET_EEPROM_MAGIC = 0x4F464653;  // "OFFS" magic number indicates saved runtime tare offset
+constexpr int HX711_OFFSET_EEPROM_MAGIC_ADDR = 32;          // Runtime offset magic stored as 4-byte uint32
+constexpr int HX711_OFFSET_EEPROM_VALUE_ADDR = 36;          // Runtime offset value stored as 4-byte float (integer-compatible range)
 
 // EEPROM size in bytes. Must be sufficient to store all calibration and tare values with their magic numbers.
 constexpr int EEPROM_SIZE_BYTES = 64;

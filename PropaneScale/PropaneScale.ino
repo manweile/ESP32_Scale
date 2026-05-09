@@ -38,6 +38,7 @@
 #include "src/workflows/input_tank_tare.h"                  // Handlers for the tank tare weight update workflow
 #include "src/workflows/level_workflow.h"                   // Functions for the liquid level read workflow
 #include "src/workflows/workflows_contexts.h"               // Context definitions for non-blocking workflows
+#include "src/workflows/startup_tare_workflow.h"            // Functions for the startup tare workflow
 
 /**
  * @section Global Class Instances
@@ -83,14 +84,25 @@ TareContext tareCtx;                                        /**< Startup tare co
 void handleCalibrationInput(char serialchar) {
   // 
   if (calCtx.state == CalState::WAIT_EMPTY || calCtx.state == CalState::WAIT_LOAD || calCtx.state == CalState::SETTLING) {
+    // From WAIT_EMPTY and WAIT_LOAD states, 'q' cancels the workflow, 
+    // but only AUTO mode needs to reset the calibration factor since MANUAL mode didn't change it yet, 
+    // and REZERO didn't change it either since it applies a runtime offset without modifying the calibration factor. 
+    // Additionally, from WAIT_EMPTY state, 'z' forces confirmation of an empty condition for the re-zero workflow.
+    if (calCtx.mode == CalMode::REZERO && calCtx.state == CalState::WAIT_EMPTY && (serialchar == 'z' || serialchar == 'Z')) {
+      Serial.println("Runtime re-zero force-confirmed by user.");
+      Serial.println();
+      transitionFromWaitEmpty();
+      return;
+    }
+
     if (serialchar != 'q' && serialchar != 'Q') {
       if (calCtx.mode == CalMode::AUTO) {
         char buf[64];
         snprintf(buf, sizeof(buf), "Invalid automatic calibration key: '%c'. Use 'q' to cancel.\n", serialchar);
         Serial.print(buf);
       } else if (calCtx.mode == CalMode::REZERO) {
-        char buf[64];
-        snprintf(buf, sizeof(buf), "Invalid re-zero key: '%c'. Use 'q' to cancel.\n", serialchar);
+        char buf[96];
+        snprintf(buf, sizeof(buf), "Invalid re-zero key: '%c'. Use 'q' to cancel or 'z' to force re-zero.\n", serialchar);
         Serial.print(buf);
       }
       return;
@@ -197,6 +209,26 @@ void resetInputContext() {
 }
 
 /**
+ * @brief Saves the current runtime tare offset from the HX711 to EEPROM.
+ *
+ * @details Reads the current offset from the HX711, casts it to a float, and saves it to EEPROM with a magic number for validation.
+ * This allows the scale to persist a runtime tare offset across power cycles, which is used for the re-zero workflow.
+ *
+ * @return {void} No value is returned.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+static void saveRuntimeTareOffset() {
+  float offsetToSave = static_cast<float>(scale.get_offset());
+  if (!saveToEeprom(offsetToSave,
+                    HX711_OFFSET_EEPROM_MAGIC,
+                    HX711_OFFSET_EEPROM_MAGIC_ADDR,
+                    HX711_OFFSET_EEPROM_VALUE_ADDR)) {
+    Serial.println("Warning: failed to save runtime tare offset to EEPROM.");
+  }
+}
+
+/**
  * @brief Processes calibration workflow steps and scale interactions on each loop() iteration.
  *
  * @details Called every loop() iteration when a calibration workflow is active. 
@@ -235,12 +267,17 @@ void tickCalibration() {
         return;
       }
 
-      if (fabsf(calCtx.measuredUnits) <= MINIMUM_LOAD_WEIGHT) {
+      bool emptyDetected = fabsf(calCtx.measuredUnits) <= MINIMUM_LOAD_WEIGHT;
+
+      if (emptyDetected) {
         Serial.println("Empty scale auto-confirmed at timeout (stable scale).");
         Serial.println();
         transitionFromWaitEmpty();
       } else {
         Serial.println("Confirmation timed out: scale not empty; cancelled.");
+        if (calCtx.mode == CalMode::REZERO) {
+          Serial.println("If scale is confirmed empty, send 'z' during re-zero to seed runtime offset.");
+        }
         Serial.println();
         calCtx.state = CalState::IDLE;
         calCtx.mode  = CalMode::NONE;
@@ -259,7 +296,9 @@ void tickCalibration() {
       return;
     }
 
-    if (fabsf(calCtx.measuredUnits) <= MINIMUM_LOAD_WEIGHT) {
+    bool emptyDetected = fabsf(calCtx.measuredUnits) <= MINIMUM_LOAD_WEIGHT;
+
+    if (emptyDetected) {
 
       // require consecutive readings to suppress transient spikes
       calCtx.stableEmptyChecks++; 
@@ -433,15 +472,15 @@ void tickCalibration() {
  * @throws {none} This function does not throw exceptions.
  */
 void tickTare() {
-  // Offset-tolerant startup threshold: keep empty boots from being misclassified as not-empty.
-  constexpr float STARTUP_NOT_EMPTY_MARGIN_LBS = 2.0f;
-  const float startupNotEmptyThreshold = fmaxf(25.0f, tankTare + STARTUP_NOT_EMPTY_MARGIN_LBS);
+  // Treat startup not-empty as configured full-tank weight plus margin.
+  const float startupNotEmptyThreshold = computeStartupNotEmptyThreshold(tankTare, maxPropane);
 
   if (tareCtx.state == TareState::IDLE) return;
 
   if (tareCtx.state == TareState::TARE) {
     Serial.println("Stable scale detected, proceeding with tare.");
     scale.tare();
+    saveRuntimeTareOffset();
     Serial.println("Scale is tared and ready.");
     tareCtx.state = TareState::IDLE;
     helpMenu();
@@ -476,8 +515,8 @@ void tickTare() {
 
     char diag[128];
     snprintf(diag, sizeof(diag),
-             "Startup tare timeout check: reading=%.2f lbs, baseline=%.2f lbs, not-empty-threshold=%.2f lbs\n",
-             m, tareCtx.baseline, startupNotEmptyThreshold);
+             "Startup tare timeout check: reading=%.2f lbs, baseline=%.2f lbs\n",
+             m, tareCtx.baseline);
     Serial.print(diag);
 
     // 1) Not-empty check first.
@@ -487,12 +526,16 @@ void tickTare() {
       return;
     }
 
-    // 2) Only then check stability; require sustained stability during the wait window.
-    if (fabsf(m - tareCtx.baseline) <= SETUP_EMPTY_WEIGHT && tareCtx.stableChecks >= UNLOAD_CHECK_COUNT) {
-      Serial.println("Startup tare auto-confirmed at timeout (stable scale).");
+    // 2) Only then check stability; require near-zero and sustained stability during the wait window.
+    bool nearZero = fabsf(m) <= MINIMUM_LOAD_WEIGHT;
+    bool stableFromBaseline = fabsf(m - tareCtx.baseline) <= SETUP_EMPTY_WEIGHT;
+    bool stableLongEnough = tareCtx.stableChecks >= UNLOAD_CHECK_COUNT;
+
+    if (nearZero && stableFromBaseline && stableLongEnough) {
+      Serial.println("Startup tare auto-confirmed empty at timeout.");
       tareCtx.state = TareState::TARE;
     } else {
-      Serial.println("Startup tare timeout: scale unstable, skipping tare.");
+      Serial.println("Startup tare timeout: scale not-empty or unstable, skipping tare.");
       tareCtx.state = TareState::SKIP;
     }
     return;
@@ -534,6 +577,7 @@ static void transitionFromWaitEmpty() {
   if (calCtx.mode == CalMode::REZERO) {
     scale.set_scale();
     scale.tare();
+    saveRuntimeTareOffset();
     scale.set_scale(calibrationFactor);
     Serial.println("Scale re-zero complete.");
     calCtx.state = CalState::IDLE;
@@ -544,6 +588,7 @@ static void transitionFromWaitEmpty() {
   Serial.println("Empty scale confirmed. Taring now...");
   scale.set_scale();
   scale.tare();
+  saveRuntimeTareOffset();
   calCtx.loadDetectThreshold = computeLoadDetectThreshold(MINIMUM_LOAD_THRESHOLD);
   if (!isfinite(calCtx.loadDetectThreshold) || calCtx.loadDetectThreshold < MINIMUM_LOAD_THRESHOLD) {
     calCtx.loadDetectThreshold = MINIMUM_LOAD_THRESHOLD;
@@ -582,95 +627,6 @@ static void transitionFromWaitEmpty() {
 
   calCtx.stateStartMs = millis();
   calCtx.state        = CalState::WAIT_LOAD;
-}
-
-/**
- * @section Project initiated workflows
- */
-
-/**
- * @brief Begins the non-blocking startup tare workflow.
- *
- * @details Validates scale readiness, establishes a baseline reading, prints startup
- * prompts, and enters WAIT_STABLE state. The workflow is then advanced each loop()
- * iteration by tickTare().
- *
- * @return {void} No value is returned.
- *
- * @throws {none} This function does not throw exceptions.
- */
-void beginTare() {
-  constexpr float STARTUP_NOT_EMPTY_MARGIN_LBS = 2.0f;
-  const float startupNotEmptyThreshold = fmaxf(25.0f, tankTare + STARTUP_NOT_EMPTY_MARGIN_LBS);
-
-  if (!ensureScaleReady("startup tare")) {
-    tareCtx.state = TareState::SKIP;
-    return;
-  }
-
-  scale.set_scale(calibrationFactor);
-
-  // Establish baseline before tare; stability is checked relative to this reading.
-  tareCtx.baseline     = readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES);
-  if (!isfinite(tareCtx.baseline)) {
-    printScaleNotReadyDiagnostic("startup tare");
-    tareCtx.state = TareState::SKIP;
-    return;
-  }
-
-  tareCtx.stableChecks = 0;
-  tareCtx.stateStartMs = millis();
-  tareCtx.state        = TareState::WAIT_STABLE;
-
-  printStartupSummary();
-
-  char startupPrompt[512];
-  int startupPromptLen = snprintf(startupPrompt,
-                                  sizeof(startupPrompt),
-                                  "Startup tare: waiting for empty scale...\n"
-                                  "Auto-detect is active.\n"
-                                  "Auto-detect timeout: %lu seconds.\n"
-                                  "Not-empty threshold: >= %.2f lbs (offset-tolerant).\n"
-                                  "Stability tolerance: +/- %.2f lbs once below not-empty threshold.\n"
-                                  "Timeout expiry with empty + stable readings auto-confirms taring workflow.\n"
-                                  "Send 'q' to skip startup tare.\n\n",
-                                  static_cast<unsigned long>(EMPTY_CONFIRM_TIMEOUT_MS / 1000UL),
-                                  startupNotEmptyThreshold,
-                                  SETUP_EMPTY_WEIGHT);
-
-  if (startupPromptLen > 0) {
-    Serial.print(startupPrompt);
-  }
-}
-
-/**
- * @brief Prints a summary of the startup configuration and EEPROM values.
- *
- * @details Displays the application title, loaded calibration factor, known weight,
- * maximum propane weight, and tank tare from EEPROM. Also prints startup tare prompts.
- *
- * @return {void} No value is returned.
- *
- * @throws {none} This function does not throw exceptions.
- */
-static void printStartupSummary() {
-  char startupSummary[384];
-  int startupSummaryLen = snprintf(startupSummary,
-                                   sizeof(startupSummary),
-                                   "\n%s\n\n"
-                                   "Loaded calibration factor from EEPROM: %.2f\n"
-                                   "Loaded known calibration weight from EEPROM: %.2f lbs\n"
-                                   "Loaded max propane weight from EEPROM: %.2f lbs\n"
-                                   "Loaded tank tare from EEPROM: %.2f lbs\n\n",
-                                   APP_TITLE,
-                                   calibrationFactor,
-                                   knownWeight,
-                                   maxPropane,
-                                   tankTare);
-
-  if (startupSummaryLen > 0) {
-    Serial.print(startupSummary);
-  }
 }
 
 /**
@@ -891,8 +847,20 @@ void defaultEeprom() {
     Serial.println(" lbs");
   }
 
+  // Invalidate persisted runtime tare offset so next boot starts from a known state.
+  uint32_t clearOffsetMagic = 0;
+  EEPROM.put(HX711_OFFSET_EEPROM_MAGIC_ADDR, clearOffsetMagic);
+  if (!EEPROM.commit()) {
+    Serial.println("Failed to clear saved runtime tare offset.");
+  } else {
+    Serial.println("Saved runtime tare offset cleared.");
+  }
+
+  // Keep current runtime path consistent with cleared persisted state.
+  scale.set_offset(0);
+
   scale.set_scale(calibrationFactor);
-  Serial.println("EEPROM reset complete. Recalibrate before use.");
+  Serial.println("EEPROM reset complete. Recalibrate and run re-zero ('r') on an empty scale before use.");
 }
 
 /**
@@ -930,6 +898,17 @@ void eepromValues() {
   printEepromField("Tank tare",
                    TARE_EEPROM_MAGIC_ADDR, TARE_EEPROM_MAGIC, TARE_EEPROM_VALUE_ADDR,
                    MIN_PLAUSIBLE_WEIGHT, MAX_PROJECT_WEIGHT, false, " lbs");
+
+  float savedRuntimeOffset = 0.0f;
+  if (loadFromEeprom(savedRuntimeOffset,
+                     HX711_OFFSET_EEPROM_MAGIC_ADDR,
+                     HX711_OFFSET_EEPROM_MAGIC,
+                     HX711_OFFSET_EEPROM_VALUE_ADDR)) {
+    Serial.print("Runtime tare offset (HX711 counts): ");
+    Serial.println(savedRuntimeOffset, 0);
+  } else {
+    Serial.println("Runtime tare offset (HX711 counts): <invalid or not set>");
+  }
 }
 
 /**
@@ -1041,13 +1020,14 @@ void reZero() {
   Serial.println("\nRuntime re-zero requested.");
   scale.set_scale(calibrationFactor);
 
-  char calPrompt[192];
+  char calPrompt[256];
   unsigned long userConfirmSeconds = USER_CONFIRM_TIMEOUT_MS / 1000UL;
   snprintf(calPrompt, sizeof(calPrompt),
            "\nRemove all weight from scale.\n"
            "Auto-detect is active.\n"
            "Empty threshold: +/- %.2f lbs.\n"
            "Send 'q' to cancel.\n"
+           "If reading is offset-biased, send 'z' to force re-zero after verifying empty scale.\n"
            "Confirmation timeout: %lu seconds.\n",
            MINIMUM_LOAD_WEIGHT,
            userConfirmSeconds);
@@ -1149,6 +1129,15 @@ void setup() {
   }
 
   scale.begin(DOUT_PIN, CLK_PIN);
+
+  // Restore previously saved runtime tare offset so startup empty/load checks use a known-empty reference.
+  float savedRuntimeOffset = 0.0f;
+  if (loadFromEeprom(savedRuntimeOffset,
+                     HX711_OFFSET_EEPROM_MAGIC_ADDR,
+                     HX711_OFFSET_EEPROM_MAGIC,
+                     HX711_OFFSET_EEPROM_VALUE_ADDR)) {
+    scale.set_offset(static_cast<long>(savedRuntimeOffset));
+  }
 
   // project not intended for continuous operation
   // always starting fresh avoids issues with long term stability issues
