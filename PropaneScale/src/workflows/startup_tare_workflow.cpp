@@ -46,6 +46,10 @@ extern HX711 scale;                                         // HX711 instance ow
 extern void helpMenu();                                     // Function to display the help menu
 extern void printStartupSummary();                          // Function to print the startup summary of loaded values and prompts
 
+/**
+ * @section Definitions for startup tare workflow functions
+ */
+
 void beginTare() {
   const float startupNotEmptyThreshold = computeStartupNotEmptyThreshold(tankTare, maxPropane);
 

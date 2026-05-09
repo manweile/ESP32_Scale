@@ -294,27 +294,29 @@ STEP 4 - Extract calibration workflow
 ------------------------------------------------------------
 Create PropaneScale/src/workflows/calibration_workflow.h declarations:
 - void automaticCalibration();
+- void handleCalibrationInput(char serialchar);
 - void manualCalibration();
 - void reZero();
 - void tickCalibration();
-- void handleCalibrationInput(char serialchar);
+
 
 Create calibration_workflow.cpp and move exact function bodies:
 - automaticCalibration
+- handleCalibrationInput
 - manualCalibration
 - reZero
 - tickCalibration
-- handleCalibrationInput
 - transitionFromWaitEmpty (keep internal static in .cpp)
 
 Dependencies in calibration_workflow.cpp:
 - <Arduino.h>
 - <math.h>
 - <stdio.h>
+
 - "config.h"
-- "src/workflows/workflow_contexts.h"
-- "src/scale_io.h"
 - "src/eeprom_store.h"
+- "src/scale_io.h"
+- "src/workflows/workflow_contexts.h"
 
 Externs commonly needed:
 - extern float calibrationFactor;
@@ -327,6 +329,81 @@ Then in PropaneScale.ino:
 2) Remove moved function bodies.
 3) Compile.
 
+test criteria:
+1. Automatic Calibration Flow
+
+Start with the scale empty.
+Send the command to begin automatic calibration (e.g., a).
+Confirm prompts: “Automatic calibration mode”, “Remove all weight from scale”, “Auto-detect is active”, etc.
+Place the known calibration weight when prompted.
+Confirm: “Weight detected. Settling for ... seconds before measuring...”
+Wait for completion.
+Confirm: “Automatic calibration complete, computed calibration factor: ...”, “Calibration saved to EEPROM.”
+Power cycle and send e to verify the calibration factor persisted.
+
+pass
+
+2. Manual Calibration Flow
+
+Start with the scale empty.
+Send the command to begin manual calibration (e.g., m).
+Confirm prompts: “Manual calibration mode”, “Remove all weight from scale”, etc.
+Place the known calibration weight when prompted.
+Use + and - to adjust the calibration factor; confirm the reading and factor update in the output.
+Use s to save; confirm: “Manual calibration complete, computed calibration factor: ...”, “Calibration saved to EEPROM.”
+Power cycle and send e to verify the calibration factor persisted.
+
+ pass
+3. Re-zero Flow
+
+Start with the scale empty.
+Send the command to begin re-zero (e.g., r).
+Confirm prompts: “Runtime re-zero requested”, “Remove all weight from scale”, etc.
+Wait for auto-confirm or send z to force.
+Confirm: “Scale re-zero complete.”
+Power cycle and verify the tare offset is applied (e.g., by reading a known empty value).
+
+pass
+
+4. Cancel Behavior
+
+Start any calibration workflow (a, m, or r).
+While in WAIT_EMPTY or WAIT_LOAD, send q.
+Confirm: “Automatic calibration cancelled.” or “Manual calibration cancelled. Changes were not saved.” or “Runtime re-zero cancelled.”
+Confirm state returns to idle and no calibration/tare values are changed.
+
+pass
+
+5. Timeout and Error Handling
+
+Start a calibration workflow and do not interact (leave scale non-empty or do not place weight).
+Wait for timeout.
+Confirm: “Confirmation timed out: scale not empty; cancelled.” or “Weight placement timed out; calibration cancelled.”
+Confirm state returns to idle.
+
+pass
+pass
+
+6. Invalid Key Handling
+
+During WAIT_EMPTY or WAIT_LOAD, send an invalid key (not q, z, +, -, or s).
+Confirm: “Invalid ... calibration key: ...” message appears and workflow continues.
+
+pass
+
+7. Persistence and Consistency
+
+After any calibration, power cycle and verify with e that the calibration factor is correct.
+Repeat calibration and re-zero multiple times to confirm no stuck states or missed transitions.
+
+pass
+
+EDITS complete
+clean compile
+Sketch uses 317175 bytes (24%)
+Global variables use 21000 bytes (6%)
+tests pass
+
 ------------------------------------------------------------
 STEP 5 - Cross-workflow command sanity
 ------------------------------------------------------------
@@ -334,7 +411,15 @@ STEP 5 - Cross-workflow command sanity
 - a, m, r flows and cancel behavior
 - l flow and cancel behavior
 - startup tare auto/skip behavior
+
+pass
+
 2) Compile after tests.
+
+clean compile
+Sketch uses 317175 bytes (24%)
+Global variables use 21000 bytes (6%)
+tests pass
 
 ------------------------------------------------------------
 Expected result after Chunk 3

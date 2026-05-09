@@ -2,7 +2,7 @@
  * @file scale_io.cpp
  * @author Gerald Manweiler
  * 
- * @brief Input/output functions for user workflows and HX711 interactions.
+ * @brief Definition of input/output functions for user workflows and HX711 interactions.
  * 
  * @details Implements helper functions for user initiated workflows and HX711 interactions.
  * 
@@ -38,6 +38,10 @@
  */
 
 extern HX711 scale;                                         // HX711 instance for interacting with the load cell amplifier
+
+/**
+ * @section Private Helper Functions
+ */
 
 /**
  * @brief Probes the HX711 with multiple reads to determine if it is producing a responsive signal.
@@ -79,6 +83,10 @@ static bool hasResponsiveHx711Signal() {
   // A completely flat raw stream is typically a stuck/disconnected signal path.
   return maxRaw != minRaw;
 }
+
+/**
+ * @section Definitions for internally used helper functions
+ */
 
 float computeLoadDetectThreshold(float minimumThresholdLbs) {
   float noise = fabsf(readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES));
