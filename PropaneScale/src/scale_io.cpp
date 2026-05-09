@@ -16,8 +16,8 @@
  * @section Standard library headers
  */
 
-#include <Arduino.h>
-#include <math.h>
+#include <Arduino.h>                                        // Arduino core library for Serial communication and basic types
+#include <math.h>                                           // Math library for fabsf() and other mathematical functions
 
 /**
  * @subsection Third party library headers
@@ -29,8 +29,9 @@
  * @section Local library headers
  */
 
-#include "config.h"
-#include "scale_io.h"
+#include "config.h"                                         // Configuration constants for the ESP32-based propane level scale
+#include "eeprom_store.h"                                   // EEPROM storage functions
+#include "scale_io.h"                                       // Input/output functions for user workflows and HX711 interactions
 
 /**
  * @section External Global State Variables
@@ -102,6 +103,17 @@ void flushSerialInput() {
   }
 }
 
+void printScaleNotReadyDiagnostic(const char* operation) {
+  Serial.print("HX711 not ready");
+  if (operation != nullptr && operation[0] != '\0') {
+    Serial.print(" during ");
+    Serial.print(operation);
+  }
+  Serial.println('.');
+  Serial.println("Check HX711 wiring, power, and data pins (DOUT/CLK).");
+  Serial.println();
+}
+
 float readAveragedUnits(int readings, int samplesPerReading) {
   float avgWeight = 0.0f;               // Computed average weight in pounds to return at the end of the function.
   int   collected  = 0;                 // Number of samples actually read (may be less than requested if HX711 not ready)
@@ -126,13 +138,12 @@ float readAveragedUnits(int readings, int samplesPerReading) {
   return avgWeight;
 }
 
-void printScaleNotReadyDiagnostic(const char* operation) {
-  Serial.print("HX711 not ready");
-  if (operation != nullptr && operation[0] != '\0') {
-    Serial.print(" during ");
-    Serial.print(operation);
+void saveRuntimeTareOffset() {
+  float offsetToSave = static_cast<float>(scale.get_offset());
+  if (!saveToEeprom(offsetToSave,
+                    HX711_OFFSET_EEPROM_MAGIC,
+                    HX711_OFFSET_EEPROM_MAGIC_ADDR,
+                    HX711_OFFSET_EEPROM_VALUE_ADDR)) {
+    Serial.println("Warning: failed to save runtime tare offset to EEPROM.");
   }
-  Serial.println('.');
-  Serial.println("Check HX711 wiring, power, and data pins (DOUT/CLK).");
-  Serial.println();
 }

@@ -179,6 +179,49 @@ Global variables use 21000 bytes (6%)
 tests pass
 
 ------------------------------------------------------------
+STEP 2.5 - Extract runtime tare persistence helper
+------------------------------------------------------------
+Purpose:
+- Move the shared runtime tare EEPROM-save helper out of PropaneScale.ino before extracting startup tare and calibration workflows.
+- Keep one implementation that both workflow modules can call after scale.tare().
+
+Preconditions:
+- Chunk 1 Step 2 EEPROM module is already complete so saveToEeprom() is available.
+- Chunk 1 Step 3 scale I/O module is already complete so the helper can live beside other HX711-related helpers.
+
+Run order (do not skip):
+1) Add a declaration to PropaneScale/src/scale_io.h.
+	- void saveRuntimeTareOffset();
+
+2) In PropaneScale/src/scale_io.cpp add the needed include and move the exact helper body:
+	Required include:
+	- #include "eeprom_store.h"
+	Move exact body only:
+	- saveRuntimeTareOffset
+	Required external linkage remains:
+	- extern HX711 scale;
+
+3) Update PropaneScale.ino.
+	- Remove the local static saveRuntimeTareOffset() definition.
+	- Keep existing call sites unchanged.
+
+4) Compile gate.
+	Pass if compile succeeds with no undefined references or duplicate symbol errors tied to saveRuntimeTareOffset.
+
+5) Focused runtime gate.
+	Test A - runtime re-zero:
+	- Send: r
+	- Pass if the normal re-zero flow still completes and subsequent reboot behavior reflects the saved runtime tare offset.
+	Test B - startup tare persistence:
+	- Boot with an empty scale so startup tare succeeds.
+	- Pass if startup tare still completes and later reads behave the same as before.
+
+Step 2.5 acceptance criteria:
+- Compile passes.
+- No user-visible message text changes.
+- One shared implementation is used by both startup tare and calibration/re-zero paths.
+
+------------------------------------------------------------
 STEP 3 - Extract startup tare workflow
 ------------------------------------------------------------
 Create PropaneScale/src/workflows/startup_tare_workflow.h declarations:

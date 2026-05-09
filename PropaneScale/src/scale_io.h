@@ -51,6 +51,18 @@ bool ensureScaleReady(const char* operation);
  */
 void flushSerialInput();
 
+/**
+ * @brief Prints a standardized HX711 not-ready diagnostic.
+ *
+ * @details Used across workflows to keep timeout/not-ready messaging consistent.
+ *
+ * @param {const char*} operation Short workflow label used in the error message.
+ * @return {void} No value is returned.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+void printScaleNotReadyDiagnostic(const char* operation);
+
 // @todo readAveragedUnits() uses wait_ready_timeout() per iteration so it no longer spins
 // indefinitely, but it still blocks loop() for up to HX711_READY_TIMEOUT_MS per reading
 // (e.g. up to ~120ms per call for single-reading polling paths, more for multi-reading
@@ -72,13 +84,13 @@ void flushSerialInput();
 float readAveragedUnits(int readings, int samplesPerReading);
 
 /**
- * @brief Prints a standardized HX711 not-ready diagnostic.
+ * @brief Saves the current runtime tare offset from the HX711 to EEPROM.
  *
- * @details Used across workflows to keep timeout/not-ready messaging consistent.
+ * @details Reads the current offset from the HX711, casts it to a float, and saves it to EEPROM with a magic number for validation.
+ * This allows the scale to persist a runtime tare offset across power cycles, which is used for the re-zero workflow.
  *
- * @param {const char*} operation Short workflow label used in the error message.
  * @return {void} No value is returned.
  *
  * @throws {none} This function does not throw exceptions.
  */
-void printScaleNotReadyDiagnostic(const char* operation);
+void saveRuntimeTareOffset();

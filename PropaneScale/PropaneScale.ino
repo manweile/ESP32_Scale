@@ -209,26 +209,6 @@ void resetInputContext() {
 }
 
 /**
- * @brief Saves the current runtime tare offset from the HX711 to EEPROM.
- *
- * @details Reads the current offset from the HX711, casts it to a float, and saves it to EEPROM with a magic number for validation.
- * This allows the scale to persist a runtime tare offset across power cycles, which is used for the re-zero workflow.
- *
- * @return {void} No value is returned.
- *
- * @throws {none} This function does not throw exceptions.
- */
-static void saveRuntimeTareOffset() {
-  float offsetToSave = static_cast<float>(scale.get_offset());
-  if (!saveToEeprom(offsetToSave,
-                    HX711_OFFSET_EEPROM_MAGIC,
-                    HX711_OFFSET_EEPROM_MAGIC_ADDR,
-                    HX711_OFFSET_EEPROM_VALUE_ADDR)) {
-    Serial.println("Warning: failed to save runtime tare offset to EEPROM.");
-  }
-}
-
-/**
  * @brief Processes calibration workflow steps and scale interactions on each loop() iteration.
  *
  * @details Called every loop() iteration when a calibration workflow is active. 
