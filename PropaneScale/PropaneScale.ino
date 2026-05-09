@@ -433,6 +433,10 @@ void tickCalibration() {
  * @throws {none} This function does not throw exceptions.
  */
 void tickTare() {
+  // Offset-tolerant startup threshold: keep empty boots from being misclassified as not-empty.
+  constexpr float STARTUP_NOT_EMPTY_MARGIN_LBS = 2.0f;
+  const float startupNotEmptyThreshold = fmaxf(25.0f, tankTare + STARTUP_NOT_EMPTY_MARGIN_LBS);
+
   if (tareCtx.state == TareState::IDLE) return;
 
   if (tareCtx.state == TareState::TARE) {
@@ -470,7 +474,21 @@ void tickTare() {
       return;
     }
 
-    if (fabsf(m - tareCtx.baseline) <= SETUP_EMPTY_WEIGHT) {
+    char diag[128];
+    snprintf(diag, sizeof(diag),
+             "Startup tare timeout check: reading=%.2f lbs, baseline=%.2f lbs, not-empty-threshold=%.2f lbs\n",
+             m, tareCtx.baseline, startupNotEmptyThreshold);
+    Serial.print(diag);
+
+    // 1) Not-empty check first.
+    if (fabsf(m) >= startupNotEmptyThreshold) {
+      Serial.println("Startup tare timeout: scale not empty, skipping tare.");
+      tareCtx.state = TareState::SKIP;
+      return;
+    }
+
+    // 2) Only then check stability; require sustained stability during the wait window.
+    if (fabsf(m - tareCtx.baseline) <= SETUP_EMPTY_WEIGHT && tareCtx.stableChecks >= UNLOAD_CHECK_COUNT) {
       Serial.println("Startup tare auto-confirmed at timeout (stable scale).");
       tareCtx.state = TareState::TARE;
     } else {
@@ -487,11 +505,15 @@ void tickTare() {
     return;
   }
 
+  // 1) Not-empty check first.
+  if (fabsf(m) >= startupNotEmptyThreshold) {
+    tareCtx.stableChecks = 0;
+    return;
+  }
+
+  // 2) Only then check stability.
   if (fabsf(m - tareCtx.baseline) <= SETUP_EMPTY_WEIGHT) {
     tareCtx.stableChecks++;
-    if (tareCtx.stableChecks >= UNLOAD_CHECK_COUNT) {
-      tareCtx.state = TareState::TARE;
-    }
   } else {
     tareCtx.stableChecks = 0;
   }
@@ -578,6 +600,9 @@ static void transitionFromWaitEmpty() {
  * @throws {none} This function does not throw exceptions.
  */
 void beginTare() {
+  constexpr float STARTUP_NOT_EMPTY_MARGIN_LBS = 2.0f;
+  const float startupNotEmptyThreshold = fmaxf(25.0f, tankTare + STARTUP_NOT_EMPTY_MARGIN_LBS);
+
   if (!ensureScaleReady("startup tare")) {
     tareCtx.state = TareState::SKIP;
     return;
@@ -599,16 +624,18 @@ void beginTare() {
 
   printStartupSummary();
 
-  char startupPrompt[320];
+  char startupPrompt[512];
   int startupPromptLen = snprintf(startupPrompt,
                                   sizeof(startupPrompt),
-                                  "Startup tare: waiting for stable scale...\n"
+                                  "Startup tare: waiting for empty scale...\n"
                                   "Auto-detect is active.\n"
                                   "Auto-detect timeout: %lu seconds.\n"
-                                  "Stability tolerance: +/- %.2f lbs.\n"
-                                  "Timeout expiry with stable scale values auto-confirms taring workflow.\n"
-                                  "Send 'q' to skip startup tare.\n",
+                                  "Not-empty threshold: >= %.2f lbs (offset-tolerant).\n"
+                                  "Stability tolerance: +/- %.2f lbs once below not-empty threshold.\n"
+                                  "Timeout expiry with empty + stable readings auto-confirms taring workflow.\n"
+                                  "Send 'q' to skip startup tare.\n\n",
                                   static_cast<unsigned long>(EMPTY_CONFIRM_TIMEOUT_MS / 1000UL),
+                                  startupNotEmptyThreshold,
                                   SETUP_EMPTY_WEIGHT);
 
   if (startupPromptLen > 0) {
