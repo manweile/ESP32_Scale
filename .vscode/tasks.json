@@ -119,125 +119,125 @@
     // arduino-cli compile task with verbose output and no clean build,
     // uses the FQBN input to specify the board configuration,
     // command line: arduino-cli compile -v --fqbn esp32:esp32:esp32thing D:/MyArduino/Projects/ESP32_Scale/PropaneScale
-    {
-      "label": "FQBN Production Quick Compile",
-      "type": "shell",
-      "command": "arduino-cli",
-      "args": [
-        "compile",
-        "-v",
-        "--fqbn",
-        "${input:FQBN}",
-        "${workspaceFolder}/PropaneScale"
-      ],
-      "group": {
-        "kind": "build",
-        "isDefault": true
-      },
-      "presentation": {
-        "echo": true,
-        "reveal": "always",
-        "focus": false,
-        "panel": "shared"
-      },
-      "problemMatcher": []
-    },
+    // {
+    //   "label": "FQBN Production Quick Compile",
+    //   "type": "shell",
+    //   "command": "arduino-cli",
+    //   "args": [
+    //     "compile",
+    //     "-v",
+    //     "--fqbn",
+    //     "${input:FQBN}",
+    //     "${workspaceFolder}/PropaneScale"
+    //   ],
+    //   "group": {
+    //     "kind": "build",
+    //     "isDefault": true
+    //   },
+    //   "presentation": {
+    //     "echo": true,
+    //     "reveal": "always",
+    //     "focus": false,
+    //     "panel": "shared"
+    //   },
+    //   "problemMatcher": []
+    // },
 
     // FQBN Production Clean Rebuild
     // arduino-cli compile task with verbose output and clean build, 
     // uses the FQBN input to specify the board configuration, 
     // command line: arduino-cli compile -v --clean --fqbn esp32:esp32:esp32thing D:/MyArduino/Projects/ESP32_Scale/PropaneScale
-    {
-      "label": "FQBN Production Clean Rebuild",
-      "type": "shell",
-      "command": "arduino-cli",
-      "args": [
-        "compile",
-        "-v",
-        "--clean",
-        "--fqbn",
-        "${input:FQBN}",
-        "${workspaceFolder}/PropaneScale"
-      ],
-      "presentation": {
-        "echo": true,
-        "reveal": "always",
-        "focus": false,
-        "panel": "shared"
-      },
-      "problemMatcher": []
-    },
+    // {
+    //   "label": "FQBN Production Clean Rebuild",
+    //   "type": "shell",
+    //   "command": "arduino-cli",
+    //   "args": [
+    //     "compile",
+    //     "-v",
+    //     "--clean",
+    //     "--fqbn",
+    //     "${input:FQBN}",
+    //     "${workspaceFolder}/PropaneScale"
+    //   ],
+    //   "presentation": {
+    //     "echo": true,
+    //     "reveal": "always",
+    //     "focus": false,
+    //     "panel": "shared"
+    //   },
+    //   "problemMatcher": []
+    // },
 
     // FQBN Debug File Compile
     // arduino-cli compile task with verbose output and clean build,
     // uses the FQBN input to specify the board configuration, 
     // and sets the build.extra_flags property to include -Og for better debugging and -g3 for maximum debug info in the binary
     // command line: arduino-cli compile -v --clean --fqbn esp32:esp32:esp32thing --build-property "build.extra_flags=-Og -g3" D:/MyArduino/Projects/ESP32_Scale/PropaneScale
-    {
-      "label": "FQBN Debug File Compile",
-      "type": "shell",
-      "command": "arduino-cli",
-      "args": [
-        "compile",
-        "-v",
-        "--clean",
-        "--fqbn",
-        "${input:FQBN}",
-        "--build-property",
-        "build.extra_flags=-Og -g3",
-        "${workspaceFolder}/PropaneScale"
-      ],
-      "problemMatcher": []
-    },
+    // {
+    //   "label": "FQBN Debug File Compile",
+    //   "type": "shell",
+    //   "command": "arduino-cli",
+    //   "args": [
+    //     "compile",
+    //     "-v",
+    //     "--clean",
+    //     "--fqbn",
+    //     "${input:FQBN}",
+    //     "--build-property",
+    //     "build.extra_flags=-Og -g3",
+    //     "${workspaceFolder}/PropaneScale"
+    //   ],
+    //   "problemMatcher": []
+    // },
 
     // COMPort & FQBN & FQBNDIR USB Upload
     // arduino-cli upload task using COM port, FQBN, and FQBNDIR inputs
     // to specify the serial port, board configuration, and build directory for the pre-built binary
     // command line: arduino-cli upload -v -p COM4 --fqbn esp32:esp32:esp32thing 
     // --input-dir D:/MyArduino/Projects/ESP32_Scale/PropaneScale/build/esp32.esp32.esp32thing D:/MyArduino/Projects/ESP32_Scale/PropaneScale
-    {
-      "label": "COMPort & FQBN & FQBNDIR USB Upload",
-      "type": "shell",
-      "command": "arduino-cli",
-      "args": [
-        "upload",
-        "-v",
-        "-p",
-        "${input:COMPort}",
-        "--fqbn",
-        "${input:FQBN}",
-        "--input-dir",
-        "${workspaceFolder}/PropaneScale/build/${input:FQBNDIR}",
-        "${workspaceFolder}/PropaneScale"
-      ],
-      "problemMatcher": []
-    },
+    // {
+    //   "label": "COMPort & FQBN & FQBNDIR USB Upload",
+    //   "type": "shell",
+    //   "command": "arduino-cli",
+    //   "args": [
+    //     "upload",
+    //     "-v",
+    //     "-p",
+    //     "${input:COMPort}",
+    //     "--fqbn",
+    //     "${input:FQBN}",
+    //     "--input-dir",
+    //     "${workspaceFolder}/PropaneScale/build/${input:FQBNDIR}",
+    //     "${workspaceFolder}/PropaneScale"
+    //   ],
+    //   "problemMatcher": []
+    // },
 
     // COMPort & Baud & FQBN Select USB Serial Monitor
     // arduino-cli monitor task using COM port, FQBN, and baudrate inputs to open a serial monitor for the specified board and port
     // command line: arduino-cli monitor -p COM4 --config baudrate=115200 --fqbn esp32:esp32:esp32thing D:/MyArduino/Projects/ESP32_Scale/PropaneScale
-    {
-      "label": "COMPort & Baud & FQBN Select USB Serial Monitor",
-      "type": "shell",
-      "command": "arduino-cli",
-      "args": [
-        "monitor",
-        "-p",
-        "${input:COMPort}",
-        "--config",
-        "baudrate=${input:monitorBaud}",
-        "--fqbn",
-        "${input:FQBN}"
-      ],
-      "isBackground": true,
-      "presentation": {
-        "echo": true,
-        "reveal": "always",
-        "focus": true,
-        "panel": "dedicated"
-      },
-      "problemMatcher": []
-    },
+    // {
+    //   "label": "COMPort & Baud & FQBN Select USB Serial Monitor",
+    //   "type": "shell",
+    //   "command": "arduino-cli",
+    //   "args": [
+    //     "monitor",
+    //     "-p",
+    //     "${input:COMPort}",
+    //     "--config",
+    //     "baudrate=${input:monitorBaud}",
+    //     "--fqbn",
+    //     "${input:FQBN}"
+    //   ],
+    //   "isBackground": true,
+    //   "presentation": {
+    //     "echo": true,
+    //     "reveal": "always",
+    //     "focus": true,
+    //     "panel": "dedicated"
+    //   },
+    //   "problemMatcher": []
+    // },
 
     // Arduino-CLI for ESP32 Thing tasks
 
@@ -432,43 +432,55 @@
       "problemMatcher": []
     },
 
-    // ESPTool USB Upload
-    // a compound task to first echo the selected FQBNDIR and a warning about the merged binary, 
-    // then echo the selected COM port, baudrate, and merged binary path, and finally run the ESPTool flash command for ESP32,
+    // ESP32 Thing Clean Rebuild & Quick Flash
+    // compound task to first clean build with arduino-cli and then flash with ESPTool, for ESP32 Thing,
     {
-      "label": "ESPTool USB Upload",
+      "label": "ESP32 Thing Clean Rebuild & Quick Flash",
       "dependsOrder": "sequence",
       "dependsOn": [
-        "FQBNDIR with Bin Warning",
-        "ESPTool COMPort & ESP Speed & Merged Bin Dialog Flash"
+        "ESP32 Thing Clean Rebuild",
+        "ESP32 Thing Quick Flash"
       ],
       "problemMatcher": []
     },
+
+    // ESPTool USB Upload
+    // a compound task to first echo the selected FQBNDIR and a warning about the merged binary, 
+    // then echo the selected COM port, baudrate, and merged binary path, and finally run the ESPTool flash command for ESP32,
+    // {
+    //   "label": "ESPTool USB Upload",
+    //   "dependsOrder": "sequence",
+    //   "dependsOn": [
+    //     "FQBNDIR with Bin Warning",
+    //     "ESPTool COMPort & ESP Speed & Merged Bin Dialog Flash"
+    //   ],
+    //   "problemMatcher": []
+    // },
 
     // ESP32 Thing Quick Compile + ESPTool Upload
     // a compound task to first compile the ESP32 Thing sketch with arduino-cli and then flash with ESPTool, for ESP32 Thing,
     // ensures the user has selected the correct COM port, baudrate, and binary path before uploading by including the pre-task to echo those values and warnings
-    {
-      "label": "ESP32 Thing Quick Compile + ESPTool Upload",
-      "dependsOrder": "sequence",
-      "dependsOn": [
-        "ESP32 Thing Quick Compile",
-        "ESPTool COMPort USB Merged Bin Upload"
-      ],
-      "problemMatcher": []
-    },
+    // {
+    //   "label": "ESP32 Thing Quick Compile + ESPTool Upload",
+    //   "dependsOrder": "sequence",
+    //   "dependsOn": [
+    //     "ESP32 Thing Quick Compile",
+    //     "ESPTool COMPort USB Merged Bin Upload"
+    //   ],
+    //   "problemMatcher": []
+    // },
 
     // ESP32 Thing Clean Rebuild + ESPTool Upload
     // a compound task to first clean build the ESP32 Thing sketch with arduino-cli and then flash with ESPTool, for ESP32 Thing,
     // ensures the user has selected the correct COM port, baudrate, and binary path before uploading by including the pre-task to echo those values and warnings
-    {
-      "label": "ESP32 Thing Clean Rebuild + ESPTool Upload",
-      "dependsOrder": "sequence",
-      "dependsOn": [
-        "ESP32 Thing Clean Rebuild",
-        "ESPTool ESP32 COMPort Merged Bin Upload"
-      ],
-      "problemMatcher": []
-    }
+    // {
+    //   "label": "ESP32 Thing Clean Rebuild + ESPTool Upload",
+    //   "dependsOrder": "sequence",
+    //   "dependsOn": [
+    //     "ESP32 Thing Clean Rebuild",
+    //     "ESPTool ESP32 COMPort Merged Bin Upload"
+    //   ],
+    //   "problemMatcher": []
+    // }
   ]
 }
