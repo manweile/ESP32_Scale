@@ -85,17 +85,6 @@ float computeLoadDetectThreshold(float minimumThresholdLbs) {
   return (threshold >= minimumThresholdLbs) ? threshold : minimumThresholdLbs;
 }
 
-void printScaleNotReadyDiagnostic(const char* operation) {
-  Serial.print("HX711 not ready");
-  if (operation != nullptr && operation[0] != '\0') {
-    Serial.print(" during ");
-    Serial.print(operation);
-  }
-  Serial.println('.');
-  Serial.println("Check HX711 wiring, power, and data pins (DOUT/CLK).");
-  Serial.println();
-}
-
 bool ensureScaleReady(const char* operation) {
   if (scale.wait_ready_timeout(HX711_READY_TIMEOUT_MS)) {
     if (hasResponsiveHx711Signal()) {
@@ -135,4 +124,15 @@ float readAveragedUnits(int readings, int samplesPerReading) {
 
   avgWeight = totalUnits / collected;
   return avgWeight;
+}
+
+void printScaleNotReadyDiagnostic(const char* operation) {
+  Serial.print("HX711 not ready");
+  if (operation != nullptr && operation[0] != '\0') {
+    Serial.print(" during ");
+    Serial.print(operation);
+  }
+  Serial.println('.');
+  Serial.println("Check HX711 wiring, power, and data pins (DOUT/CLK).");
+  Serial.println();
 }

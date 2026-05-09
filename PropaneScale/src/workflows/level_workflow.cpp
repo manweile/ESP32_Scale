@@ -39,8 +39,8 @@
  */
 
 extern float calibrationFactor;                             // Calibration factor for converting raw HX711 readings to weight in pounds
-extern float tankTare;                                      // Tare weight of the empty propane tank in pounds
 extern float maxPropane;                                    // Maximum legal propane weight in pounds
+extern float tankTare;                                      // Tare weight of the empty propane tank in pounds
 extern HX711 scale;                                         // HX711 instance owned by PropaneScale.ino
 extern bool ensureScaleReady(const char* operation);        // Checks if the HX711 is ready and prints diagnostics if not
 

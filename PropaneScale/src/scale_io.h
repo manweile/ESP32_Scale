@@ -41,18 +41,6 @@ float computeLoadDetectThreshold(float minimumThresholdLbs);
 bool ensureScaleReady(const char* operation);
 
 /**
- * @brief Prints a standardized HX711 not-ready diagnostic.
- *
- * @details Used across workflows to keep timeout/not-ready messaging consistent.
- *
- * @param {const char*} operation Short workflow label used in the error message.
- * @return {void} No value is returned.
- *
- * @throws {none} This function does not throw exceptions.
- */
-void printScaleNotReadyDiagnostic(const char* operation);
-
-/**
  * @brief Flushes any buffered serial input.
  *
  * @details Reads and discards any available serial input to ensure that subsequent serial reads start with fresh input from the user.
@@ -82,3 +70,15 @@ void flushSerialInput();
  * @throws {none} This function does not throw exceptions.
  */
 float readAveragedUnits(int readings, int samplesPerReading);
+
+/**
+ * @brief Prints a standardized HX711 not-ready diagnostic.
+ *
+ * @details Used across workflows to keep timeout/not-ready messaging consistent.
+ *
+ * @param {const char*} operation Short workflow label used in the error message.
+ * @return {void} No value is returned.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+void printScaleNotReadyDiagnostic(const char* operation);
