@@ -146,14 +146,21 @@ void tickTare() {
              m, tareCtx.baseline);
     Serial.print(diag);
 
-    // 1) Not-empty check first.
+    // a negative reading means we had a false non-empty, so auto re-zero
+    if (m < -1.0f) {
+      Serial.println("Negative weight detected at startup, auto re-zeroing (tare).");
+      tareCtx.state = TareState::TARE;
+      return;
+    }
+
+    // Not-empty check first
     if (fabsf(m) >= startupNotEmptyThreshold) {
       Serial.println("Startup tare timeout: scale not empty, skipping tare.");
       tareCtx.state = TareState::SKIP;
       return;
     }
 
-    // 2) Only then check stability; require near-zero and sustained stability during the wait window.
+    // Only then check stability; require near-zero and sustained stability during the wait window.
     bool nearZero = fabsf(m) <= MINIMUM_LOAD_WEIGHT;
     bool stableFromBaseline = fabsf(m - tareCtx.baseline) <= SETUP_EMPTY_WEIGHT;
     bool stableLongEnough = tareCtx.stableChecks >= UNLOAD_CHECK_COUNT;
