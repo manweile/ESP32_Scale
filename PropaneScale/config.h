@@ -19,7 +19,7 @@
  */
 
 // HX711 wiring pins on the ESP32.
-constexpr int CLK_PIN = 4;              // Clock pin can be changed to any other GPIO pin if needed
+constexpr int CLK_PIN = 17;             // Clock pin can be changed to any other GPIO pin if needed
 constexpr int DOUT_PIN = 16;            // Data output pin can be changed to any other GPIO pin if needed
 
 /**
