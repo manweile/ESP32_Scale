@@ -25,6 +25,11 @@ STEP 0 - Baseline compile
 ------------------------------------------------------------
 1) Compile and confirm baseline after Chunk 3.
 
+EDITS complete
+clean compile
+Sketch uses 31723 bytes (24%)
+Global variables use 21000 bytes (6%)
+tests pass
 ------------------------------------------------------------
 STEP 1 - Extract startup summary and runtime reporting
 ------------------------------------------------------------
