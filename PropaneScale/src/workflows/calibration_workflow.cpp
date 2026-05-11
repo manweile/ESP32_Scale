@@ -53,6 +53,8 @@ extern const char CALIBRATION_SAVE_SUCCESS_MSG[];           // Message to displa
  *
  * @details For REZERO mode, tares the scale and returns to IDLE.
  * For AUTO and MANUAL modes, tares, measures the noise threshold, and transitions to WAIT_LOAD.
+ * Declared and Implemented as a static function to allow reuse of the WAIT_EMPTY -> WAIT_LOAD transition logic
+ * for both auto-confirming an empty condition after timeout and force-confirming an empty condition from user input. 
  *
  * @return {void} No value is returned.
  *
@@ -75,12 +77,14 @@ static void transitionFromWaitEmpty() {
   scale.set_scale();
   scale.tare();
   saveRuntimeTareOffset();
-  calCtx.loadDetectThreshold = computeLoadDetectThreshold(MINIMUM_LOAD_THRESHOLD);
-  if (!isfinite(calCtx.loadDetectThreshold) || calCtx.loadDetectThreshold < MINIMUM_LOAD_THRESHOLD) {
-    calCtx.loadDetectThreshold = MINIMUM_LOAD_THRESHOLD;
+  calCtx.loadDetectThreshold = computeLoadDetectThreshold(MINIMUM_LOAD_WEIGHT);
+  if (!isfinite(calCtx.loadDetectThreshold) || calCtx.loadDetectThreshold < MINIMUM_LOAD_WEIGHT) {
+    calCtx.loadDetectThreshold = MINIMUM_LOAD_WEIGHT;
   }
-  if (calCtx.loadDetectThreshold > (MINIMUM_LOAD_THRESHOLD * 8.0f)) {
-    calCtx.loadDetectThreshold = MINIMUM_LOAD_THRESHOLD * 8.0f;
+  // cap the load detect threshold at a maximum to prevent overflow issues with very noisy scales, 
+  // which would cause the threshold to become non-finite and break the workflow
+  if (calCtx.loadDetectThreshold > (MINIMUM_LOAD_WEIGHT * 8.0f)) {
+    calCtx.loadDetectThreshold = MINIMUM_LOAD_WEIGHT * 8.0f;
   }
 
   // workflow - auto calibration waiting on user to place known weight on scale after empty confirmation
@@ -152,8 +156,9 @@ void automaticCalibration() {
 }
 
 void handleCalibrationInput(char serialchar) {
-  // 
+  //  workflow - from waiting states, allow user to cancel with 'q', and for REZERO mode allow force-confirming an empty condition with 'z' from WAIT_EMPTY state, but ignore other inputs
   if (calCtx.state == CalState::WAIT_EMPTY || calCtx.state == CalState::WAIT_LOAD || calCtx.state == CalState::SETTLING) {
+    
     // From WAIT_EMPTY and WAIT_LOAD states, 'q' cancels the workflow, 
     // but only AUTO mode needs to reset the calibration factor since MANUAL mode didn't change it yet, 
     // and REZERO didn't change it either since it applies a runtime offset without modifying the calibration factor. 
@@ -343,13 +348,50 @@ void tickCalibration() {
 
   // workflow - waiting on user to remove all weight from platen
   if (calCtx.state == CalState::WAIT_EMPTY) {
-    
-    // user never confirmed empty by removing weight or pressing 'q
+    // Check for pending serial input and process 'q' (cancel)  or 'z' (force-confirm) immediately
+    if (Serial.available()) {
+      char c = Serial.read();
+
+        // 4 wait for empty calibration workflows possible:
+        // - REZERO: just cancel workflow, no state changes needed since runtime offset wasn't applied yet
+        // - AUTO: reset calibration factor to default since it was applied at start of workflow, then cancel workflow
+        // - MANUAL: reset calibration factor to original since it was applied at start of workflow, then cancel workflow
+        // - REZERO: force-confirm empty condition and proceed with re-zero if 'z' is pressed
+
+      if (c == 'q' || c == 'Q') {
+
+        if (calCtx.mode == CalMode::REZERO) {
+          Serial.println("Runtime re-zero cancelled.");
+        } else if (calCtx.mode == CalMode::AUTO) {
+          Serial.println("Automatic calibration cancelled.");
+          calibrationFactor = DEF_CALIBRATION_FACTOR;
+          
+          bool savedToEeprom = saveToEeprom(calibrationFactor, CAL_EEPROM_MAGIC, CAL_EEPROM_MAGIC_ADDR, CAL_EEPROM_VALUE_ADDR);
+          if(!savedToEeprom) {
+            Serial.println(CALIBRATION_SAVE_FAILURE_MSG);
+          } else {
+            Serial.println(CALIBRATION_SAVE_SUCCESS_MSG);
+          }
+        } else if (calCtx.mode == CalMode::MANUAL) {
+          calibrationFactor = calCtx.originalCalibrationFactor;
+          scale.set_scale(calibrationFactor);
+          Serial.println("Manual calibration cancelled. Changes were not saved.");
+        }
+        calCtx.state = CalState::IDLE;
+        calCtx.mode  = CalMode::NONE;
+        return;
+      } else if (calCtx.mode == CalMode::REZERO && (c == 'z' || c == 'Z')) {
+        Serial.println("Runtime re-zero force-confirmed by user.");
+        Serial.println();
+        transitionFromWaitEmpty();
+        return;
+      }
+      // else: ignore other keys here
+    }
+
+    // Only check for empty at timeout, not on every tick
     if ((millis() - calCtx.stateStartMs) >= USER_CONFIRM_TIMEOUT_MS) {
-      
-      // take one final reading to decide auto-confirm vs. abort
       calCtx.measuredUnits = readAveragedUnits(1, POLL_SAMPLES);
-      
       if (!isfinite(calCtx.measuredUnits)) {
         printScaleNotReadyDiagnostic("empty-scale confirmation");
         Serial.println("Calibration cancelled.");
@@ -357,9 +399,7 @@ void tickCalibration() {
         calCtx.mode  = CalMode::NONE;
         return;
       }
-
       bool emptyDetected = fabsf(calCtx.measuredUnits) <= MINIMUM_LOAD_WEIGHT;
-
       if (emptyDetected) {
         Serial.println("Empty scale auto-confirmed at timeout (stable scale).");
         Serial.println();
@@ -375,34 +415,7 @@ void tickCalibration() {
       }
       return;
     }
-
-    // Poll each tick to detect empty early (before timeout expires)
-    calCtx.measuredUnits = readAveragedUnits(1, POLL_SAMPLES);
-
-    if (!isfinite(calCtx.measuredUnits)) {
-      printScaleNotReadyDiagnostic("empty-scale confirmation");
-      Serial.println("Calibration cancelled.");
-      calCtx.state = CalState::IDLE;
-      calCtx.mode  = CalMode::NONE;
-      return;
-    }
-
-    bool emptyDetected = fabsf(calCtx.measuredUnits) <= MINIMUM_LOAD_WEIGHT;
-
-    if (emptyDetected) {
-
-      // require consecutive readings to suppress transient spikes
-      calCtx.stableEmptyChecks++; 
-      
-      if (calCtx.stableEmptyChecks >= UNLOAD_CHECK_COUNT) {
-        Serial.println("Empty scale auto-detected, continuing with calibration.");
-        Serial.println();
-        transitionFromWaitEmpty();
-      }
-    } else {
-      // non-empty reading breaks streak; must restart count
-      calCtx.stableEmptyChecks = 0; 
-    }
+    // Do not auto-detect early; just wait for timeout or user input
     return;
   }
 
@@ -412,14 +425,12 @@ void tickCalibration() {
 
     // If the computed threshold is too strict, progressively relax it through
     // the wait window so a valid placed load can still trigger.
-    float midWindowThreshold = MINIMUM_LOAD_THRESHOLD * 0.5f;
-    float lateWindowThreshold = MINIMUM_LOAD_THRESHOLD * 0.25f;
+    float midWindowThreshold = MINIMUM_LOAD_WEIGHT * 0.5f;
+    float lateWindowThreshold = MINIMUM_LOAD_WEIGHT * 0.25f;
 
-    if (elapsedMs >= ((EMPTY_CONFIRM_TIMEOUT_MS * 3UL) / 4UL) &&
-        calCtx.loadDetectThreshold > lateWindowThreshold) {
+    if (elapsedMs >= ((EMPTY_CONFIRM_TIMEOUT_MS * 3UL) / 4UL) && calCtx.loadDetectThreshold > lateWindowThreshold) {
       calCtx.loadDetectThreshold = lateWindowThreshold;
-    } else if (elapsedMs >= (EMPTY_CONFIRM_TIMEOUT_MS / 2UL) &&
-               calCtx.loadDetectThreshold > midWindowThreshold) {
+    } else if (elapsedMs >= (EMPTY_CONFIRM_TIMEOUT_MS / 2UL) && calCtx.loadDetectThreshold > midWindowThreshold) {
       calCtx.loadDetectThreshold = midWindowThreshold;
     }
 
@@ -446,8 +457,7 @@ void tickCalibration() {
 
     char buf[80];
     unsigned long settleSeconds = CAL_SETTLE_DELAY_MS / 1000UL;
-    snprintf(buf, sizeof(buf), "Weight detected. Settling for %lu seconds before measuring...\n",
-             settleSeconds);
+    snprintf(buf, sizeof(buf), "Weight detected. Settling for %lu seconds before measuring...\n", settleSeconds);
     Serial.print(buf);
     calCtx.stateStartMs = millis();
     calCtx.state        = CalState::SETTLING;

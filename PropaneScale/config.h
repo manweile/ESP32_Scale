@@ -73,7 +73,6 @@ constexpr float DEF_TANK_TARE = 17.5f;                      /**< Default tare we
 
 constexpr float MINIMUM_LOAD_WEIGHT = 1.0f;                 /**< Minimum load in pounds to detect tank placement during level read workflow */
 
-constexpr float MINIMUM_LOAD_THRESHOLD = 1000.0f;           /**< Minimum load threshold in raw ADC units for stable no-load detection */
 
 /**
  * @section Timing Constants for Non-blocking Workflows
