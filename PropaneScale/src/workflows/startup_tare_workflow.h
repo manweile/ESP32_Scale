@@ -37,4 +37,3 @@ void beginTare();
  *
  * @throws {none} This function does not throw exceptions.
  */
-static void printStartupSummary();

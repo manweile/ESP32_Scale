@@ -31,6 +31,7 @@
  */
 
 #include "config.h"                                         // Configuration constants for the ESP32-based propane level scale
+#include "src/runtime_report.h"                             // For printStartupSummary
 #include "src/scale_io.h"                                   // Input/output functions for user workflows and HX711 interactions
 #include "src/workflows/workflows_contexts.h"               // Context definitions for non-blocking workflows
 
@@ -44,7 +45,6 @@ extern float maxPropane;                                    // Maximum legal pro
 extern float tankTare;                                      // Tare weight of the empty propane tank in pounds
 extern HX711 scale;                                         // HX711 instance owned by PropaneScale.ino
 extern void helpMenu();                                     // Function to display the help menu
-extern void printStartupSummary();                          // Function to print the startup summary of loaded values and prompts
 
 /**
  * @section Definitions for startup tare workflow functions
@@ -92,25 +92,5 @@ void beginTare() {
 
   if (startupPromptLen > 0) {
     Serial.print(startupPrompt);
-  }
-}
-
-void printStartupSummary() {
-  char startupSummary[384];
-  int startupSummaryLen = snprintf(startupSummary,
-                                   sizeof(startupSummary),
-                                   "\n%s\n\n"
-                                   "Loaded calibration factor from EEPROM: %.2f\n"
-                                   "Loaded known calibration weight from EEPROM: %.2f lbs\n"
-                                   "Loaded max propane weight from EEPROM: %.2f lbs\n"
-                                   "Loaded tank tare from EEPROM: %.2f lbs\n\n",
-                                   APP_TITLE,
-                                   calibrationFactor,
-                                   knownWeight,
-                                   maxPropane,
-                                   tankTare);
-
-  if (startupSummaryLen > 0) {
-    Serial.print(startupSummary);
   }
 }
