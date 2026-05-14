@@ -62,6 +62,7 @@ struct CalContext {
   int           lastFactorHundredth = 0;                    /**< manual mode: last displayed factor, scaled by 100 (2 decimal places) */
   int           lastReadingTenth   = 0;                     /**< manual mode: last displayed reading, scaled by 10 (1 decimal place) */
   int           lastStepTenThousandth = 0;                  /**< manual mode: last displayed step, scaled by 10000 (4 decimal places) */
+  int           loadDetectChecks   = 0;                     /**< calibration mode: consecutive above-threshold load detection checks */
   float         loadDetectThreshold = 0.0f;                 /**< noise-derived threshold for weight detection */
   float         measuredUnits      = 0.0f;                  /**< last averaged reading in pounds */
   float         minStep            = 0.0f;                  /**< manual mode: floor for adjustmentStep */

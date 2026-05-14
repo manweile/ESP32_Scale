@@ -82,6 +82,9 @@ constexpr float MINIMUM_LOAD_WEIGHT = 1.0f;                 /**< Minimum load in
 // Prevents mid-placement reads caused by the weight still moving when the threshold is first crossed.
 constexpr unsigned long CAL_SETTLE_DELAY_MS = 2000UL;
 
+// Minimum time the placed load must remain above threshold before calibration treats it as detected.
+constexpr unsigned long CAL_LOAD_DETECT_CONFIRM_MS = 1000UL;
+
 // Maximum time to wait for load placement during startup and calibration before giving up and returning to idle state.
 constexpr unsigned long EMPTY_CONFIRM_TIMEOUT_MS = 15000UL;
 

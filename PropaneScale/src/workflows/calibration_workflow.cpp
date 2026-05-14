@@ -77,6 +77,7 @@ static void transitionFromWaitEmpty() {
   scale.set_scale();
   scale.tare();
   saveRuntimeTareOffset();
+  calCtx.loadDetectChecks = 0;
   calCtx.loadDetectThreshold = computeLoadDetectThreshold(MINIMUM_LOAD_WEIGHT);
   if (!isfinite(calCtx.loadDetectThreshold) || calCtx.loadDetectThreshold < MINIMUM_LOAD_WEIGHT) {
     calCtx.loadDetectThreshold = MINIMUM_LOAD_WEIGHT;
@@ -152,6 +153,7 @@ void automaticCalibration() {
   calCtx.state             = CalState::WAIT_EMPTY;
   calCtx.stateStartMs      = millis();
   calCtx.stableEmptyChecks = 0;
+  calCtx.loadDetectChecks   = 0;
   calCtx.measuredUnits     = 0.0f;
 }
 
@@ -303,6 +305,7 @@ void manualCalibration() {
   calCtx.mode                      = CalMode::MANUAL;
   calCtx.originalCalibrationFactor = calibrationFactor;
   calCtx.stableEmptyChecks         = 0;
+  calCtx.loadDetectChecks          = 0;
   calCtx.state                     = CalState::WAIT_EMPTY;
   calCtx.stateStartMs              = millis();
 }
@@ -337,6 +340,7 @@ void reZero() {
   calCtx.state             = CalState::WAIT_EMPTY;
   calCtx.stateStartMs      = millis();
   calCtx.stableEmptyChecks = 0;
+  calCtx.loadDetectChecks   = 0;
   calCtx.measuredUnits     = 0.0f;
 }
 
@@ -423,20 +427,11 @@ void tickCalibration() {
   if (calCtx.state == CalState::WAIT_LOAD) {
     unsigned long elapsedMs = millis() - calCtx.stateStartMs;
 
-    // If the computed threshold is too strict, progressively relax it through
-    // the wait window so a valid placed load can still trigger.
-    float midWindowThreshold = MINIMUM_LOAD_WEIGHT * 0.5f;
-    float lateWindowThreshold = MINIMUM_LOAD_WEIGHT * 0.25f;
-
-    if (elapsedMs >= ((EMPTY_CONFIRM_TIMEOUT_MS * 3UL) / 4UL) && calCtx.loadDetectThreshold > lateWindowThreshold) {
-      calCtx.loadDetectThreshold = lateWindowThreshold;
-    } else if (elapsedMs >= (EMPTY_CONFIRM_TIMEOUT_MS / 2UL) && calCtx.loadDetectThreshold > midWindowThreshold) {
-      calCtx.loadDetectThreshold = midWindowThreshold;
+    if (elapsedMs < EMPTY_CONFIRM_TIMEOUT_MS) {
+      return;
     }
 
-    // Poll each tick to detect load placement as soon as possible
     calCtx.measuredUnits = readAveragedUnits(1, POLL_SAMPLES);
-
     if (!isfinite(calCtx.measuredUnits)) {
       printScaleNotReadyDiagnostic("weight placement detection");
       Serial.println("Calibration cancelled.");
@@ -445,14 +440,11 @@ void tickCalibration() {
       return;
     }
 
-    // below noise-derived threshold — no real load yet
     if (fabsf(calCtx.measuredUnits) < calCtx.loadDetectThreshold) {
-      if (elapsedMs >= EMPTY_CONFIRM_TIMEOUT_MS) {
-        Serial.println("Weight placement timed out; calibration cancelled.");
-        calCtx.state = CalState::IDLE;
-        calCtx.mode  = CalMode::NONE;
-      }
-      return; 
+      Serial.println("Weight placement timed out; calibration cancelled.");
+      calCtx.state = CalState::IDLE;
+      calCtx.mode  = CalMode::NONE;
+      return;
     }
 
     char buf[80];
