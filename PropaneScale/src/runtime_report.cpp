@@ -33,11 +33,12 @@
  */
 
 extern float calibrationFactor;
+extern bool eepromReady;
 extern float knownWeight;
 extern float maxPropane;
 extern float tankTare;
 
-extern bool eepromReady;
+
 
 /**
  * @section Definitions for runtime reporting functions
