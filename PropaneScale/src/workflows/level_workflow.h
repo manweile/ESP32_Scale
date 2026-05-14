@@ -15,6 +15,21 @@
 #pragma once
 
 /**
+ * @brief Handles input for the liquid level read workflow.
+ *
+ * @details When the level read workflow is active, this function processes incoming characters from the serial interface. 
+ * It routes 'q' to cancel the workflow when waiting for tank placement or settling, 
+ * and ignores newlines to prevent interference with command processing.
+ * 
+ * @param incoming The incoming character from the serial interface.
+ *
+ * @return {bool} Returns true if the input was handled by the level read workflow, false otherwise.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+bool handleLevelReadInput(char incoming);
+
+/**
  * @brief Starts the liquid level read workflow.
  *
  * @details Validates scale readiness, measures the noise baseline to compute a

@@ -241,7 +241,7 @@ void loop() {
   tickLevelRead();
   tickTare();
 
-  // While startup tare is active, tickTare() consumes serial input; suppress all other dispatch
+  // While startup tare is active suppress all other dispatch
   if (tareCtx.state != TareState::IDLE) {
     return;
   }
@@ -253,32 +253,28 @@ void loop() {
 
   char temp = Serial.read();
 
-  // Route 'q' cancel when level read is waiting for tank placement or settling
-  if (levelCtx.state == LevelState::WAIT_LOAD || levelCtx.state == LevelState::SETTLING) {
-    if (temp == 'q' || temp == 'Q') {
-      Serial.println("Level read cancelled.");
-      levelCtx.state = LevelState::IDLE;
-    } else if (temp != '\r' && temp != '\n') {
-      Serial.print("Invalid level read key: '");
-      Serial.print(temp);
-      Serial.println("'. Send 'q' to cancel.");
-    }
+  // need to handle level read settling & waiting workflow before checking the input modes, 
+  // because level read workflow needs to be able to preempt other workflows and commands when active, 
+  // and it does not use the input context since it is not a multi-character input workflow
+  
+  if(handleLevelReadInput(temp)) {
     return;
   }
 
-  // Route one character at a time to active tank tare input workflow
+  // Route one character at a time to active workflow
+  // these three are multi-character input workflows that require the input context, 
+  // so need to check them before dispatching to single-character commands
+
   if (inputCtx.mode == InputMode::TANK_TARE) {
     handleTankTareInput(temp);
     return;
   }
 
-  // Route one character at a time to active propane weight input workflow
   if (inputCtx.mode == InputMode::PROPANE_WEIGHT) {
     handlePropaneWeightInput(temp);
     return;
   }
 
-  // Route one character at a time to active known calibration weight input workflow
   if (inputCtx.mode == InputMode::KNOWN_WEIGHT) {
     handleKnownWeightInput(temp);
     return;

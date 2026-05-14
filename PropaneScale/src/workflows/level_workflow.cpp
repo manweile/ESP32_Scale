@@ -45,6 +45,21 @@ extern HX711 scale;                                         // HX711 instance ow
 extern bool ensureScaleReady(const char* operation);        // Checks if the HX711 is ready and prints diagnostics if not
 
 
+bool handleLevelReadInput(char incoming) {
+  if (levelCtx.state == LevelState::WAIT_LOAD || levelCtx.state == LevelState::SETTLING) {
+    if (incoming == 'q' || incoming == 'Q') {
+      Serial.println("Level read cancelled.");
+      levelCtx.state = LevelState::IDLE;
+    } else if (incoming != '\r' && incoming != '\n') {
+      Serial.print("Invalid level read key: '");
+      Serial.print(incoming);
+      Serial.println("'. Send 'q' to cancel.");
+    }
+    return true;
+  }
+  return false;
+}
+
 void liquidLevel() {
   if (levelCtx.state != LevelState::IDLE) {
     Serial.println("Level read already in progress. Send 'q' to cancel first.");
