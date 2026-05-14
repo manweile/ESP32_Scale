@@ -20,17 +20,17 @@
 #include <Arduino.h>
 #include <EEPROM.h>
 
-/** 
- * @section Local library headers
- */
-#include "config.h"
-#include "src/eeprom_store.h"
-
 /**
  * @subsection Third party library headers
  */
 
 #include "HX711.h"                                          // HX711 library for interfacing with the load cell amplifier to read weight data
+
+/** 
+ * @section Local library headers
+ */
+#include "config.h"
+#include "src/eeprom_store.h"
 
 /**
  * @section External Global State Variables and Functions
