@@ -13,12 +13,6 @@
  */
 
 /**
- * @section Standard library headers
- */
-
-#include <EEPROM.h>                                         // EEPROM library for persistent storage of calibration and tare values
-
-/**
  * @section Third party library headers
  */
 
@@ -29,6 +23,7 @@
  */
 
 #include "config.h"                                         // Configuration constants for the ESP32-based propane level scale
+#include "src/app_startup.h"                                // Application startup initialization functions
 #include "src/commands.h"                                   // Command processing functions for serial interface
 #include "src/eeprom_store.h"                               // EEPROM storage functions
 #include "src/parsing_utils.h"                              // Utility functions for validating and parsing input values
@@ -75,8 +70,9 @@ TareContext tareCtx;                                        /**< Startup tare co
 /**
  * @brief Resets the input context to its initial state.
  *
- * @details Clears the input context, setting the mode to NONE, state to IDLE,
- * index to 0, parsed value to 0.0f, and buffer to an empty string.
+ * @details Resets the mode & state, index, parsed value, and buffer to default values. 
+ * Called at the end of each input workflow to prepare for the next one.
+ * Needs to be accessible for workflow implementations without circular dependencies.
  *
  * @return {void} No value is returned.
  *
@@ -93,8 +89,8 @@ void resetInputContext() {
 /**
  * @brief Advances the non-blocking startup tare workflow one iteration.
  *
- * @details Called each loop() iteration. Handles the WAIT_STABLE, TARE, and SKIP
- * states. Returns immediately when IDLE.
+ * @details Called each loop() iteration. Handles the WAIT_STABLE, TARE, and SKIP states. Returns immediately when IDLE.
+ * Needs to be accessible so the main loop can manage serial input and advance state based on timing and readings.
  *
  * @return {void} No value is returned.
  *
@@ -104,8 +100,10 @@ void tickTare() {
   // Treat startup not-empty as configured full-tank weight plus margin.
   const float startupNotEmptyThreshold = computeStartupNotEmptyThreshold(tankTare, maxPropane);
 
+  // fast idle detect to save cycles when we are not in a tare workflow
   if (tareCtx.state == TareState::IDLE) return;
 
+  // primary happy path
   if (tareCtx.state == TareState::TARE) {
     Serial.println("Stable scale detected, proceeding with tare.");
     scale.tare();
@@ -116,6 +114,7 @@ void tickTare() {
     return;
   }
 
+  // alternate happy path where user skipped taring
   if (tareCtx.state == TareState::SKIP) {
     Serial.println("Continuing without startup tare.");
     Serial.println("Remove propane weight and send 'r' to re-zero when ready.");
@@ -124,7 +123,8 @@ void tickTare() {
     return;
   }
 
-  // WAIT_STABLE: check for user skip or stable scale reading
+  // if we have gotten here, we are in WAIT_STABLE, 
+  // need to always check for user cancel before doing any other processing
   if (Serial.available()) {
     char c = Serial.read();
     if (c == 'q' || c == 'Q') {
@@ -134,8 +134,13 @@ void tickTare() {
     }
   }
 
+  // still in WAIT_STABLE, need to quick check scale is ready to avoid long blocking
   if ((millis() - tareCtx.stateStartMs) >= CONFIRM_TIMEOUT_MS) {
+
+    // scoped to avoid unused variable warning in non-timeout path
     float m = readAveragedUnits(1, POLL_SAMPLES);
+    
+    // bad scale reading, warn user to check hardware
     if (!isfinite(m)) {
       printScaleNotReadyDiagnostic("startup tare");
       tareCtx.state = TareState::SKIP;
@@ -143,26 +148,23 @@ void tickTare() {
     }
 
     char diag[128];
-    snprintf(diag, sizeof(diag),
-             "Startup tare timeout check: reading=%.2f lbs, baseline=%.2f lbs\n",
-             m, tareCtx.baseline);
+    snprintf(diag, sizeof(diag), "Startup tare timeout check: reading=%.2f lbs, baseline=%.2f lbs\n", m, tareCtx.baseline);
     Serial.print(diag);
 
-    // a negative reading means we had a false non-empty, so auto re-zero
+    // a negative reading is typically a false non-empty
     if (m < -1.0f) {
       Serial.println("Negative weight detected at startup, auto re-zeroing (tare).");
       tareCtx.state = TareState::TARE;
       return;
     }
 
-    // Not-empty check first
     if (fabsf(m) >= startupNotEmptyThreshold) {
       Serial.println("Startup tare timeout: scale not empty, skipping tare.");
       tareCtx.state = TareState::SKIP;
       return;
     }
 
-    // Only then check stability; require near-zero and sustained stability during the wait window.
+    // require near-zero and sustained stability during the wait window.
     bool nearZero = fabsf(m) <= MINIMUM_LOAD_WEIGHT;
     bool stableFromBaseline = fabsf(m - tareCtx.baseline) <= SETUP_EMPTY_WEIGHT;
     bool stableLongEnough = tareCtx.stableChecks >= UNLOAD_CHECK_COUNT;
@@ -177,20 +179,25 @@ void tickTare() {
     return;
   }
 
+  // finally at stable point where we can update state
   float m = readAveragedUnits(1, POLL_SAMPLES);
+  
+  // verify scale reading is valid before doing any processing
+  // bad scale reading, warn user to check hardware
   if (!isfinite(m)) {
     printScaleNotReadyDiagnostic("startup tare");
     tareCtx.state = TareState::SKIP;
     return;
   }
 
-  // 1) Not-empty check first.
+  // scale is not empty, we want to reset stability checks 
+  // requires new window of stable readings below the not-empty threshold before auto-confirming.
   if (fabsf(m) >= startupNotEmptyThreshold) {
     tareCtx.stableChecks = 0;
     return;
   }
 
-  // 2) Only then check stability.
+  // stable relative to baseline, can increment stable check count for auto-confirm tare at timeout
   if (fabsf(m - tareCtx.baseline) <= SETUP_EMPTY_WEIGHT) {
     tareCtx.stableChecks++;
   } else {
@@ -203,11 +210,10 @@ void tickTare() {
  */
 
 /**
- * @brief Initializes serial output and the HX711 scale interface.
+ * @brief Initializes the application and starts the startup tare workflow.
  *
- * @details Starts the serial port, prints the available runtime commands, initializes
- * the HX711 using the configured pins, verifies the amplifier is responding, and
- * applies the current calibration factor before normal readings begin.
+ * @details Initializes the serial interface, sets up the HX711 scale, applies calibration from EEPROM, 
+ * and begins the startup tare workflow to establish a stable baseline for accurate weight readings.
  *
  * @return {void} No value is returned.
  *
@@ -215,90 +221,7 @@ void tickTare() {
  */
 void setup() {
   Serial.begin(BAUD);
-
-  // need to check if eeprom is ready before trying to load values, and if not, use defaults and continue without eeprom functionality
-  eepromReady = EEPROM.begin(EEPROM_SIZE_BYTES);
-
-  // complete eeprom begin failure means we have to use the hard coded defaults and cannot persist any changes, 
-  // but we can still operate the scale with the default calibration factor and tare values, 
-  // so we should not halt execution, just warn the user and continue
-  if (!eepromReady) {
-    Serial.println("EEPROM init failed. Using defaults.");
-    calibrationFactor = DEF_CALIBRATION_FACTOR;
-    knownWeight       = DEF_KNOWN_WEIGHT;
-    maxPropane        = DEF_MAX_PROPANE;
-    tankTare          = DEF_TANK_TARE;
-  } else {
-    float loaded = 0.0f;
-
-    // for each persisted value, use the magic marker if present and valid, 
-    // otherwise use the default and save it to eeprom for next time
-    // this way if one value becomes corrupted, it does not affect the others, 
-    // user can still get a valid reading with defaults ,
-    // and can fix the corrupted value by re-saving it
-
-    if (loadFromEeprom(loaded, CAL_EEPROM_MAGIC_ADDR, CAL_EEPROM_MAGIC, CAL_EEPROM_VALUE_ADDR) && isValidBoundedFloat(loaded, CAL_FACTOR_ABS_MIN, CAL_FACTOR_ABS_MAX, true)) {
-      calibrationFactor = loaded;
-    } else {
-      calibrationFactor = DEF_CALIBRATION_FACTOR;
-      Serial.println("Calibration factor not found or invalid; using default.");
-      if (!saveToEeprom(calibrationFactor, CAL_EEPROM_MAGIC, CAL_EEPROM_MAGIC_ADDR, CAL_EEPROM_VALUE_ADDR)) {
-        Serial.println(CALIBRATION_SAVE_FAILURE_MSG);
-      } else {
-        Serial.println(CALIBRATION_SAVE_SUCCESS_MSG);
-      }
-    }
-
-    if (loadFromEeprom(loaded, KNOWN_WEIGHT_EEPROM_MAGIC_ADDR, KNOWN_WEIGHT_EEPROM_MAGIC, KNOWN_WEIGHT_EEPROM_VALUE_ADDR) && isValidBoundedFloat(loaded, MIN_PLAUSIBLE_WEIGHT, MAX_PROJECT_WEIGHT)) {
-      knownWeight = loaded;
-    } else {
-      knownWeight = DEF_KNOWN_WEIGHT;
-      Serial.println("Known calibration weight not found or invalid; using default.");
-      if (!saveToEeprom(knownWeight, KNOWN_WEIGHT_EEPROM_MAGIC, KNOWN_WEIGHT_EEPROM_MAGIC_ADDR, KNOWN_WEIGHT_EEPROM_VALUE_ADDR)) {
-        Serial.println("Failure saving default known calibration weight to EEPROM.");
-      } else {
-        Serial.println("Success saving default known calibration weight to EEPROM.");
-      }
-    }
-
-    if (loadFromEeprom(loaded, MAX_PROPANE_EEPROM_MAGIC_ADDR, MAX_PROPANE_EEPROM_MAGIC, MAX_PROPANE_EEPROM_VALUE_ADDR) && isValidBoundedFloat(loaded, MIN_PLAUSIBLE_WEIGHT, MAX_PROJECT_WEIGHT)) {
-      maxPropane = loaded;
-    } else {
-      maxPropane = DEF_MAX_PROPANE;
-      Serial.println("Max propane weight not found or invalid; using default.");
-      if (!saveToEeprom(maxPropane, MAX_PROPANE_EEPROM_MAGIC, MAX_PROPANE_EEPROM_MAGIC_ADDR, MAX_PROPANE_EEPROM_VALUE_ADDR)) {
-        Serial.println("Failure saving default max propane weight to EEPROM.");
-      } else {
-        Serial.println("Success saving default max propane weight to EEPROM.");
-      }
-    }
-
-    if (loadFromEeprom(loaded, TARE_EEPROM_MAGIC_ADDR, TARE_EEPROM_MAGIC, TARE_EEPROM_VALUE_ADDR) && isValidBoundedFloat(loaded, MIN_PLAUSIBLE_WEIGHT, MAX_PROJECT_WEIGHT)) {
-      tankTare = loaded;
-    } else {
-      tankTare = DEF_TANK_TARE;
-      Serial.println("Tank tare not found or invalid; using default.");
-      if (!saveToEeprom(tankTare, TARE_EEPROM_MAGIC, TARE_EEPROM_MAGIC_ADDR, TARE_EEPROM_VALUE_ADDR)) {
-        Serial.println("Failure saving default tank tare to EEPROM.");
-      } else {
-        Serial.println("Success saving default tank tare to EEPROM.");
-      }
-    }
-  }
-
-  scale.begin(DOUT_PIN, CLK_PIN);
-
-  // Restore previously saved runtime tare offset so startup empty/load checks use a known-empty reference.
-  float savedRuntimeOffset = 0.0f;
-  if (loadFromEeprom(savedRuntimeOffset,
-                     HX711_OFFSET_EEPROM_MAGIC_ADDR,
-                     HX711_OFFSET_EEPROM_MAGIC,
-                     HX711_OFFSET_EEPROM_VALUE_ADDR)) {
-    scale.set_offset(static_cast<long>(savedRuntimeOffset));
-  }
-
-  // project not intended for continuous operation
-  // always starting fresh avoids issues with long term stability issues
+  initializeApp();
   beginTare();
 }
 

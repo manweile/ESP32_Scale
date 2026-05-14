@@ -61,7 +61,7 @@ void beginTare() {
   scale.set_scale(calibrationFactor);
 
   // Establish baseline before tare; stability is checked relative to this reading.
-  tareCtx.baseline     = readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES);
+  tareCtx.baseline = readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES);
 
   // if the HX711 is not producing a valid signal, skip the tare workflow instead of blocking on instability.
   if (!isfinite(tareCtx.baseline)) {
@@ -72,10 +72,11 @@ void beginTare() {
 
   tareCtx.stableChecks = 0;
   tareCtx.stateStartMs = millis();
-  tareCtx.state        = TareState::WAIT_STABLE;
+  tareCtx.state = TareState::WAIT_STABLE;
 
   printStartupSummary();
 
+  unsigned autoTimeout = CONFIRM_TIMEOUT_MS / 1000UL;
   char startupPrompt[512];
   int startupPromptLen = snprintf(startupPrompt,
                                   sizeof(startupPrompt),
@@ -86,9 +87,8 @@ void beginTare() {
                                   "Stability tolerance: +/- %.2f lbs once below not-empty threshold.\n"
                                   "Timeout expiry with empty + stable readings auto-confirms taring workflow.\n"
                                   "Send 'q' to skip startup tare.\n\n",
-                                  static_cast<unsigned long>(CONFIRM_TIMEOUT_MS / 1000UL),
-                                  startupNotEmptyThreshold,
-                                  SETUP_EMPTY_WEIGHT);
+                                  autoTimeout, startupNotEmptyThreshold, SETUP_EMPTY_WEIGHT
+                                );
 
   if (startupPromptLen > 0) {
     Serial.print(startupPrompt);
