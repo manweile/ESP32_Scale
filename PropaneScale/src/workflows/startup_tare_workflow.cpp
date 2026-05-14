@@ -86,7 +86,7 @@ void beginTare() {
                                   "Stability tolerance: +/- %.2f lbs once below not-empty threshold.\n"
                                   "Timeout expiry with empty + stable readings auto-confirms taring workflow.\n"
                                   "Send 'q' to skip startup tare.\n\n",
-                                  static_cast<unsigned long>(EMPTY_CONFIRM_TIMEOUT_MS / 1000UL),
+                                  static_cast<unsigned long>(CONFIRM_TIMEOUT_MS / 1000UL),
                                   startupNotEmptyThreshold,
                                   SETUP_EMPTY_WEIGHT);
 

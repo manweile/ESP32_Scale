@@ -77,7 +77,7 @@ Then in PropaneScale.ino:
 
 edits complete
 clean compile
-Sketch uses 317203 bytes (24%) of program storage space. Maximum is 1310720 bytes.
+Sketch uses 317207 bytes (24%) of program storage space. Maximum is 1310720 bytes.
 Global variables use 21000 bytes (6%) of dynamic memory, leaving 306680 bytes for local variables. Maximum is 327680 bytes.
 tests 
 

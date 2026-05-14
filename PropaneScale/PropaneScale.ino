@@ -134,7 +134,7 @@ void tickTare() {
     }
   }
 
-  if ((millis() - tareCtx.stateStartMs) >= EMPTY_CONFIRM_TIMEOUT_MS) {
+  if ((millis() - tareCtx.stateStartMs) >= CONFIRM_TIMEOUT_MS) {
     float m = readAveragedUnits(1, POLL_SAMPLES);
     if (!isfinite(m)) {
       printScaleNotReadyDiagnostic("startup tare");

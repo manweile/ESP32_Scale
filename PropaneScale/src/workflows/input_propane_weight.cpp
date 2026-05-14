@@ -214,7 +214,7 @@ void propaneWeightUpdate() {
   inputCtx.index = 0;
   inputCtx.parsedValue = 0.0f;
   inputCtx.buffer[0] = '\0';
-  unsigned long userConfirmSeconds = USER_CONFIRM_TIMEOUT_MS / 1000UL;
+  unsigned long userConfirmSeconds = CONFIRM_TIMEOUT_MS / 1000UL;
   char prompt[192];
   snprintf(prompt, sizeof(prompt),
            "\nCurrent max propane weight: %.2f lbs\n"

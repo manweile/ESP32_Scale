@@ -110,7 +110,7 @@ static void transitionFromWaitEmpty() {
   }
   
   char buf[96];
-  unsigned long loadDetectSeconds = EMPTY_CONFIRM_TIMEOUT_MS / 1000UL;
+  unsigned long loadDetectSeconds = CONFIRM_TIMEOUT_MS / 1000UL;
   snprintf(buf, sizeof(buf),
            "Waiting for weight placement on scale...\nLoad placement timeout: %lu seconds.\n",
            loadDetectSeconds);
@@ -138,7 +138,7 @@ void automaticCalibration() {
   scale.set_scale(calibrationFactor);
 
   char calPrompt[192];
-  unsigned long userConfirmSeconds = USER_CONFIRM_TIMEOUT_MS / 1000UL;
+  unsigned long userConfirmSeconds = CONFIRM_TIMEOUT_MS / 1000UL;
   snprintf(calPrompt, sizeof(calPrompt),
            "\nRemove all weight from scale.\n"
            "Auto-detect is active.\n"
@@ -286,7 +286,7 @@ void manualCalibration() {
   scale.set_scale(calibrationFactor);
 
   char calPrompt[192];
-  unsigned long userConfirmSeconds = USER_CONFIRM_TIMEOUT_MS / 1000UL;
+  unsigned long userConfirmSeconds = CONFIRM_TIMEOUT_MS / 1000UL;
   snprintf(calPrompt, sizeof(calPrompt),
            "\nRemove all weight from scale.\n"
            "Auto-detect is active.\n"
@@ -324,7 +324,7 @@ void reZero() {
   scale.set_scale(calibrationFactor);
 
   char calPrompt[256];
-  unsigned long userConfirmSeconds = USER_CONFIRM_TIMEOUT_MS / 1000UL;
+  unsigned long userConfirmSeconds = CONFIRM_TIMEOUT_MS / 1000UL;
   snprintf(calPrompt, sizeof(calPrompt),
            "\nRemove all weight from scale.\n"
            "Auto-detect is active.\n"
@@ -394,7 +394,7 @@ void tickCalibration() {
     }
 
     // Only check for empty at timeout, not on every tick
-    if ((millis() - calCtx.stateStartMs) >= USER_CONFIRM_TIMEOUT_MS) {
+    if ((millis() - calCtx.stateStartMs) >= CONFIRM_TIMEOUT_MS) {
       calCtx.measuredUnits = readAveragedUnits(1, POLL_SAMPLES);
       if (!isfinite(calCtx.measuredUnits)) {
         printScaleNotReadyDiagnostic("empty-scale confirmation");
@@ -427,7 +427,7 @@ void tickCalibration() {
   if (calCtx.state == CalState::WAIT_LOAD) {
     unsigned long elapsedMs = millis() - calCtx.stateStartMs;
 
-    if (elapsedMs < EMPTY_CONFIRM_TIMEOUT_MS) {
+    if (elapsedMs < CONFIRM_TIMEOUT_MS) {
       return;
     }
 

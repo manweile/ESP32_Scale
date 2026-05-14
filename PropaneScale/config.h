@@ -73,26 +73,19 @@ constexpr float DEF_TANK_TARE = 17.5f;                      /**< Default tare we
 
 constexpr float MINIMUM_LOAD_WEIGHT = 1.0f;                 /**< Minimum load in pounds to detect tank placement during level read workflow */
 
-
 /**
  * @section Timing Constants for Non-blocking Workflows
  */
 
 // Settle delay in milliseconds after load detection before taking a calibration measurement.
 // Prevents mid-placement reads caused by the weight still moving when the threshold is first crossed.
-constexpr unsigned long CAL_SETTLE_DELAY_MS = 2000UL;
-
-// Minimum time the placed load must remain above threshold before calibration treats it as detected.
-constexpr unsigned long CAL_LOAD_DETECT_CONFIRM_MS = 1000UL;
-
-// Maximum time to wait for load placement during startup and calibration before giving up and returning to idle state.
-constexpr unsigned long EMPTY_CONFIRM_TIMEOUT_MS = 15000UL;
+constexpr unsigned long CAL_SETTLE_DELAY_MS = 5000UL;
 
 // Maximum time to wait for the HX711 to become ready during blocking reads
 constexpr unsigned long HX711_READY_TIMEOUT_MS = 120UL;
 
-// Time to wait for user confirmation during calibration workflows before auto-confirming with stable readings or cancelling if not stable.
-constexpr unsigned long USER_CONFIRM_TIMEOUT_MS = 20000UL;
+// Time to wait for user and auto confirmations during startup tare workflow and calibration workflows.
+constexpr unsigned long CONFIRM_TIMEOUT_MS = 15000UL;
 
 /**
  * @section Startup Tare Constants & Functions
@@ -108,7 +101,7 @@ constexpr float STARTUP_NOT_EMPTY_MARGIN_LBS = 2.0f;
  * @brief Computes the startup not-empty threshold.
  * 
  * @details Calculates threshold in pounds above which the scale is considered to have a load on it during startup tare.
- * Provides single source of truth logic tied to constants in this file and avoids linker errors.
+ * Implemented here to provide a single source of truth logic tied to constants in this file and avoids linker errors.
  * 
  * @param tankTareLbs Tare weight of the empty tank in pounds.
  * @param maxPropaneLbs Maximum legal propane weight in pounds.

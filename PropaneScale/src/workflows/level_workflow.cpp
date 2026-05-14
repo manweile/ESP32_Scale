@@ -62,7 +62,7 @@ void liquidLevel() {
   levelCtx.state               = LevelState::WAIT_LOAD;
 
   char levelPrompt[128];
-  unsigned long loadDetectSeconds = EMPTY_CONFIRM_TIMEOUT_MS / 1000UL;
+  unsigned long loadDetectSeconds = CONFIRM_TIMEOUT_MS / 1000UL;
   snprintf(levelPrompt, sizeof(levelPrompt),
            "\nPlace propane tank on scale.\n"
            "Waiting for tank placement...\n"
@@ -78,7 +78,7 @@ void tickLevelRead() {
   }
 
   if (levelCtx.state == LevelState::WAIT_LOAD) {
-    if ((millis() - levelCtx.stateStartMs) >= EMPTY_CONFIRM_TIMEOUT_MS) {
+    if ((millis() - levelCtx.stateStartMs) >= CONFIRM_TIMEOUT_MS) {
       Serial.println("Tank placement timed out; cancelled.");
       levelCtx.state = LevelState::IDLE;
       return;
