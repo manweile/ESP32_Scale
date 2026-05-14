@@ -180,16 +180,6 @@ void handleKnownWeightInput(char incoming) {
   resetInputContext();
 }
 
-/**
- * @brief Initiates the known calibration weight update workflow.
- *
- * @details Starts a non-blocking serial workflow that prompts the user to enter a new known
- * calibration weight, validates the input, and saves it to EEPROM if confirmed.
- *
- * @return {void} No value is returned.
- *
- * @throws {none} This function does not throw exceptions.
- */
 void knownWeightUpdate() {
   if (inputCtx.mode != InputMode::NONE) {
     Serial.println("Known weight input workflow already in progress. Send 'q' to cancel first.");
