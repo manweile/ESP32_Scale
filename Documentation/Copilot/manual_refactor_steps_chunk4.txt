@@ -156,6 +156,12 @@ STEP 6 - Final validation pass
 3) Verify no serial message regressions.
 4) Confirm flash/RAM are in expected range.
 
+edits complete
+clean compile
+Sketch uses 317291 bytes (24%) of program storage space. Maximum is 1310720 bytes.
+Global variables use 21000 bytes (6%) of dynamic memory, leaving 306680 bytes for local variables. Maximum is 327680 bytes.
+tests pass
+
 ------------------------------------------------------------
 Expected end-state
 ------------------------------------------------------------
