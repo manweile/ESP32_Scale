@@ -91,10 +91,13 @@ Priority order for your current situation:
 
 Manual refactor chunks
 Why first: this is the biggest enabler. It reduces risk and makes every later performance change easier to implement, test, and roll back.
+COMPLETE
 
 item 12
 Consolidate per-loop status output into a single structured line
 Why here: strong payoff now and directly reusable for web telemetry later. It also reduces serial overhead by standardizing to one compact line format.
+Not worth it for serial monitor version. Revisit for web interface.
+DEFERRED
 
 item 10
 Tick output rate-limiting
