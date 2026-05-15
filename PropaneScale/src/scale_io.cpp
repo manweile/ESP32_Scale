@@ -85,7 +85,7 @@ static bool hasResponsiveHx711Signal() {
 }
 
 /**
- * @section Definitions for internally used helper functions
+ * @section Definitions for public input/output functions for user workflows and HX711 interactions.
  */
 
 float computeLoadDetectThreshold(float minimumThresholdLbs) {
