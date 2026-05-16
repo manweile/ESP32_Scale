@@ -236,6 +236,9 @@ void setup() {
  * @throws {none} This function does not throw exceptions. 
  */
 void loop() {
+  // can't have any queued serial output before processing new input or advancing workflows
+  drainQueuedSerialOutput();
+
   // Advance all active state machines each iteration before processing serial input
   tickCalibration();
   tickLevelRead();

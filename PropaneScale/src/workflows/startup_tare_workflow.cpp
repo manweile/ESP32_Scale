@@ -76,21 +76,20 @@ void beginTare() {
 
   printStartupSummary();
 
-  unsigned autoTimeout = CONFIRM_TIMEOUT_MS / 1000UL;
+  const unsigned long autoTimeout = CONFIRM_TIMEOUT_MS / 1000UL;
   char startupPrompt[512];
-  int startupPromptLen = snprintf(startupPrompt,
-                                  sizeof(startupPrompt),
-                                  "Startup tare: waiting for empty scale...\n"
-                                  "Auto-detect is active.\n"
-                                  "Auto-detect timeout: %lu seconds.\n\n"
-                                  "Not-empty threshold: >= %.2f lbs (tank tare + max propane + margin).\n"
-                                  "Stability tolerance: +/- %.2f lbs once below not-empty threshold.\n"
-                                  "Timeout expiry with empty + stable readings auto-confirms taring workflow.\n"
-                                  "Send 'q' to skip startup tare.\n\n",
-                                  autoTimeout, startupNotEmptyThreshold, SETUP_EMPTY_WEIGHT
-                                );
+  const int startupPromptLen = snprintf(startupPrompt,
+                                        sizeof(startupPrompt),
+                                        "Startup tare: waiting for empty scale...\n"
+                                        "Auto-detect is active.\n"
+                                        "Auto-detect timeout: %lu seconds.\n\n"
+                                        "Not-empty threshold: >= %.2f lbs (tank tare + max propane + margin).\n"
+                                        "Stability tolerance: +/- %.2f lbs once below not-empty threshold.\n"
+                                        "Timeout expiry with empty + stable readings auto-confirms taring workflow.\n"
+                                        "Send 'q' to skip startup tare.\n\n",
+                                        autoTimeout, startupNotEmptyThreshold, SETUP_EMPTY_WEIGHT);
 
-  if (startupPromptLen > 0) {
-    Serial.print(startupPrompt);
+  if (startupPromptLen > 0 && startupPromptLen < static_cast<int>(sizeof(startupPrompt))) {
+    queueSerialOutput(startupPrompt);
   }
 }

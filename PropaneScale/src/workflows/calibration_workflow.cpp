@@ -49,6 +49,48 @@ extern const char CALIBRATION_SAVE_SUCCESS_MSG[];           // Message to displa
  */
 
 /**
+ * @brief Queues the current manual calibration reading snapshot when needed.
+ *
+ * @details Applies the current calibration factor, reads the current weight,
+ * and queues a formatted snapshot on first entry or whenever the displayed
+ * reading/factor/step changes. Returns false when the scale is not ready yet.
+ *
+ * @return {bool} True when a valid reading was acquired; false when the HX711 is not ready.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+static bool queueManualAdjustmentSnapshot() {
+  // apply current factor before reading so display reflects latest adjustment
+  scale.set_scale(calibrationFactor);
+
+  // skip until the first valid reading is available after more iteration(s)
+  if (!scale.is_ready()) {
+    return false;
+  }
+
+  float readingWeight = scale.get_units();
+
+  // Quantize to integers for change detection — float comparison is unreliable across loop ticks
+  int readingTenth      = static_cast<int>(lroundf(readingWeight         * 10.0f));
+  int factorHundredth   = static_cast<int>(lroundf(calibrationFactor     * 100.0f));
+  int stepTenThousandth = static_cast<int>(lroundf(calCtx.adjustmentStep * 10000.0f));
+
+  if (!calCtx.hasManualDisplay || readingTenth != calCtx.lastReadingTenth || factorHundredth != calCtx.lastFactorHundredth || stepTenThousandth != calCtx.lastStepTenThousandth) {
+    char buf[80];
+    snprintf(buf, sizeof(buf), "Reading: %.1f lbs  factor: %.2f  step: %.4f\n",
+             readingWeight, calibrationFactor, calCtx.adjustmentStep);
+    queueSerialOutput(buf);
+
+    calCtx.hasManualDisplay      = true;
+    calCtx.lastReadingTenth      = readingTenth;
+    calCtx.lastFactorHundredth   = factorHundredth;
+    calCtx.lastStepTenThousandth = stepTenThousandth;
+  }
+
+  return true;
+}
+
+/**
  * @brief Advances the calibration context from WAIT_EMPTY to the next appropriate state.
  *
  * @details For REZERO mode, tares the scale and returns to IDLE.
@@ -92,7 +134,7 @@ static void transitionFromWaitEmpty() {
   if (calCtx.mode == CalMode::AUTO) {
     char buf[64];
     snprintf(buf, sizeof(buf), "Place the known weight on the scale: %.2f lbs\n", knownWeight);
-    Serial.print(buf);
+    queueSerialOutput(buf);
   }
 
   // workflow - manual calibration waiting on user to place known weight on scale after empty confirmation, 
@@ -111,10 +153,8 @@ static void transitionFromWaitEmpty() {
   
   char buf[96];
   unsigned long loadDetectSeconds = CONFIRM_TIMEOUT_MS / 1000UL;
-  snprintf(buf, sizeof(buf),
-           "Waiting for weight placement on scale...\nLoad placement timeout: %lu seconds.\n",
-           loadDetectSeconds);
-  Serial.print(buf);
+  snprintf(buf, sizeof(buf), "Waiting for weight placement on scale...\nLoad placement timeout: %lu seconds.\n", loadDetectSeconds);
+  queueSerialOutput(buf);
 
   calCtx.stateStartMs = millis();
   calCtx.state        = CalState::WAIT_LOAD;
@@ -134,12 +174,12 @@ void automaticCalibration() {
     return;
   }
 
-  Serial.println("\nAutomatic calibration mode");
   scale.set_scale(calibrationFactor);
 
-  char calPrompt[192];
+  char calPrompt[224];
   unsigned long userConfirmSeconds = CONFIRM_TIMEOUT_MS / 1000UL;
   snprintf(calPrompt, sizeof(calPrompt),
+           "\nAutomatic calibration mode\n"
            "\nRemove all weight from scale.\n"
            "Auto-detect is active.\n"
            "Empty threshold: +/- %.2f lbs.\n"
@@ -147,7 +187,7 @@ void automaticCalibration() {
            "Confirmation timeout: %lu seconds.\n",
            MINIMUM_LOAD_WEIGHT,
            userConfirmSeconds);
-  Serial.print(calPrompt);
+  queueSerialOutput(calPrompt);
 
   calCtx.mode              = CalMode::AUTO;
   calCtx.state             = CalState::WAIT_EMPTY;
@@ -282,12 +322,12 @@ void manualCalibration() {
   if (step    == 0.0f) step    = 10.0f;
   if (minStep == 0.0f) minStep = 0.001f;
 
-  Serial.println("\nManual calibration mode");
   scale.set_scale(calibrationFactor);
 
-  char calPrompt[192];
+  char calPrompt[224];
   unsigned long userConfirmSeconds = CONFIRM_TIMEOUT_MS / 1000UL;
   snprintf(calPrompt, sizeof(calPrompt),
+           "\nManual calibration mode\n"
            "\nRemove all weight from scale.\n"
            "Auto-detect is active.\n"
            "Empty threshold: +/- %.2f lbs.\n"
@@ -295,7 +335,7 @@ void manualCalibration() {
            "Confirmation timeout: %lu seconds.\n",
            MINIMUM_LOAD_WEIGHT,
            userConfirmSeconds);
-  Serial.print(calPrompt);
+  queueSerialOutput(calPrompt);
 
   calCtx.adjustmentStep            = step;
   calCtx.hasManualDisplay          = false;
@@ -320,12 +360,12 @@ void reZero() {
     return;
   }
 
-  Serial.println("\nRuntime re-zero requested.");
   scale.set_scale(calibrationFactor);
 
-  char calPrompt[256];
+  char calPrompt[288];
   unsigned long userConfirmSeconds = CONFIRM_TIMEOUT_MS / 1000UL;
   snprintf(calPrompt, sizeof(calPrompt),
+           "\nRuntime re-zero requested.\n"
            "\nRemove all weight from scale.\n"
            "Auto-detect is active.\n"
            "Empty threshold: +/- %.2f lbs.\n"
@@ -334,7 +374,7 @@ void reZero() {
            "Confirmation timeout: %lu seconds.\n",
            MINIMUM_LOAD_WEIGHT,
            userConfirmSeconds);
-  Serial.print(calPrompt);
+  queueSerialOutput(calPrompt);
 
   calCtx.mode              = CalMode::REZERO;
   calCtx.state             = CalState::WAIT_EMPTY;
@@ -484,19 +524,16 @@ void tickCalibration() {
       // re-read to confirm factor produces correct output
       float verifiedUnits = readAveragedUnits(CAL_SAMPLES, LIVE_SAMPLES);
 
-      char buf[160];
+      char buf[224];
+      bool saveSucceeded = saveToEeprom(calibrationFactor, CAL_EEPROM_MAGIC, CAL_EEPROM_MAGIC_ADDR, CAL_EEPROM_VALUE_ADDR);
       snprintf(buf, sizeof(buf),
                "Initial calibration factor estimate: %.2f\n"
                "Verified reading: %.2f lbs\n"
-               "Automatic calibration complete, computed calibration factor: %.2f\n",
-               calibrationFactor, verifiedUnits, calibrationFactor);
-      Serial.print(buf);
-
-      if (!saveToEeprom(calibrationFactor, CAL_EEPROM_MAGIC, CAL_EEPROM_MAGIC_ADDR, CAL_EEPROM_VALUE_ADDR)) {
-        Serial.println("Failed to save calibration to EEPROM.");
-      } else {
-        Serial.println("Calibration saved to EEPROM.");
-      }
+               "Automatic calibration complete, computed calibration factor: %.2f\n"
+               "%s\n",
+               calibrationFactor, verifiedUnits, calibrationFactor,
+               saveSucceeded ? "Calibration saved to EEPROM." : "Failed to save calibration to EEPROM.");
+      queueSerialOutput(buf);
 
       calCtx.state = CalState::IDLE;
       calCtx.mode  = CalMode::NONE;
@@ -504,16 +541,17 @@ void tickCalibration() {
 
     if (calCtx.mode == CalMode::MANUAL) {
       // serial input handled by handleCalibrationInput()
-      Serial.print("Adjust calibration until the reading matches the known weight.\n"
-                   "Send '+' to increase calibration factor\n"
-                   "Send '-' to decrease calibration factor\n"
-                   "(step halves on direction reversal)\n"
-                   "Send 's' to save and finish manual calibration.\n"
-                   "Send 'q' to cancel manual calibration without saving.\n");
+      queueSerialOutput("Adjust calibration until the reading matches the known weight.\n"
+            "Send '+' to increase calibration factor\n"
+            "Send '-' to decrease calibration factor\n"
+            "(step halves on direction reversal)\n"
+            "Send 's' to save and finish manual calibration.\n"
+            "Send 'q' to cancel manual calibration without saving.\n");
 
       // force first print on next ADJUSTING tick
       calCtx.hasManualDisplay = false;
       calCtx.state            = CalState::ADJUSTING;
+      queueManualAdjustmentSnapshot();
     }
 
     return;
@@ -521,35 +559,6 @@ void tickCalibration() {
 
   // workflow - interactive manual calibration adjustment
   if (calCtx.state == CalState::ADJUSTING) {
-
-    // apply current factor before reading so display reflects latest adjustment
-    scale.set_scale(calibrationFactor);
-
-    // skip the rest of the logic until the first valid reading is available after more iteration(s)
-    // guards against HX711 becoming uninitialized due to power down and/or disconnection
-    if (!scale.is_ready()) {
-      return;
-    }
-
-    float readingWeight = scale.get_units();
-
-    // Quantize to integers for change detection — float comparison is unreliable across loop ticks
-    int readingTenth      = static_cast<int>(lroundf(readingWeight         * 10.0f));
-    int factorHundredth   = static_cast<int>(lroundf(calibrationFactor     * 100.0f));
-    int stepTenThousandth = static_cast<int>(lroundf(calCtx.adjustmentStep * 10000.0f));
-
-    // always print once on first entry
-    if (!calCtx.hasManualDisplay || readingTenth != calCtx.lastReadingTenth || factorHundredth != calCtx.lastFactorHundredth || stepTenThousandth != calCtx.lastStepTenThousandth) {
-      char buf[80];
-      snprintf(buf, sizeof(buf), "Reading: %.1f lbs  factor: %.2f  step: %.4f\n",
-               readingWeight, calibrationFactor, calCtx.adjustmentStep);
-      Serial.print(buf);
-
-      // suppress repeat prints until a value actually changes
-      calCtx.hasManualDisplay      = true; 
-      calCtx.lastReadingTenth      = readingTenth;
-      calCtx.lastFactorHundredth   = factorHundredth;
-      calCtx.lastStepTenThousandth = stepTenThousandth;
-    }
+    queueManualAdjustmentSnapshot();
   }
 }

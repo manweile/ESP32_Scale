@@ -31,22 +31,6 @@
 bool loadFromEeprom(float& value, uint32_t magicAddr, uint32_t magicValue, uint32_t valueAddr);
 
 /**
- * @brief Saves a float value to EEPROM with a magic number for validation.
- *
- * @details Writes the magic number and float value to EEPROM, and commits the changes.
- * Returns false immediately if EEPROM was not successfully initialized.
- *
- * @param {float} value The float value to save.
- * @param {uint32_t} magic The magic number for validation.
- * @param {int} magicAddr EEPROM address of the magic number.
- * @param {int} valueAddr EEPROM address of the float value.
- * @return {bool} True if the value was successfully saved, false otherwise.
- *
- * @throws {none} This function does not throw exceptions.
- */
-bool saveToEeprom(float value, uint32_t magic, int magicAddr, int valueAddr);
-
-/**
  * @brief Reads one EEPROM float and prints it.
  *
  * @details Attempts to read a float value from EEPROM at the specified address, 
@@ -67,3 +51,19 @@ bool saveToEeprom(float value, uint32_t magic, int magicAddr, int valueAddr);
  * @throws {none} This function does not throw exceptions.
  */
 bool printEepromField(const char* label, uint32_t magicAddr, uint32_t magicValue, uint32_t valueAddr, float minValue, float maxValue, bool useAbsMag = false, const char* unitSuffix = nullptr);
+
+/**
+ * @brief Saves a float value to EEPROM with a magic number for validation.
+ *
+ * @details Writes the magic number and float value to EEPROM, and commits the changes.
+ * Returns false immediately if EEPROM was not successfully initialized.
+ *
+ * @param {float} value The float value to save.
+ * @param {uint32_t} magic The magic number for validation.
+ * @param {int} magicAddr EEPROM address of the magic number.
+ * @param {int} valueAddr EEPROM address of the float value.
+ * @return {bool} True if the value was successfully saved, false otherwise.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+bool saveToEeprom(float value, uint32_t magic, int magicAddr, int valueAddr);

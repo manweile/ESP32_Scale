@@ -24,6 +24,7 @@
 #include "config.h"
 #include "eeprom_store.h"
 #include "parsing_utils.h"
+#include "scale_io.h"
 
 /**
  * @section External Global State Variables
@@ -43,6 +44,24 @@ bool loadFromEeprom(float& value, uint32_t magicAddr, uint32_t magicValue, uint3
   return true;
 }
 
+bool printEepromField(const char* label, uint32_t magicAddr, uint32_t magicValue, uint32_t valueAddr, float minValue, float maxValue, bool useAbsMag, const char* unitSuffix) {
+  float value = 0.0f;
+  char line[96];
+
+  if (loadFromEeprom(value, magicAddr, magicValue, valueAddr) && isValidBoundedFloat(value, minValue, maxValue, useAbsMag)) {
+    snprintf(line, sizeof(line), "%s: %.2f%s\n",
+             label,
+             value,
+             (unitSuffix != nullptr && unitSuffix[0] != '\0') ? unitSuffix : "");
+    queueSerialOutput(line);
+    return true;
+  }
+
+  snprintf(line, sizeof(line), "%s: <invalid or not set>\n", label);
+  queueSerialOutput(line);
+  return false;
+}
+
 bool saveToEeprom(float value, uint32_t magic, int magicAddr, int valueAddr) {
   if (!eepromReady) {
     return false;
@@ -51,25 +70,4 @@ bool saveToEeprom(float value, uint32_t magic, int magicAddr, int valueAddr) {
   EEPROM.put(magicAddr, magic);
   EEPROM.put(valueAddr, value);
   return EEPROM.commit();
-}
-
-bool printEepromField(const char* label, uint32_t magicAddr, uint32_t magicValue, uint32_t valueAddr, float minValue, float maxValue, bool useAbsMag, const char* unitSuffix) {
-  float value = 0.0f;
-
-  if (loadFromEeprom(value, magicAddr, magicValue, valueAddr) && isValidBoundedFloat(value, minValue, maxValue, useAbsMag)) {
-    Serial.print(label);
-    Serial.print(": ");
-    Serial.print(value, 2);
-
-    if (unitSuffix != nullptr && unitSuffix[0] != '\0') {
-      Serial.print(unitSuffix);
-    }
-
-    Serial.println();
-    return true;
-  }
-
-  Serial.print(label);
-  Serial.println(": <invalid or not set>");
-  return false;
 }

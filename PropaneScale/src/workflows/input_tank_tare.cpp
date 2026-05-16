@@ -63,20 +63,21 @@ void handleTankTareInput(char incoming) {
       if (deltaTankTare >= tankTare * CHANGE_WARN_PCT) {
         char warnBuf[192];
         snprintf(warnBuf, sizeof(warnBuf),
-                 "Warning: Tank tare changed by %.2f lbs.\nUpdate max legal propane ('p') and known calibration weight ('k'), then recalibrate ('a' or 'm') to maintain accuracy.\n",
+                 "Warning: Tank tare changed by %.2f lbs.\n"
+                 "Update max legal propane ('p') and known calibration weight ('k'), then recalibrate ('a' or 'm') to maintain accuracy.\n",
                  deltaTankTare);
-        Serial.print(warnBuf);
+        queueSerialOutput(warnBuf);
       }
 
       tankTare = inputCtx.parsedValue;
       bool eepromSuccess = saveToEeprom(tankTare, TARE_EEPROM_MAGIC, TARE_EEPROM_MAGIC_ADDR, TARE_EEPROM_VALUE_ADDR);
       
       if (!eepromSuccess) {
-        Serial.println("Failed to save tank tare to EEPROM.");
+        queueSerialOutput("Failed to save tank tare to EEPROM.\n");
       } else {
         char buf[56];
         snprintf(buf, sizeof(buf), "Tank tare saved successfully: %.2f lbs\n", tankTare);
-        Serial.print(buf);
+        queueSerialOutput(buf);
       }
       resetInputContext();
       return;
@@ -153,7 +154,9 @@ void handleTankTareInput(char incoming) {
 
       if (!parseSuccess || !validValue) {
         char buf[96];
-        snprintf(buf, sizeof(buf), "Invalid tank tare. Enter a number from %.2f to %.2f lbs, or 'q' to cancel.\n", MIN_PLAUSIBLE_WEIGHT, MAX_PROJECT_WEIGHT);
+        snprintf(buf, sizeof(buf), 
+                 "Invalid tank tare. Enter a number from %.2f to %.2f lbs, or 'q' to cancel.\n", 
+                 MIN_PLAUSIBLE_WEIGHT, MAX_PROJECT_WEIGHT);
         Serial.print(buf);
         inputCtx.index = 0;
         inputCtx.buffer[0] = '\0';
@@ -165,20 +168,21 @@ void handleTankTareInput(char incoming) {
       if (deltaTankTare >= tankTare * CHANGE_WARN_PCT) {
         char warnBuf[192];
         snprintf(warnBuf, sizeof(warnBuf),
-                 "Warning: Tank tare changed by %.2f lbs.\nUpdate max legal propane ('p') and known calibration weight ('k'), then recalibrate ('a' or 'm') to maintain accuracy.\n",
+                 "Warning: Tank tare changed by %.2f lbs.\n"
+                 "Update max legal propane ('p') and known calibration weight ('k'), then recalibrate ('a' or 'm') to maintain accuracy.\n",
                  deltaTankTare);
-        Serial.print(warnBuf);
+        queueSerialOutput(warnBuf);
       }
 
       tankTare = inputCtx.parsedValue;
       bool eepromSuccess = saveToEeprom(tankTare, TARE_EEPROM_MAGIC, TARE_EEPROM_MAGIC_ADDR, TARE_EEPROM_VALUE_ADDR);
 
       if (!eepromSuccess) {
-        Serial.println("Failed to save tank tare to EEPROM.");
+        queueSerialOutput("Failed to save tank tare to EEPROM.\n");
       } else {
         char buf[56];
         snprintf(buf, sizeof(buf), "Tank tare saved successfully: %.2f lbs\n", tankTare);
-        Serial.print(buf);
+        queueSerialOutput(buf);
       }
       resetInputContext();
       return;
@@ -220,5 +224,5 @@ void tankTareUpdate() {
            "Enter new tank tare in lbs (%.2f to %.2f), then press Enter.\n"
            "After entry, send 's' to save or 'q' to cancel.\n",
            tankTare, MIN_PLAUSIBLE_WEIGHT, MAX_PROJECT_WEIGHT);
-  Serial.print(prompt);
+  queueSerialOutput(prompt);
 }

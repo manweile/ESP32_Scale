@@ -200,5 +200,5 @@ void knownWeightUpdate() {
            "Enter new known calibration weight in lbs (%.2f to %.2f), then press Enter.\n"
            "After entry, send 's' to save or 'q' to cancel.\n",
            knownWeight, MIN_PLAUSIBLE_WEIGHT, MAX_PROJECT_WEIGHT);
-  Serial.print(prompt);
+  queueSerialOutput(prompt);
 }

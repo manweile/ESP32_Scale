@@ -66,18 +66,18 @@ void handlePropaneWeightInput(char incoming) {
         snprintf(warnBuf, sizeof(warnBuf),
                  "Warning: Max propane weight changed by %.2f lbs. Verify tank tare ('t') and known calibration weight ('k') are still accurate, and recalibrate ('a' or 'm') if needed.\n",
                  deltaMaxPropane);
-        Serial.print(warnBuf);
+        queueSerialOutput(warnBuf);
       }
 
       maxPropane = inputCtx.parsedValue;
       bool eepromSuccess = saveToEeprom(maxPropane, MAX_PROPANE_EEPROM_MAGIC, MAX_PROPANE_EEPROM_MAGIC_ADDR, MAX_PROPANE_EEPROM_VALUE_ADDR);
       
       if (!eepromSuccess) {
-        Serial.println("Failed to save max propane weight to EEPROM.");
+        queueSerialOutput("Failed to save max propane weight to EEPROM.\n");
       } else {
         char buf[48];
         snprintf(buf, sizeof(buf), "Max propane weight updated: %.2f lbs\n", maxPropane);
-        Serial.print(buf);
+        queueSerialOutput(buf);
       }
       resetInputContext();
       return;
@@ -168,18 +168,18 @@ void handlePropaneWeightInput(char incoming) {
         snprintf(warnBuf, sizeof(warnBuf),
                  "Warning: Max propane weight changed by %.2f lbs. Verify tank tare ('t') and known calibration weight ('k') are still accurate, and recalibrate ('a' or 'm') if needed.\n",
                  deltaMaxPropane);
-        Serial.print(warnBuf);
+        queueSerialOutput(warnBuf);
       }
 
       maxPropane = inputCtx.parsedValue;
       bool eepromSuccess = saveToEeprom(maxPropane, MAX_PROPANE_EEPROM_MAGIC, MAX_PROPANE_EEPROM_MAGIC_ADDR, MAX_PROPANE_EEPROM_VALUE_ADDR);
 
       if (!eepromSuccess) {
-        Serial.println("Failed to save max propane weight to EEPROM.");
+        queueSerialOutput("Failed to save max propane weight to EEPROM.\n");
       } else {
         char buf[48];
         snprintf(buf, sizeof(buf), "Max propane weight updated: %.2f lbs\n", maxPropane);
-        Serial.print(buf);
+        queueSerialOutput(buf);
       }
       resetInputContext();
       return;
@@ -221,5 +221,5 @@ void propaneWeightUpdate() {
            "Enter new max propane weight in lbs (%.2f to %.2f), then press Enter.\n"
            "After entry, send 's' to save or 'q' to cancel.\n",
            maxPropane, MIN_PLAUSIBLE_WEIGHT, MAX_PROJECT_WEIGHT);
-  Serial.print(prompt);
+  queueSerialOutput(prompt);
 }

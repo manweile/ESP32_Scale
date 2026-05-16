@@ -84,7 +84,7 @@ void liquidLevel() {
            "Load placement timeout: %lu seconds.\n"
            "Send 'q' to cancel.\n",
            loadDetectSeconds);
-  Serial.print(levelPrompt);
+  queueSerialOutput(levelPrompt);
 }
 
 void tickLevelRead() {

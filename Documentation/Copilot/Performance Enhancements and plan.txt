@@ -91,21 +91,36 @@ Priority order for your current situation:
 
 Manual refactor chunks
 Why first: this is the biggest enabler. It reduces risk and makes every later performance change easier to implement, test, and roll back.
+
+Sketch uses 317291 bytes (24%) of program storage space. Maximum is 1310720 bytes.
+Global variables use 21000 bytes (6%) of dynamic memory, leaving 306680 bytes for local variables. Maximum is 327680 bytes.
 COMPLETE
 
 item 12
 Consolidate per-loop status output into a single structured line
 Why here: strong payoff now and directly reusable for web telemetry later. It also reduces serial overhead by standardizing to one compact line format.
+
 Not worth it for serial monitor version. Revisit for web interface.
+Sketch uses 317291 bytes (24%) of program storage space. Maximum is 1310720 bytes.
+Global variables use 21000 bytes (6%) of dynamic memory, leaving 306680 bytes for local variables. Maximum is 327680 bytes.
 DEFERRED
 
 item 10
 Tick output rate-limiting
 Why next: high impact when output is periodic. Apply only to truly repetitive status paths so you keep important event messages immediate.
 
+Empirical testing showed More printing, not less.
+DROPPED
+
 item 11
 Serial.availableForWrite() guard on large prints
 Why after rate limiting: good protection against loop stalls, but mainly useful once high-frequency output is already trimmed.
+
+Sketch uses 317595 bytes (24%) of program storage space. Maximum is 1310720 bytes.
+Global variables use 23056 bytes (7%) of dynamic memory, leaving 304624 bytes for local variables. Maximum is 327680 bytes.
+ 
+tests: verify that help, runtime report, and startup prompts still appear in the expected order. PASSED
+verify eeprom prints, scale prints, calibration prints, all 3 input prints, level prints appear correctly. PASS
 
 item 2
 Replace repeated switch-to-string logic in runtime prints with lookup tables
@@ -114,7 +129,8 @@ Why mid-pack: clean and slightly smaller/faster diagnostics path, but lower impa
 item 4
 Make detection thresholds adaptive with hysteresis + debounce windows
 Why later: can improve robustness/noise behavior, but introduces behavior tuning complexity. Better after code is modular and baseline behavior is stable.
- item 5
+
+item 5
 Add fast/slow sampling profiles per state
 Why later: useful, but it overlaps with your planned web-first non-blocking acquisition redesign, so avoid spending too much on pre-redesign tuning.
 

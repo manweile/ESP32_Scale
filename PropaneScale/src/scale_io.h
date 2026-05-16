@@ -29,6 +29,18 @@
 float computeLoadDetectThreshold(float minimumThresholdLbs);
 
 /**
+ * @brief Drains queued serial output without blocking.
+ *
+ * @details Writes at most the currently available UART buffer space from the
+ * internal output queue and returns immediately.
+ *
+ * @return {void} No value is returned.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+void drainQueuedSerialOutput();
+
+/**
  * @brief Ensures the HX711 is ready before attempting reads or tare.
  *
  * @details Checks the amplifier readiness and prints a field-diagnostic message when it is not ready so workflows can exit early instead of blocking.
@@ -62,6 +74,21 @@ void flushSerialInput();
  * @throws {none} This function does not throw exceptions.
  */
 void printScaleNotReadyDiagnostic(const char* operation);
+
+/**
+ * @brief Queues a serial message for non-blocking transmission.
+ *
+ * @details Appends the provided message to an internal output queue.
+ * Thin wrapper around the private queueSerialOutput implementation.
+ * The queue is drained incrementally from loop() using drainQueuedSerialOutput().
+ *
+ * @param {const char*} message Null-terminated message to append to the queue.
+ * @return {bool} True when the full message was queued; false if the queue has insufficient space.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+bool queueSerialOutput(const char* message);
+
 
 // @todo readAveragedUnits() uses wait_ready_timeout() per iteration so it no longer spins
 // indefinitely, but it still blocks loop() for up to HX711_READY_TIMEOUT_MS per reading
