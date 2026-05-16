@@ -121,6 +121,7 @@ Global variables use 23056 bytes (7%) of dynamic memory, leaving 304624 bytes fo
  
 tests: verify that help, runtime report, and startup prompts still appear in the expected order. PASSED
 verify eeprom prints, scale prints, calibration prints, all 3 input prints, level prints appear correctly. PASS
+COMPLETED
 
 item 2
 Replace repeated switch-to-string logic in runtime prints with lookup tables
