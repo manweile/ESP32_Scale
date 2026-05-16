@@ -1,24 +1,28 @@
 #!/usr/bin/env python3
-"""
-align_members.py
+'''
+@file align_members.py
 
-Aligns C/C++ struct and enum member declarations in files to follow these rules:
+@brief Aligns C/C++ struct and enum member declarations in files to follow these rules:
+
+@details
 1) Indent members by 2 spaces.
 2) Place member names 1 space after the longest member data type in the block.
 3) Place the equals sign 1 space after the longest member name in the block (i.e., name padded, then ' =').
 4) Member value comes 1 space after the equals sign.
 5) Any inline comment (`/**< ... */` or `// ...`) should start at column 61 (1-indexed).
-
 Usage:
   python scripts/align_members.py [--in-place] file1.h file2.h ...
   python scripts/align_members.py --diff file1.h
 
 The script uses heuristics and targets simple member lines like:
   <type> <name> [= <value>]; [/**< comment */ | // comment]
-
 It will skip complex lines it cannot parse.
-"""
 
+@author Gerald Manweiler
+@copyright @showdate "%Y" GWN Software. All rights reserved.
+'''
+
+# standard modules
 from __future__ import annotations
 import re
 import sys
@@ -40,7 +44,7 @@ MEMBER_RE = re.compile(
     r"^(?P<indent>\s*)(?P<type>[\w:\<\>\s]+?)\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)"
     r"(?:\s*(?P<assign>=)\s*(?P<value>[^;\/]*?))?"  # optional = value (stop at ; or / start)
     r"\s*;\s*(?P<comment>(?:/\*\*?<.*?\*/|//.*)?)$",
-    re.DOTALL,
+    re.DOTALL
 )
 
 # Enum member regex: name, optional = value, trailing comma, optional comment
@@ -49,8 +53,16 @@ ENUM_MEMBER_RE = re.compile(
     re.DOTALL,
 )
 
+
 def align_block(lines: List[str], start: int, end: int) -> List[str]:
-    """Align member lines between indices [start, end) (inclusive start, exclusive end)."""
+    '''
+    @brief Align member lines between indices [start, end) (inclusive start, exclusive end).
+    @param lines List of all lines in the file.
+    @param start Starting index of the block members (inclusive).
+    @param end Ending index of the block members (exclusive).
+    @return New list of lines with the block members aligned.
+    '''
+
     # Determine if this is an enum block by inspecting the header line
     header_line = lines[start - 1] if start - 1 >= 0 else ""
     is_enum = 'enum' in header_line
@@ -144,6 +156,13 @@ def align_block(lines: List[str], start: int, end: int) -> List[str]:
 
 
 def process_file(path: Path, in_place: bool) -> Tuple[bool, str]:
+    '''
+    @brief Process a single file to align struct/enum members.
+    @param path Path to the file to process.
+    @param in_place If True, write changes back to the file (creates .bak). If False, just return modified text.
+    @return Tuple of (modified, new_text) where modified is True if changes were made
+    '''
+
     text = path.read_text(encoding='utf-8')
     lines = text.splitlines(keepends=True)
 
@@ -182,6 +201,11 @@ def process_file(path: Path, in_place: bool) -> Tuple[bool, str]:
 
 
 def main(argv: List[str]):
+    '''
+    @brief Program entry point.
+    @param argv List of command-line arguments (excluding script name).
+    '''
+
     parser = argparse.ArgumentParser(description='Align struct/enum member declarations')
     parser.add_argument('files', nargs='+', help='Files to process')
     parser.add_argument('--in-place', action='store_true', help='Edit files in place (creates .bak)')
@@ -203,5 +227,10 @@ def main(argv: List[str]):
         elif not modified:
             print(f"{f}: unchanged")
 
+
 if __name__ == '__main__':
+    '''
+    @brief Entry point when run as a script.
+    '''
+
     main(sys.argv[1:])

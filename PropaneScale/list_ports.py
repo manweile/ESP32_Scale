@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 '''
 @file list_ports.py
-test run list@brief Lists active COM ports, optionally filtered by USB VID/PID.
+
+@brief Lists active COM ports, optionally filtered by USB VID/PID.
 @details Useful for VS Code task inputs to deterministically select the ESP32 port.
 
 @author Gerald Manweiler
