@@ -1,0 +1,28 @@
+#!/bin/sh
+# Pre-commit hook: format staged C/C++/Arduino files with astyle and re-stage them.
+# Install astyle and ensure core.hooksPath is set: git config core.hooksPath .githooks
+
+# Get staged files (Added, Copied, Modified)
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep -E "\.(c|cc|cpp|h|hpp|ino)$" || true)
+
+if [ -z "$STAGED_FILES" ]; then
+  exit 0
+fi
+
+FORMAT_CHANGED=0
+for file in $STAGED_FILES; do
+  if [ -f "$file" ]; then
+    echo "Formatting $file"
+    astyle --options=".astylerc" "$file"
+    git add "$file"
+    FORMAT_CHANGED=1
+  fi
+done
+
+if [ $FORMAT_CHANGED -eq 1 ]; then
+  echo "Files reformatted and re-staged. Please review and re-run commit if necessary."
+  # Allow commit to continue with formatted files staged
+  exit 0
+fi
+
+exit 0

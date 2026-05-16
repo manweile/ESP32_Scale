@@ -1,0 +1,21 @@
+name: Check formatting
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  astyle-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install AStyle
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y astyle
+      - name: Run AStyle and fail on changes
+        run: |
+          # Run AStyle recursively on the PropaneScale folder
+          astyle --options=.astylerc -r PropaneScale
+          # If AStyle made changes, the git working tree will differ
+          git diff --exit-code || (echo "AStyle formatting violations detected. Run 'astyle --options=.astylerc -r PropaneScale' locally and commit the results." && exit 1)

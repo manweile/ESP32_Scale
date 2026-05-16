@@ -1,0 +1,10 @@
+--style=kr
+--indent=spaces=2
+--pad-oper
+--pad-comma
+--align-pointer=type
+--align-reference=type
+--break-blocks
+--break-elseifs
+# Increase max line length to avoid splitting inline initializers and comments
+--max-code-length=150

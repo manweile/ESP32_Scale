@@ -251,8 +251,7 @@
       "command": "arduino-cli",
       "args": [
         "compile",
-        "--fqbn",
-        "esp32:esp32:esp32thing",
+        "--fqbn", "esp32:esp32:esp32thing",
         "${workspaceFolder}/PropaneScale"
       ],
       "presentation": {
@@ -276,8 +275,7 @@
         "compile",
         "-v",
         "--clean",
-        "--fqbn",
-        "esp32:esp32:esp32thing",
+        "--fqbn", "esp32:esp32:esp32thing",
         "${workspaceFolder}/PropaneScale"
       ],
       "presentation": {
@@ -327,15 +325,10 @@
       "command": "${env:LOCALAPPDATA}/Arduino15/packages/esp32/tools/esptool_py/5.1.0/esptool.exe",
       "args": [
         "--verbose",
-        "--chip",
-        "esp32",
-        "--port",
-        "${input:COMPort}",
-        "--baud",
-        "921600",
-        "write-flash",
-        "-z",
-        "0x0",
+        "--chip", "esp32",
+        "--port", "${input:COMPort}",
+        "--baud", "921600",
+        "write-flash", "-z", "0x0",
         "${workspaceFolder}/PropaneScale/build/esp32.esp32.esp32thing/${fileBasename}.merged.bin"
       ],
       "problemMatcher": []
@@ -350,10 +343,8 @@
       "type": "shell",
       "command": "${env:LOCALAPPDATA}/Arduino15/packages/esp32/tools/esptool_py/5.1.0/esptool.exe",
       "args": [
-        "--chip",
-        "esp32",
-        "--port",
-        "${input:COMPort}",
+        "--chip", "esp32",
+        "--port", "${input:COMPort}",
         "erase_flash"
       ],
       "presentation": {
@@ -404,15 +395,10 @@
       "command": "${env:LOCALAPPDATA}/Arduino15/packages/esp32/tools/esptool_py/5.1.0/esptool.exe",
       "args": [
         "--verbose",
-        "--chip",
-        "esp32",
-        "--port",
-        "${input:COMPort}",
-        "--baud",
-        "${input:espUploadSpeed}",
-        "write-flash",
-        "-z",
-        "0x0",
+        "--chip", "esp32",
+        "--port", "${input:COMPort}",
+        "--baud", "${input:espUploadSpeed}",
+        "write-flash", "-z", "0x0",
         "${input:openMergedBinDialog}"
       ],
       "problemMatcher": []
@@ -481,9 +467,11 @@
     //     "ESPTool ESP32 COMPort Merged Bin Upload"
     //   ],
     //   "problemMatcher": []
-    // }
+    // },
 
-    ,
+    // Doxygen tasks
+
+    // Create Doxygen Documentation
     {
       "label": "Create Doxygen Documentation",
       "type": "shell",
@@ -506,6 +494,8 @@
         "close": true
       }
     },
+
+    // Open Doxygen Documentation
     {
       "label": "Open Doxygen Documentation",
       "type": "process",
@@ -526,6 +516,30 @@
         "clear": false,
         "close": true
       }
+    },
+
+    // AStyle tasks
+
+    // AStyle Format Code
+    {
+      "label": "Format Code (AStyle)",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-Command",
+        "Get-ChildItem -Path '${workspaceFolder}/PropaneScale' -Recurse -Include *.c,*.cpp,*.h,*.hpp,*.ino | ForEach-Object { & astyle --options='${workspaceFolder}\\.astylerc' $_.FullName }"
+      ],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared",
+        "showReuseMessage": true,
+        "clear": false,
+        "close": true
+      },
+      "problemMatcher": []
     }
   ]
 }

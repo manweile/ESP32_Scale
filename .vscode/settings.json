@@ -1,0 +1,10 @@
+{
+  "emeraldwalk.runonsave": {
+    "commands": [
+      {
+        "match": "\\.(c|cc|cpp|h|hpp|ino)$",
+        "cmd": "\"C:\\AStyle\\astyle.exe\" --options=\"${workspaceFolder}/.astylerc\" \"${file}\""
+      }
+    ]
+  }
+}
