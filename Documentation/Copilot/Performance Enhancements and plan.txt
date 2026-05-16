@@ -96,6 +96,10 @@ Sketch uses 317291 bytes (24%) of program storage space. Maximum is 1310720 byte
 Global variables use 21000 bytes (6%) of dynamic memory, leaving 306680 bytes for local variables. Maximum is 327680 bytes.
 COMPLETE
 
+item 1
+True non-blocking HX711 sampler: already reserved as first step in web-interface phase, so this ordering avoids conflicting rework before that.
+DEFERRED
+
 item 12
 Consolidate per-loop status output into a single structured line
 Why here: strong payoff now and directly reusable for web telemetry later. It also reduces serial overhead by standardizing to one compact line format.
@@ -126,31 +130,77 @@ COMPLETED
 item 2
 Replace repeated switch-to-string logic in runtime prints with lookup tables
 Why mid-pack: clean and slightly smaller/faster diagnostics path, but lower impact than serial traffic shaping.
+TODO
 
 item 4
 Make detection thresholds adaptive with hysteresis + debounce windows
 Why later: can improve robustness/noise behavior, but introduces behavior tuning complexity. Better after code is modular and baseline behavior is stable.
+TODO
 
 item 5
 Add fast/slow sampling profiles per state
 Why later: useful, but it overlaps with your planned web-first non-blocking acquisition redesign, so avoid spending too much on pre-redesign tuning.
+TODO
 
 item 6
 Cache rarely changing computed values
 Why low priority: likely micro-gains only in this codebase compared with serial and acquisition flow changes.
-
-Dropped as inapplicable for now:
+TODO
 
 item 7
 Minimize EEPROM commit frequency and batch writes
 Why dropped: in your current flow, EEPROM writes are already user-driven save events, not high-frequency loop writes. This is not a meaningful runtime performance bottleneck right now.
-Notes reflected from your constraints:
+DROPPED
 
 item 3
-Reduce Serial.print fragmentation: already done, so excluded.
+Reduce Serial.print fragmentation
+COMPLETED
 
 item 9
 Baud rate increase: intentionally excluded per your ROM boot visibility requirement.
+DROPPED
 
-item 1
-True non-blocking HX711 sampler: already reserved as first step in web-interface phase, so this ordering avoids conflicting rework before that.
+Update 2:
+
+Priority (High → Low):
+
+High
+- Item 1 — Split blocking measurement from async acquisition: Status: Recommended / High priority.
+	Action: Implement a non-blocking HX711 sampler with `startSampleBatch(n)`, `pollSample()`, `isSampleDone()`, `getSampleResult()` and update callers in workflows to poll once-per-loop tick. 
+  Rationale: required for a responsive web interface and to keep loop latency low; preserve Serial monitor by forwarding structured telemetry lines when debugging.
+
+High‑Medium
+- Item 12 — Consolidate per-loop status into a single structured line: Status: Deferred / Recommended for web phase.
+	Action: Standardize per-loop output to one-line JSON or compact CSV (e.g., `{"w":12.34,"s":45}`). 
+  Use the same format for Serial debug output and WebSocket/HTTP telemetry to avoid format churn during porting.
+
+Medium
+- Item 2 — Replace repeated switch-to-string logic with lookup tables: Status: Worth doing / Medium priority.
+	Action: Replace enum switch blocks with `const char*` tables indexed by enum values when editing diagnostic/print paths.
+
+- Item 4 — Adaptive thresholds (hysteresis + debounce): Status: Useful later / Medium priority.
+	Action: Implement a filtered decision layer with hysteresis windows once the sampling path is non-blocking and stable; this reduces false transitions and expensive cycles.
+
+- Item 5 — Fast/slow sampling profiles per state: Status: Keep / Defer.
+	Action: Define lightweight sampling profiles (polling vs final average) and apply them after non-blocking sampler exists.
+
+Medium‑Low
+- Item 8 — Move high-frequency math to integer forms: Status: Consider after profiling / Low–Medium priority.
+	Action: Replace float-heavy comparisons in hot loops with scaled integer math where safe to reduce CPU cost.
+
+Low
+- Item 6 — Cache rarely changing computed values: Status: Low priority / Optional.
+	Action: Precompute threshold multipliers and tare combos on config change rather than in every tick.
+
+Dropped / Not applicable
+- Item 7 — Minimize EEPROM commit frequency and batch writes: DROPPED (writes are user-driven).
+- Item 9 — Baud rate increase: NOT APPLICABLE (ROM/boot constraints prevent safe change).
+- Item 10 — Tick output rate-limiting: DROPPED (empirical tests showed no benefit for your flow).
+
+Completed
+- Item 3 — Reduce Serial.print fragmentation: COMPLETED.
+- Item 11 — `Serial.availableForWrite()` guard: COMPLETED.
+
+Next recommended immediate action: 
+implement Item 1 (non-blocking sampler) and add a lightweight `telemetry_write()` helper that emits one-line JSON to both Serial (for debug) and a small web telemetry buffer. 
+This gives the largest net improvement for adding a web interface while preserving Serial monitor functionality.
