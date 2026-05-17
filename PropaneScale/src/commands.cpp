@@ -13,35 +13,26 @@
  * @copyright Copyright (c) 2024 Gerald Manweiler
  */
 
-/**
- * @section Standard library headers
- */
-
+// Standard library headers
 #include <Arduino.h>
 #include <EEPROM.h>
 
-/**
- * @subsection Third party library headers
- */
-
+// Third party library headers
 #include "HX711.h"                                          // HX711 library for interfacing with the load cell amplifier to read weight data
 
-/** 
- * @section Local library headers
- */
+// Local library headers
 #include "config.h"
 #include "src/eeprom_store.h"
 
-/**
- * @section External Global State Variables and Functions
- */
-
+// External Global State Variables and Functions
 extern float calibrationFactor;
 extern bool eepromReady;
 extern float knownWeight;
 extern float maxPropane;
 extern HX711 scale;                                         // HX711 instance for interacting with the load cell amplifier
 extern float tankTare;
+
+// Definitions for command processing functions
 
 void defaultEeprom() {
   if (!eepromReady) {

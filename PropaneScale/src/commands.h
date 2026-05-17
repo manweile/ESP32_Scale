@@ -14,6 +14,8 @@
 
 #pragma once
 
+// Declarations for command processing functions
+
 /**
  * @brief Resets all EEPROM-persisted values to their hardcoded defaults.
  *
@@ -21,8 +23,6 @@
  * weight, and tank tare with the compile-time defaults defined in config.h, then persists
  * each value to EEPROM and updates the corresponding runtime globals. Reports the result
  * of each save over serial.
- *
- * @return {void} No value is returned.
  *
  * @throws {none} This function does not throw exceptions.
  */

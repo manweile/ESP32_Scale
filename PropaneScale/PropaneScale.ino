@@ -12,16 +12,10 @@
  * @copyright Copyright (c) 2024 Gerald Manweiler
  */
 
-/**
- * @section Third party library headers
- */
-
+// Third party library headers
 #include "HX711.h"                                          // HX711 library for interfacing with the load cell amplifier to read weight data
 
-/** 
- * @section Local library headers
- */
-
+//Local library headers
 #include "config.h"                                         // Configuration constants for the ESP32-based propane level scale
 #include "src/app_startup.h"                                // Application startup initialization functions
 #include "src/commands.h"                                   // Command processing functions for serial interface
@@ -38,34 +32,23 @@
 #include "src/workflows/startup_tare_workflow.h"            // Functions for the startup tare workflow
 #include "src/workflows/calibration_workflow.h"             // Functions for the calibration workflow
 
-/**
- * @section Global Class Instances
- */
-
+// Global Class Instances
 HX711 scale;                                                // HX711 instance for interacting with the load cell amplifier
 
-/** 
- * @section Global State Variables
- */
-
+// Global State Variables
 float calibrationFactor = 0.0f;                             // Calibration factor for converting raw HX711 readings to weight in pounds
 bool eepromReady = false;                                   // Flag to track if EEPROM was successfully initialized
 float knownWeight = 0.0f;                                   // Known weight for calibration
 float maxPropane = 0.0f;                                    // Maximum legal propane weight in pounds
 float tankTare = 0.0f;                                      // Tare weight of the empty propane tank in pounds
 
-/**
- * @section State Machine Variables
- */
-
+// State Machine Variables
 CalContext calCtx;                                          /**< Calibration context instance to hold state for calibration workflows */
 InputContext inputCtx;                                      /**< Non-blocking input context for serial workflows */
 LevelContext levelCtx;                                      /**< Level read context instance to hold state for the level read workflow */
 TareContext tareCtx;                                        /**< Startup tare context instance */
 
-/**
- * @section State Machine Functions
- */
+// State Machine Functions
 
 /**
  * @brief Resets the input context to its initial state.
@@ -73,8 +56,6 @@ TareContext tareCtx;                                        /**< Startup tare co
  * @details Resets the mode & state, index, parsed value, and buffer to default values. 
  * Called at the end of each input workflow to prepare for the next one.
  * Needs to be accessible for workflow implementations without circular dependencies.
- *
- * @return {void} No value is returned.
  *
  * @throws {none} This function does not throw exceptions.
  */
@@ -91,8 +72,6 @@ void resetInputContext() {
  *
  * @details Called each loop() iteration. Handles the WAIT_STABLE, TARE, and SKIP states. Returns immediately when IDLE.
  * Needs to be accessible so the main loop can manage serial input and advance state based on timing and readings.
- *
- * @return {void} No value is returned.
  *
  * @throws {none} This function does not throw exceptions.
  */
@@ -215,8 +194,6 @@ void tickTare() {
  * @details Initializes the serial interface, sets up the HX711 scale, applies calibration from EEPROM, 
  * and begins the startup tare workflow to establish a stable baseline for accurate weight readings.
  *
- * @return {void} No value is returned.
- *
  * @throws {none} This function does not throw exceptions.
  */
 void setup() {
@@ -226,12 +203,10 @@ void setup() {
 }
 
 /**
- * @brief Processes serial commands and prints the current scale reading.
+ * @brief Main application loop that processes serial input and advances workflows.
  * 
  * @details Handles calibration, tare, and re-zero commands from the serial port,
  * verifies the HX711 is ready, and reports a single propane reading when requested.
- * 
- * @return {void} No value is returned.
  * 
  * @throws {none} This function does not throw exceptions. 
  */
