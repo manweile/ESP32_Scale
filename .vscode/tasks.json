@@ -477,7 +477,7 @@
       "type": "shell",
       "command": "doxygen",
       "options": {
-        "cwd": "${workspaceFolder}/Documentation"
+        "cwd": "${workspaceFolder}/Documentation/Doxygen"
       },
       "problemMatcher": [],
       "group": {
@@ -487,11 +487,11 @@
       "presentation": {
         "echo": true,
         "reveal": "always",
-        "focus": false,
-        "panel": "shared",
+        "focus": true,
+        "panel": "dedicated",
         "showReuseMessage": true,
         "clear": false,
-        "close": true
+        "close": false
       }
     },
 
@@ -504,7 +504,7 @@
         "command": "C:/Program Files/Mozilla Firefox/firefox.exe"
       },
       "args": [
-        "file:///${workspaceFolder}/Documentation/doxygen/html/index.html"
+        "file:///${workspaceFolder}/Documentation/Doxygen/html/index.html"
       ],
       "problemMatcher": [],
       "presentation": {

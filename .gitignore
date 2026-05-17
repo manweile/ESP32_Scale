@@ -1,3 +1,8 @@
 # Arduino/ESP32 build outputs
 build/
 PropaneScale/build/
+
+# Doxygen generated output - ignore generated HTML/docs
+Documentation/doxygen/
+# (also ignore any copies under Documentation/Doxygen if present)
+Documentation/Doxygen/doxygen/
