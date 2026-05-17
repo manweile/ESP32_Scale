@@ -3,7 +3,7 @@ param(
   [string]$WorkspaceFolder
 )
 
-$port = python "$WorkspaceFolder/PropaneScale/list_ports.py"
+$port = python "$WorkspaceFolder/scripts/list_ports.py"
 if (-not $port) {
   Write-Error "No COM port returned from list_ports.py"
   exit 1

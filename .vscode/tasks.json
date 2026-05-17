@@ -10,7 +10,7 @@
       "command": "shellCommand.execute",
       "args": {
           // alternative windows only command: "powershell -Command \"[System.IO.Ports.SerialPort]::GetPortNames()\""
-          "command": "python ${workspaceFolder}/PropaneScale/list_ports.py",
+          "command": "python ${workspaceFolder}/scripts/list_ports.py",
           "description": "Select the COM port for upload"
       }
     },
