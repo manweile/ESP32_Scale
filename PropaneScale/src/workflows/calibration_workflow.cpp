@@ -26,13 +26,13 @@
 #include "src/workflows/workflows_contexts.h"               // Context definitions for non-blocking workflows
 
 // External Global State Variables and Functions
-extern float calibrationFactor;                             // Calibration factor for converting raw HX711 readings to weight in pounds
-extern float knownWeight;                                   // Known weight for calibration
-extern HX711 scale;                                         // HX711 instance owned by PropaneScale.ino
-extern const char CALIBRATION_SAVE_FAILURE_MSG[];           // Message to display when saving calibration factor to EEPROM fails
-extern const char CALIBRATION_SAVE_SUCCESS_MSG[];           // Message to display when saving calibration factor to EEPROM succeeds
+extern float calibrationFactor;                             /**< Calibration factor for converting raw HX711 readings to weight in pounds */
+extern float knownWeight;                                   /**< Known weight for calibration */
+extern HX711 scale;                                         /**< HX711 instance owned by PropaneScale.ino */
+extern const char CALIBRATION_SAVE_FAILURE_MSG[];           /**< Message to display when saving calibration factor to EEPROM fails */
+extern const char CALIBRATION_SAVE_SUCCESS_MSG[];           /**< Message to display when saving calibration factor to EEPROM succeeds */
 
-// Private Helper Functions
+// Declaration & Definition of Private Helper Functions
 
 /**
  * @brief Queues the current manual calibration reading snapshot when needed.
@@ -46,7 +46,7 @@ extern const char CALIBRATION_SAVE_SUCCESS_MSG[];           // Message to displa
  * @throws {none} This function does not throw exceptions.
  */
 static bool queueManualAdjustmentSnapshot() {
-  // apply current factor before reading so display reflects latest adjustment
+  // manual calibration always needs to apply current factor to reflect latest adjustment
   scale.set_scale(calibrationFactor);
 
   // skip until the first valid reading is available after more iteration(s)
@@ -61,15 +61,18 @@ static bool queueManualAdjustmentSnapshot() {
   int factorHundredth   = static_cast<int>(lroundf(calibrationFactor     * 100.0f));
   int stepTenThousandth = static_cast<int>(lroundf(calCtx.adjustmentStep * 10000.0f));
 
-  if (!calCtx.hasManualDisplay || readingTenth != calCtx.lastReadingTenth || factorHundredth != calCtx.lastFactorHundredth || stepTenThousandth != calCtx.lastStepTenThousandth) {
+  bool tenthChanged = (readingTenth != calCtx.lastReadingTenth);
+  bool factorChanged = (factorHundredth != calCtx.lastFactorHundredth);
+  bool stepChanged = (stepTenThousandth != calCtx.lastStepTenThousandth);
+  
+  if (!calCtx.hasManualDisplay || tenthChanged || factorChanged || stepChanged) {
     char buf[80];
-    snprintf(buf, sizeof(buf), "Reading: %.1f lbs  factor: %.2f  step: %.4f\n",
-             readingWeight, calibrationFactor, calCtx.adjustmentStep);
+    snprintf(buf, sizeof(buf), "Reading: %.1f lbs  factor: %.2f  step: %.4f\n", readingWeight, calibrationFactor, calCtx.adjustmentStep);
     queueSerialOutput(buf);
 
-    calCtx.hasManualDisplay      = true;
-    calCtx.lastReadingTenth      = readingTenth;
-    calCtx.lastFactorHundredth   = factorHundredth;
+    calCtx.hasManualDisplay = true;
+    calCtx.lastReadingTenth = readingTenth;
+    calCtx.lastFactorHundredth = factorHundredth;
     calCtx.lastStepTenThousandth = stepTenThousandth;
   }
 
@@ -105,6 +108,8 @@ static void transitionFromWaitEmpty() {
   saveRuntimeTareOffset();
   calCtx.loadDetectChecks = 0;
   calCtx.loadDetectThreshold = computeLoadDetectThreshold(MINIMUM_LOAD_WEIGHT);
+
+  // isfinite because it handle NaN and +- infinities in one function
   if (!isfinite(calCtx.loadDetectThreshold) || calCtx.loadDetectThreshold < MINIMUM_LOAD_WEIGHT) {
     calCtx.loadDetectThreshold = MINIMUM_LOAD_WEIGHT;
   }
@@ -131,7 +136,7 @@ static void transitionFromWaitEmpty() {
   if (calCtx.mode != CalMode::AUTO && calCtx.mode != CalMode::MANUAL) {
     Serial.println("Invalid calibration mode; cancelling workflow.");
     calCtx.state = CalState::IDLE;
-    calCtx.mode  = CalMode::NONE;
+    calCtx.mode = CalMode::NONE;
     return;
   }
   
@@ -141,7 +146,7 @@ static void transitionFromWaitEmpty() {
   queueSerialOutput(buf);
 
   calCtx.stateStartMs = millis();
-  calCtx.state        = CalState::WAIT_LOAD;
+  calCtx.state = CalState::WAIT_LOAD;
 }
 
 // Definitions for calibration workflow functions
@@ -171,22 +176,22 @@ void automaticCalibration() {
            userConfirmSeconds);
   queueSerialOutput(calPrompt);
 
-  calCtx.mode              = CalMode::AUTO;
-  calCtx.state             = CalState::WAIT_EMPTY;
-  calCtx.stateStartMs      = millis();
+  calCtx.mode = CalMode::AUTO;
+  calCtx.originalCalibrationFactor = calibrationFactor;
+  calCtx.state = CalState::WAIT_EMPTY;
+  calCtx.stateStartMs = millis();
   calCtx.stableEmptyChecks = 0;
-  calCtx.loadDetectChecks   = 0;
-  calCtx.measuredUnits     = 0.0f;
+  calCtx.loadDetectChecks = 0;
+  calCtx.measuredUnits = 0.0f;
 }
 
 void handleCalibrationInput(char serialchar) {
-  //  workflow - from waiting states, allow user to cancel with 'q', and for REZERO mode allow force-confirming an empty condition with 'z' from WAIT_EMPTY state, but ignore other inputs
-  if (calCtx.state == CalState::WAIT_EMPTY || calCtx.state == CalState::WAIT_LOAD || calCtx.state == CalState::SETTLING) {
+  // workflow - in WAIT_EMPTY or WAIT_LOAD, only valid inputs are 'q' and 'z'
+  // we dont care about the 3rd 'wait' state - SETTLING - because it is time-based and not user-input based
+  if (calCtx.state == CalState::WAIT_EMPTY || calCtx.state == CalState::WAIT_LOAD) {
     
-    // From WAIT_EMPTY and WAIT_LOAD states, 'q' cancels the workflow, 
-    // but only AUTO mode needs to reset the calibration factor since MANUAL mode didn't change it yet, 
-    // and REZERO didn't change it either since it applies a runtime offset without modifying the calibration factor. 
-    // Additionally, from WAIT_EMPTY state, 'z' forces confirmation of an empty condition for the re-zero workflow.
+    // handle the force-confirm first because it is the most likely user input in WAIT_EMPTY, 
+    // in case the user is trying to work around a scale that is giving a false non-empty reading due to noise or an offset
     if (calCtx.mode == CalMode::REZERO && calCtx.state == CalState::WAIT_EMPTY && (serialchar == 'z' || serialchar == 'Z')) {
       Serial.println("Runtime re-zero force-confirmed by user.");
       Serial.println();
@@ -194,6 +199,7 @@ void handleCalibrationInput(char serialchar) {
       return;
     }
 
+    // a user typo is always possible
     if (serialchar != 'q' && serialchar != 'Q') {
       if (calCtx.mode == CalMode::AUTO) {
         char buf[64];
@@ -207,25 +213,16 @@ void handleCalibrationInput(char serialchar) {
       return;
     }
 
-    // workflow - cancel from waiting states goes back to IDLE,
-    // but only AUTO mode needs to reset the calibration factor since MANUAL mode didn't change it yet, 
-    // and REZERO didn't change it either since it applies a runtime offset without modifying the calibration factor
-    if (calCtx.mode == CalMode::AUTO) {
-      Serial.println("Automatic calibration cancelled.");
-      calibrationFactor = DEF_CALIBRATION_FACTOR;
+    // AUTO wouldn't have had chance to compute calibration factor change,
+    // MANUAL didn't have a chance to change it yet, 
+    // and REZERO doesn't change it at all
 
-      if(!saveToEeprom(calibrationFactor, CAL_EEPROM_MAGIC, CAL_EEPROM_MAGIC_ADDR, CAL_EEPROM_VALUE_ADDR)) {
-        Serial.println(CALIBRATION_SAVE_FAILURE_MSG);
-      } else {
-        Serial.println(CALIBRATION_SAVE_SUCCESS_MSG);
-      }
-    } 
-    
-    if (calCtx.mode == CalMode::MANUAL) {
+    if (calCtx.mode == CalMode::AUTO || calCtx.mode == CalMode::MANUAL) {
+      // restore the factor that was active before the calibration workflow
+      Serial.println("Calibration cancelled. Changes were not saved.");
       calibrationFactor = calCtx.originalCalibrationFactor;
       scale.set_scale(calibrationFactor);
-      Serial.println("Manual calibration cancelled. Changes were not saved.");
-    } 
+    }
     
     if (calCtx.mode == CalMode::REZERO) {
       Serial.println("Runtime re-zero cancelled.");
@@ -236,10 +233,7 @@ void handleCalibrationInput(char serialchar) {
     return;
   }
 
-  // workflow - in manual adjustment state,
-  // increasing & decreasing calibration factor, 
-  // saving calibration factor or cancelling workflow altogether,
-  // handling an invalid key
+  // workflow - in manual adjustment state
   if (calCtx.state == CalState::ADJUSTING) {
     if (serialchar == '+') {
 
@@ -299,9 +293,9 @@ void manualCalibration() {
     return;
   }
 
-  float step    = fabsf(calibrationFactor) * 0.01f;
+  float step = fabsf(calibrationFactor) * 0.01f;
   float minStep = fabsf(calibrationFactor) * 0.0001f;
-  if (step    == 0.0f) step    = 10.0f;
+  if (step == 0.0f) step    = 10.0f;
   if (minStep == 0.0f) minStep = 0.001f;
 
   scale.set_scale(calibrationFactor);
@@ -319,17 +313,17 @@ void manualCalibration() {
            userConfirmSeconds);
   queueSerialOutput(calPrompt);
 
-  calCtx.adjustmentStep            = step;
-  calCtx.hasManualDisplay          = false;
-  calCtx.lastDirection             = 0;
-  calCtx.measuredUnits             = 0.0f;
-  calCtx.minStep                   = minStep;
-  calCtx.mode                      = CalMode::MANUAL;
+  calCtx.adjustmentStep = step;
+  calCtx.hasManualDisplay = false;
+  calCtx.lastDirection = 0;
+  calCtx.measuredUnits = 0.0f;
+  calCtx.minStep = minStep;
+  calCtx.mode = CalMode::MANUAL;
   calCtx.originalCalibrationFactor = calibrationFactor;
-  calCtx.stableEmptyChecks         = 0;
-  calCtx.loadDetectChecks          = 0;
-  calCtx.state                     = CalState::WAIT_EMPTY;
-  calCtx.stateStartMs              = millis();
+  calCtx.stableEmptyChecks = 0;
+  calCtx.loadDetectChecks = 0;
+  calCtx.state = CalState::WAIT_EMPTY;
+  calCtx.stateStartMs = millis();
 }
 
 void reZero() {
@@ -358,12 +352,12 @@ void reZero() {
            userConfirmSeconds);
   queueSerialOutput(calPrompt);
 
-  calCtx.mode              = CalMode::REZERO;
-  calCtx.state             = CalState::WAIT_EMPTY;
-  calCtx.stateStartMs      = millis();
+  calCtx.mode = CalMode::REZERO;
+  calCtx.state = CalState::WAIT_EMPTY;
+  calCtx.stateStartMs = millis();
   calCtx.stableEmptyChecks = 0;
-  calCtx.loadDetectChecks   = 0;
-  calCtx.measuredUnits     = 0.0f;
+  calCtx.loadDetectChecks = 0;
+  calCtx.measuredUnits = 0.0f;
 }
 
 void tickCalibration() {
@@ -374,39 +368,28 @@ void tickCalibration() {
 
   // workflow - waiting on user to remove all weight from platen
   if (calCtx.state == CalState::WAIT_EMPTY) {
-    // Check for pending serial input and process 'q' (cancel)  or 'z' (force-confirm) immediately
     if (Serial.available()) {
       char c = Serial.read();
 
-        // 4 wait for empty calibration workflows possible:
-        // - REZERO: just cancel workflow, no state changes needed since runtime offset wasn't applied yet
-        // - AUTO: reset calibration factor to default since it was applied at start of workflow, then cancel workflow
-        // - MANUAL: reset calibration factor to original since it was applied at start of workflow, then cancel workflow
-        // - REZERO: force-confirm empty condition and proceed with re-zero if 'z' is pressed
+        // four possible wait for empty calibration workflows inputs:
+        // REZERO (quit cancel), AUTO, MANUAL, REZERO (force cancel)
 
       if (c == 'q' || c == 'Q') {
 
         if (calCtx.mode == CalMode::REZERO) {
+          // just cancel workflow, no state changes needed since runtime offset wasn't applied yet
           Serial.println("Runtime re-zero cancelled.");
-        } else if (calCtx.mode == CalMode::AUTO) {
-          Serial.println("Automatic calibration cancelled.");
-          calibrationFactor = DEF_CALIBRATION_FACTOR;
-          
-          bool savedToEeprom = saveToEeprom(calibrationFactor, CAL_EEPROM_MAGIC, CAL_EEPROM_MAGIC_ADDR, CAL_EEPROM_VALUE_ADDR);
-          if(!savedToEeprom) {
-            Serial.println(CALIBRATION_SAVE_FAILURE_MSG);
-          } else {
-            Serial.println(CALIBRATION_SAVE_SUCCESS_MSG);
-          }
-        } else if (calCtx.mode == CalMode::MANUAL) {
+        } else if (calCtx.mode == CalMode::AUTO || calCtx.mode == CalMode::MANUAL) {
+          // restore the original factor for both AUTO and MANUAL cancellations
+          Serial.println("Calibration cancelled. Changes were not saved.");
           calibrationFactor = calCtx.originalCalibrationFactor;
           scale.set_scale(calibrationFactor);
-          Serial.println("Manual calibration cancelled. Changes were not saved.");
         }
         calCtx.state = CalState::IDLE;
         calCtx.mode  = CalMode::NONE;
         return;
       } else if (calCtx.mode == CalMode::REZERO && (c == 'z' || c == 'Z')) {
+        // force-confirm empty condition and proceed with re-zero
         Serial.println("Runtime re-zero force-confirmed by user.");
         Serial.println();
         transitionFromWaitEmpty();
@@ -417,6 +400,7 @@ void tickCalibration() {
 
     // Only check for empty at timeout, not on every tick
     if ((millis() - calCtx.stateStartMs) >= CONFIRM_TIMEOUT_MS) {
+
       calCtx.measuredUnits = readAveragedUnits(1, POLL_SAMPLES);
       if (!isfinite(calCtx.measuredUnits)) {
         printScaleNotReadyDiagnostic("empty-scale confirmation");
@@ -425,6 +409,7 @@ void tickCalibration() {
         calCtx.mode  = CalMode::NONE;
         return;
       }
+
       bool emptyDetected = fabsf(calCtx.measuredUnits) <= MINIMUM_LOAD_WEIGHT;
       if (emptyDetected) {
         Serial.println("Empty scale auto-confirmed at timeout (stable scale).");
@@ -486,6 +471,7 @@ void tickCalibration() {
       return;
     }
 
+    // workflow - auto calibration takes a measurement and computes new factor and saves to eeprom
     if (calCtx.mode == CalMode::AUTO) {
       Serial.println("Measuring stable reading...");
 
@@ -521,6 +507,7 @@ void tickCalibration() {
       calCtx.mode  = CalMode::NONE;
     }
 
+    // workflow - manual calibration transitions to adjustment state with user input
     if (calCtx.mode == CalMode::MANUAL) {
       // serial input handled by handleCalibrationInput()
       queueSerialOutput("Adjust calibration until the reading matches the known weight.\n"
@@ -535,11 +522,11 @@ void tickCalibration() {
       calCtx.state            = CalState::ADJUSTING;
       queueManualAdjustmentSnapshot();
     }
-
+    // auto is done or we are in manual and need to await user adjustment input
     return;
   }
 
-  // workflow - interactive manual calibration adjustment
+  // workflow - still in manual adjustment state, waiting for user to adjust factor and save or cancel
   if (calCtx.state == CalState::ADJUSTING) {
     queueManualAdjustmentSnapshot();
   }
