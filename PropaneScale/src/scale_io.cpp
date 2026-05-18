@@ -48,7 +48,7 @@ static char serialQueue[SERIAL_CAPACITY];                    // Internal buffer 
  * @throws {none} This function does not throw exceptions.
  */
 static bool hasResponsiveHx711Signal() {
-  const int probeReads = 10;                                // HX711 is set at 10 samples per second
+  const int probeReads = LIVE_SAMPLES;                      // HX711 is set at 10 samples per second
   bool haveSample = false;
   long minRaw = 0;
   long maxRaw = 0;
@@ -170,14 +170,16 @@ void drainQueuedSerialOutput() {
 }
 
 bool ensureScaleReady(const char* operation) {
-  if (scale.wait_ready_timeout(HX711_READY_TIMEOUT_MS)) {
-    if (hasResponsiveHx711Signal()) {
-      return true;
-    }
+  bool ready = false;
+  
+  ready = scale.wait_ready_timeout(HX711_READY_TIMEOUT_MS) && hasResponsiveHx711Signal();
+
+  if (ready) {
+    return true;
   }
 
   printScaleNotReadyDiagnostic(operation);
-  return false;
+  return ready;
 }
 
 void flushSerialInput() {
