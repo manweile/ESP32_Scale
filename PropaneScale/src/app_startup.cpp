@@ -52,14 +52,18 @@ void initializeApp() {
     maxPropane        = DEF_MAX_PROPANE;
     tankTare          = DEF_TANK_TARE;
   } else {
-    float loaded = 0.0f;
-
     // for each persisted value, use the magic marker if present and valid, 
     // otherwise use the default and save it to eeprom for next time
     // this way if one value becomes corrupted, it does not affect the others, 
     // user can still get a valid reading with defaults ,
     // and can fix the corrupted value by re-saving it
 
+    // @todo replace each 'loaded' with exact var for value getting from eeprom
+    // ie loadedCalibrationFactor, loadedKnownWeight, etc. 
+    // to make it more clear in the code that these are the loaded values being validated 
+    // before assignment to the global state vars
+
+    float loaded = 0.0f;
     if (loadFromEeprom(loaded, CAL_EEPROM_MAGIC_ADDR, CAL_EEPROM_MAGIC, CAL_EEPROM_VALUE_ADDR) && isValidBoundedFloat(loaded, CAL_FACTOR_ABS_MIN, CAL_FACTOR_ABS_MAX, true)) {
       calibrationFactor = loaded;
     } else {
