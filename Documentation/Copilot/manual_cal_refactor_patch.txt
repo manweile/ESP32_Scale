@@ -1,0 +1,112 @@
+Minimal Nested `ManualCal` Refactor Proposal
+
+Summary:
+- Move manual-only `CalContext` fields into a nested `ManualCal` struct named `manual`.
+- Keep shared workflow fields at top-level in `CalContext`.
+- Update call sites to `calCtx.manual.<field>`.
+
+Why:
+- Separates manual-specific state from shared state used by AUTO/REZERO.
+- Clarifies intent and reduces accidental cross-mode access.
+- Low-risk, minimal-churn refactor.
+
+Proposed `CalContext` layout (copy into PropaneScale/src/workflows/workflows_contexts.h):
+
+struct CalContext {
+  // Shared across modes
+  CalMode       mode                      = CalMode::NONE;  /**< current calibration mode */
+  CalState      state                     = CalState::IDLE; /**< current state within workflow */
+  unsigned long stateStartMs              = 0;              /**< millis() when current state was entered */
+  int           stableEmptyChecks         = 0;              /**< consecutive empty-scale readings in WAIT_EMPTY */
+  int           loadDetectChecks          = 0;              /**< consecutive above-threshold load detection checks */
+  float         loadDetectThreshold       = 0.0f;           /**< noise-derived threshold for weight detection */
+  float         measuredUnits             = 0.0f;           /**< last averaged reading in pounds */
+
+  // Manual-mode specific subgroup
+  struct ManualCal {
+    float adjustmentStep            = 0.0f;           /**< manual mode: current factor nudge size */
+    bool  hasManualDisplay          = false;          /**< manual mode: whether we have a prior display snapshot */
+    int   lastDirection             = 0;              /**< manual mode: +1 = last press +, -1 = last press - */
+    int   lastFactorHundredth       = 0;              /**< manual mode: last displayed factor, scaled by 100 */
+    int   lastReadingTenth          = 0;              /**< manual mode: last displayed reading, scaled by 10 */
+    int   lastStepTenThousandth     = 0;              /**< manual mode: last displayed step, scaled by 10000 */
+    float minStep                   = 0.0f;           /**< manual mode: floor for adjustmentStep */
+    float originalCalibrationFactor = 0.0f;           /**< manual mode: calibration factor captured at start */
+  } manual;
+};
+
+Migration steps (mechanical):
+1) Add the nested `ManualCal` struct into `PropaneScale/src/workflows/workflows_contexts.h` replacing the existing `CalContext` definition. Keep the shared fields unchanged.
+
+2) Update call sites to reference the nested `manual` member. The following fields must be updated:
+   - adjustmentStep
+   - hasManualDisplay
+   - lastDirection
+   - lastFactorHundredth
+   - lastReadingTenth
+   - lastStepTenThousandth
+   - minStep
+   - originalCalibrationFactor
+
+Precise PowerShell search/replace commands (run from the repository root):
+
+# NOTE: these commands rewrite files in-place. Run under Git and review diffs before committing.
+# They operate on .cpp and .h files under the workspace. Adjust -Path filter if needed.
+
+Get-ChildItem -Path . -Recurse -Include *.cpp,*.h | ForEach-Object {
+  (Get-Content $_.FullName) |
+    ForEach-Object {
+      $_ -replace 'calCtx\\.adjustmentStep', 'calCtx.manual.adjustmentStep' `
+         -replace 'calCtx\\.hasManualDisplay', 'calCtx.manual.hasManualDisplay' `
+         -replace 'calCtx\\.lastDirection', 'calCtx.manual.lastDirection' `
+         -replace 'calCtx\\.lastFactorHundredth', 'calCtx.manual.lastFactorHundredth' `
+         -replace 'calCtx\\.lastReadingTenth', 'calCtx.manual.lastReadingTenth' `
+         -replace 'calCtx\\.lastStepTenThousandth', 'calCtx.manual.lastStepTenThousandth' `
+         -replace 'calCtx\\.minStep', 'calCtx.manual.minStep' `
+         -replace 'calCtx\\.originalCalibrationFactor', 'calCtx.manual.originalCalibrationFactor'
+    } | Set-Content $_.FullName
+}
+
+Alternative: single-purpose replacements (safer, one at a time):
+
+(Get-ChildItem -Path . -Recurse -Include *.cpp,*.h) | ForEach-Object {
+  (Get-Content $_.FullName) -replace 'calCtx\\.adjustmentStep', 'calCtx.manual.adjustmentStep' | Set-Content $_.FullName
+}
+
+Repeat for each symbol replacing the left/right sides.
+
+Manual patch example for `PropaneScale/src/workflows/workflows_contexts.h` (apply by hand or via your patch tool):
+
+--- workflows_contexts.h (original excerpt)
+@@
+ struct CalContext {
+-  float         adjustmentStep            = 0.0f;           /**< manual mode: current factor nudge size */
+-  bool          hasManualDisplay          = false;          /**< manual mode: whether we have a prior display snapshot to compare against */
+-  int           lastDirection             = 0;              /**< manual mode: +1 = last press +, -1 = last press - */
+-  int           lastFactorHundredth       = 0;              /**< manual mode: last displayed factor, scaled by 100 (2 decimal places) */
+-  int           lastReadingTenth          = 0;              /**< manual mode: last displayed reading, scaled by 10 (1 decimal place) */
+-  int           lastStepTenThousandth     = 0;              /**< manual mode: last displayed step, scaled by 10000 (4 decimal places) */
+-  int           loadDetectChecks          = 0;              /**< calibration mode: consecutive above-threshold load detection checks */
+-  float         loadDetectThreshold       = 0.0f;           /**< noise-derived threshold for weight detection */
+-  float         measuredUnits             = 0.0f;           /**< last averaged reading in pounds */
+-  float         minStep                   = 0.0f;           /**< manual mode: floor for adjustmentStep */
+-  CalMode       mode                      = CalMode::NONE;  /**< current calibration mode, or NONE when not in a calibration workflow */
+-  float         originalCalibrationFactor = 0.0f;           /**< manual mode: calibration factor captured at start for cancel/restore */
+-  int           stableEmptyChecks         = 0;              /**< consecutive empty-scale readings in WAIT_EMPTY */
+-  CalState      state                     = CalState::IDLE; /**< current state within the calibration workflow */
+-  unsigned long stateStartMs              = 0;              /**< millis() when current state was entered */
+-};
++  // (Replace the whole contents with the new layout shown in the proposal above.)
++
+--- end example
+
+Build & test checklist:
+- Run a Git diff and review changes.
+- Build with your existing tasks (e.g. `ESP32 Thing Quick Compile`).
+- Test manual calibration and auto calibration + rezero on device.
+
+Suggested commit message:
+refactor(workflows): nest manual-only calibration fields into CalContext::ManualCal
+
+---
+File created by Copilot assistant: Documentation/Copilot/manual_cal_refactor_patch.txt
