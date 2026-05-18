@@ -33,14 +33,14 @@
 #include "src/workflows/calibration_workflow.h"             // Functions for the calibration workflow
 
 // Global Class Instances
-HX711 scale;                                                // HX711 instance for interacting with the load cell amplifier
+HX711 scale;                                                /**< HX711 instance for interacting with the load cell amplifier */
 
 // Global State Variables
-float calibrationFactor = 0.0f;                             // Calibration factor for converting raw HX711 readings to weight in pounds
-bool eepromReady = false;                                   // Flag to track if EEPROM was successfully initialized
-float knownWeight = 0.0f;                                   // Known weight for calibration
-float maxPropane = 0.0f;                                    // Maximum legal propane weight in pounds
-float tankTare = 0.0f;                                      // Tare weight of the empty propane tank in pounds
+float calibrationFactor = 0.0f;                             /**< Calibration factor for converting raw HX711 readings to weight in pounds */
+bool eepromReady = false;                                   /**< Flag to track if EEPROM was successfully initialized */
+float knownWeight = 0.0f;                                   /**< Known weight for calibration */
+float maxPropane = 0.0f;                                    /**< Maximum legal propane weight in pounds */
+float tankTare = 0.0f;                                      /**< Tare weight of the empty propane tank in pounds */
 
 // State Machine Variables
 CalContext calCtx;                                          /**< Calibration context instance to hold state for calibration workflows */
@@ -48,7 +48,7 @@ InputContext inputCtx;                                      /**< Non-blocking in
 LevelContext levelCtx;                                      /**< Level read context instance to hold state for the level read workflow */
 TareContext tareCtx;                                        /**< Startup tare context instance */
 
-// State Machine Functions
+// // Definitions & Declarations for State Machine Functions
 
 /**
  * @brief Resets the input context to its initial state.
@@ -137,13 +137,13 @@ void tickTare() {
       return;
     }
 
+    // a true non-empty, but we require near-zero and sustained stability
     if (fabsf(m) >= startupNotEmptyThreshold) {
       Serial.println("Startup tare timeout: scale not empty, skipping tare.");
       tareCtx.state = TareState::SKIP;
       return;
     }
 
-    // require near-zero and sustained stability during the wait window.
     bool nearZero = fabsf(m) <= MINIMUM_LOAD_WEIGHT;
     bool stableFromBaseline = fabsf(m - tareCtx.baseline) <= SETUP_EMPTY_WEIGHT;
     bool stableLongEnough = tareCtx.stableChecks >= UNLOAD_CHECK_COUNT;
@@ -158,11 +158,10 @@ void tickTare() {
     return;
   }
 
-  // finally at stable point where we can update state
+  // probably at stable point where we can update state
+  // verify scale reading is valid before doing any processing
   float m = readAveragedUnits(1, POLL_SAMPLES);
   
-  // verify scale reading is valid before doing any processing
-  // bad scale reading, warn user to check hardware
   if (!isfinite(m)) {
     printScaleNotReadyDiagnostic("startup tare");
     tareCtx.state = TareState::SKIP;
@@ -170,7 +169,7 @@ void tickTare() {
   }
 
   // scale is not empty, we want to reset stability checks 
-  // requires new window of stable readings below the not-empty threshold before auto-confirming.
+  // requires new window of stable readings below the not-empty threshold before auto-confirming
   if (fabsf(m) >= startupNotEmptyThreshold) {
     tareCtx.stableChecks = 0;
     return;
@@ -184,13 +183,13 @@ void tickTare() {
   }
 }
 
-// Project lifecycle functions
+// Definitions & Declarations for Project lifecycle functions
 
 /**
  * @brief Initializes the application and starts the startup tare workflow.
  *
  * @details Initializes the serial interface, sets up the HX711 scale, applies calibration from EEPROM, 
- * and begins the startup tare workflow to establish a stable baseline for accurate weight readings.
+ * and begins the startup tare workflow.
  *
  * @throws {none} This function does not throw exceptions.
  */
@@ -203,8 +202,8 @@ void setup() {
 /**
  * @brief Main application loop that processes serial input and advances workflows.
  * 
- * @details Handles calibration, tare, and re-zero commands from the serial port,
- * verifies the HX711 is ready, and reports a single propane reading when requested.
+ * @details Advances the calibration, level read, and tare workflows on each iteration.
+ * Processes serial input for workflow interactions and command dispatch. 
  * 
  * @throws {none} This function does not throw exceptions. 
  */
@@ -237,7 +236,6 @@ void loop() {
     return;
   }
 
-  // Route one character at a time to active workflow
   // these three are multi-character input workflows that require the input context, 
   // so need to check them before dispatching to single-character commands
 
@@ -271,7 +269,7 @@ void loop() {
     return;
   }
 
-  // Fell through to here, so no active workflows, setup for user serial input
+  // Fell through to here, so no active workflows, setup for 1 char user serial input
   bool handled = true;
 
   // by having empty lower case input cases, do not need to call tolower() on the input
