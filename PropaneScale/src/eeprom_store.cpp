@@ -12,25 +12,20 @@
  * @copyright Copyright (c) 2026 Gerald Manweiler
  */
 
-/**
- * @section Standard library headers
- */
+// Standard library headers
 #include <Arduino.h>
 #include <EEPROM.h>
 
-/** 
- * @section Local library headers
- */
+// Local library headers
 #include "config.h"
 #include "eeprom_store.h"
 #include "parsing_utils.h"
 #include "scale_io.h"
 
-/**
- * @section External Global State Variables
- */
-
+// External Global State Variables
 extern bool eepromReady;                                   // Flag to track if EEPROM was successfully initialized
+
+// Definitions of EEPROM storage functions for the propane scale project
 
 bool loadFromEeprom(float& value, uint32_t magicAddr, uint32_t magicValue, uint32_t valueAddr) {
   uint32_t magic = 0;                                       // Magic number read from EEPROM for validation

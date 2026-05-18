@@ -14,6 +14,8 @@
 
 #pragma once
 
+// Declarations for startup tare workflow functions
+
 /**
  * @brief Begins the non-blocking startup tare workflow.
  *
@@ -21,19 +23,6 @@
  * prompts, and enters WAIT_STABLE state. The workflow is then advanced each loop()
  * iteration by tickTare().
  *
- * @return {void} No value is returned.
- *
  * @throws {none} This function does not throw exceptions.
  */
 void beginTare();
-
-/**
- * @brief Prints a summary of the startup configuration and EEPROM values.
- *
- * @details Displays the application title, loaded calibration factor, known weight,
- * maximum propane weight, and tank tare from EEPROM. Also prints startup tare prompts.
- *
- * @return {void} No value is returned.
- *
- * @throws {none} This function does not throw exceptions.
- */

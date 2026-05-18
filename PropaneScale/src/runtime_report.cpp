@@ -11,18 +11,12 @@
  * @copyright Copyright (c) 2026 Gerald Manweiler
  */
 
-/**
- * @section Standard library headers
- */
-
+// Standard library headers
 #include <Arduino.h>                                        // Arduino core library for serial communication and basic functions
 #include <stdarg.h>                                         // Variadic formatting helpers for queued runtime reports
 #include <stdio.h>                                          // Standard I/O library for string formatting functions
 
-/** 
- * @section Local library headers
- */
-
+// Local library headers
 #include "config.h"                                         // Configuration constants for the ESP32-based propane level scale
 #include "src/eeprom_store.h"                               // EEPROM storage functions
 #include "src/runtime_report.h"                             // Declarations for runtime reporting functions
@@ -30,19 +24,14 @@
 #include "src/workflows/input_context.h"                    // Input context definitions for non-blocking user input workflows
 #include "src/workflows/workflows_contexts.h"               // Context definitions for non-blocking workflows
 
-/**
- * @section External Global State Variables
- */
-
+// External Global State Variables
 extern float calibrationFactor;
 extern bool eepromReady;
 extern float knownWeight;
 extern float maxPropane;
 extern float tankTare;
 
-/**
- * @section Private Helper Functions
- */
+// Definitions & Declarations for Private Helper Functions
 
 /**
  * @brief Appends a formatted string to a buffer, updating the used length.
@@ -213,9 +202,7 @@ static const char* tareStateNameFor(TareState state) {
   return "?";
 }
 
-/**
- * @section Definitions for runtime reporting functions
- */
+// Definitions for runtime reporting functions
 
 void currentRuntimeValues() {
   char report[768];

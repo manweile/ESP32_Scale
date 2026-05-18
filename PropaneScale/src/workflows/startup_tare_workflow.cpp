@@ -12,32 +12,21 @@
  * @copyright Copyright (c) 2026 Gerald Manweiler
  */
 
-/**
- * @section Standard library headers
- */
-
+// Standard library headers
 #include <Arduino.h>
 #include <math.h>
 #include <stdio.h>
 
-/**
- * @section Third party library headers
- */
-
+// Third party library headers
 #include "HX711.h"                                       // HX711 library for scale type declaration
 
-/**
- * @section Local library headers
- */
-
+// Local library headers
 #include "config.h"                                         // Configuration constants for the ESP32-based propane level scale
 #include "src/runtime_report.h"                             // For printStartupSummary
 #include "src/scale_io.h"                                   // Input/output functions for user workflows and HX711 interactions
 #include "src/workflows/workflows_contexts.h"               // Context definitions for non-blocking workflows
 
-/**
- * @section External Global State Variables and Functions
- */
+// External Global State Variables and Functions
 
 extern float calibrationFactor;                             // Calibration factor for converting raw HX711 readings to weight in pounds
 extern float knownWeight;                                   // Known weight for calibration
@@ -46,9 +35,7 @@ extern float tankTare;                                      // Tare weight of th
 extern HX711 scale;                                         // HX711 instance owned by PropaneScale.ino
 extern void helpMenu();                                     // Function to display the help menu
 
-/**
- * @section Definitions for startup tare workflow functions
- */
+// Definitions for startup tare workflow functions
 
 void beginTare() {
   const float startupNotEmptyThreshold = computeStartupNotEmptyThreshold(tankTare, maxPropane);

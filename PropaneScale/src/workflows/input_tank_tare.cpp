@@ -12,30 +12,23 @@
  * @copyright Copyright (c) 2026 Gerald Manweiler
  */
 
-/**
- * @section Standard library headers
- */
-
+// Standard library headers
 #include <Arduino.h>
 #include <math.h>
 #include <stdio.h>
 
-/**
- * @section Local library headers
- */
-
+// Local library headers
 #include "config.h"                                         // Configuration constants for the ESP32-based propane level scale  
 #include "src/eeprom_store.h"                               // EEPROM storage functions for loading and saving calibration and tare values
 #include "src/parsing_utils.h"                              // Utility functions for validating and parsing input values
 #include "src/scale_io.h"                                   // Input/output functions for user workflows and HX711 interactions
 #include "src/workflows/input_context.h"                    // Input context definitions for non-blocking user input workflows
 
-/**
- * @section External Global State Variables and Functions
- */
-
+// External Global State Variables and Functions
 extern float tankTare;                                      // Tare weight of the empty propane tank in pounds
 extern void resetInputContext();                            // Resets the input context to its initial state
+
+// Definitions for tank tare input functions
 
 void handleTankTareInput(char incoming) {
   // ignore carriage return characters to prevent interference with parsing logic

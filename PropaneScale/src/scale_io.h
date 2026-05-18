@@ -14,6 +14,8 @@
 
 #pragma once
 
+// Declarations for input/output functions for user workflows and HX711 interactions
+
 /**
  * @brief Computes the load-detection threshold from measured noise.
  *
@@ -21,7 +23,7 @@
  * as a signal-to-noise margin, then clamps to minimumThresholdLbs so a very
  * quiet scale still responds to a real load.
  *
- * @param {float} minimumThresholdLbs Floor value for the returned threshold in pounds.
+ * @param minimumThresholdLbs {float} Floor value for the returned threshold in pounds.
  * @return {float} Computed threshold in pounds: max(noise * 20, minimumThresholdLbs).
  *
  * @throws {none} This function does not throw exceptions.
@@ -34,8 +36,6 @@ float computeLoadDetectThreshold(float minimumThresholdLbs);
  * @details Writes at most the currently available UART buffer space from the
  * internal output queue and returns immediately.
  *
- * @return {void} No value is returned.
- *
  * @throws {none} This function does not throw exceptions.
  */
 void drainQueuedSerialOutput();
@@ -45,7 +45,7 @@ void drainQueuedSerialOutput();
  *
  * @details Checks the amplifier readiness and prints a field-diagnostic message when it is not ready so workflows can exit early instead of blocking.
  *
- * @param {const char*} operation Short workflow label used in the error message.
+ * @param operation {const char*} Short workflow label used in the error message.
  * @return {bool} True when HX711 is ready; false otherwise.
  *
  * @throws {none} This function does not throw exceptions.
@@ -57,8 +57,6 @@ bool ensureScaleReady(const char* operation);
  *
  * @details Reads and discards any available serial input to ensure that subsequent serial reads start with fresh input from the user.
  * 
- * @return {void} No value is returned.
- * 
  * @throws {none} This function does not throw exceptions.
  */
 void flushSerialInput();
@@ -68,8 +66,7 @@ void flushSerialInput();
  *
  * @details Used across workflows to keep timeout/not-ready messaging consistent.
  *
- * @param {const char*} operation Short workflow label used in the error message.
- * @return {void} No value is returned.
+ * @param operation {const char*} Short workflow label used in the error message.
  *
  * @throws {none} This function does not throw exceptions.
  */
@@ -82,7 +79,7 @@ void printScaleNotReadyDiagnostic(const char* operation);
  * Thin wrapper around the private queueSerialOutput implementation.
  * The queue is drained incrementally from loop() using drainQueuedSerialOutput().
  *
- * @param {const char*} message Null-terminated message to append to the queue.
+ * @param message {const char*} Null-terminated message to append to the queue.
  * @return {bool} True when the full message was queued; false if the queue has insufficient space.
  *
  * @throws {none} This function does not throw exceptions.
@@ -102,8 +99,8 @@ bool queueSerialOutput(const char* message);
  * @details Takes multiple readings from the scale, averages them, and returns the result in pounds.
  * Useful for smoothing out noise in the scale readings and getting a more stable weight measurement.
  * 
- * @param {int} readings Number of readings to average.
- * @param {int} samplesPerReading Number of samples per reading.
+ * @param readings {int} Number of readings to average.
+ * @param samplesPerReading {int} Number of samples per reading.
  * @return {float} avgWeight The average weight in pounds. 
  * 
  * @throws {none} This function does not throw exceptions.
@@ -115,8 +112,6 @@ float readAveragedUnits(int readings, int samplesPerReading);
  *
  * @details Reads the current offset from the HX711, casts it to a float, and saves it to EEPROM with a magic number for validation.
  * This allows the scale to persist a runtime tare offset across power cycles, which is used for the re-zero workflow.
- *
- * @return {void} No value is returned.
  *
  * @throws {none} This function does not throw exceptions.
  */

@@ -184,9 +184,7 @@ void tickTare() {
   }
 }
 
-/** 
- * @section Project lifecycle functions
- */
+// Project lifecycle functions
 
 /**
  * @brief Initializes the application and starts the startup tare workflow.

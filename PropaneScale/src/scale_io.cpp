@@ -12,46 +12,30 @@
  * @copyright Copyright (c) 2026 Gerald Manweiler
  */
 
-/**
- * @section Standard library headers
- */
+// Standard library headers
 
 #include <Arduino.h>                                        // Arduino core library for Serial communication and basic types
 #include <math.h>                                           // Math library for fabsf() and other mathematical functions
 #include <string.h>                                         // String helpers for non-blocking serial queue management
 
-/**
- * @subsection Third party library headers
- */
-
+// Third party library headers
 #include "HX711.h"                                          // HX711 library for interfacing with the load cell amplifier to read weight data
 
-/** 
- * @section Local library headers
- */
-
+// Local library headers
 #include "config.h"                                         // Configuration constants for the ESP32-based propane level scale
 #include "eeprom_store.h"                                   // EEPROM storage functions
 #include "scale_io.h"                                       // Input/output functions for user workflows and HX711 interactions
 
-/**
- * @section External Global State Variables
- */
-
+// External Global State Variables
 extern HX711 scale;                                         // HX711 instance for interacting with the load cell amplifier
 
-/** 
- * @section Private Static Constants and Variables
- */
-
+//  Private Static Constants and Variables
 static constexpr size_t SERIAL_CAPACITY = 2048;              // Capacity of the internal serial output queue in bytes
 static size_t serialLength = 0;                              // Current length of data in the serial output queue
 static size_t serialOffset = 0;                              // Current offset for reading from the serial output queue
 static char serialQueue[SERIAL_CAPACITY];                    // Internal buffer for queued serial output
 
-/**
- * @section Private Helper Functions
- */
+// Private Definitions & Declarations for input/output helper functions
 
 /**
  * @brief Probes the HX711 with multiple reads to determine if it is producing a responsive signal.
@@ -59,9 +43,9 @@ static char serialQueue[SERIAL_CAPACITY];                    // Internal buffer 
  * @details Secondary check to detect if HX711 is powered but not properly connected.
  * Intentionally private implementation detail, only used as part of the scale ready workflow.
  * 
- * @return true if the HX711 is producing a responsive signal with variability across multiple reads; false otherwise.
+ * @return {bool} True if the HX711 is producing a responsive signal with variability across multiple reads; false otherwise.
  * 
- * @throws none This function does not throw exceptions.
+ * @throws {none} This function does not throw exceptions.
  */
 static bool hasResponsiveHx711Signal() {
   const int probeReads = 10;                                // HX711 is set at 10 samples per second
@@ -110,11 +94,11 @@ static bool hasResponsiveHx711Signal() {
  * If the message is null or empty, it is treated as successfully queued.
  * Intentionally private implementation detail, only used as part of the scale ready workflow and user prompts
  * 
- * @param message The message to queue for serial output.
- * @param messageLength The length of the message in bytes.
- * @return true if the message was successfully queued; false if there was insufficient space in the queue.
+ * @param message {const char*} The message to queue for serial output.
+ * @param messageLength {size_t} The length of the message in bytes.
+ * @return {bool} True if the message was successfully queued; false if there was insufficient space in the queue.
  * 
- * @throws none This function does not throw exceptions.
+ * @throws {none} This function does not throw exceptions.
  */
 static bool queueSerialOutput(const char* message, size_t messageLength) {
   if (message == nullptr || messageLength == 0) {
@@ -145,7 +129,7 @@ static bool queueSerialOutput(const char* message, size_t messageLength) {
 }
 
 /**
- * @section Definitions for public input/output functions for user workflows and HX711 interactions.
+ * @section Public Definitions for input/output functions
  */
 
 float computeLoadDetectThreshold(float minimumThresholdLbs) {

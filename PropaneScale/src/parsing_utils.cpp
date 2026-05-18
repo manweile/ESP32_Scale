@@ -12,18 +12,14 @@
  * @copyright Copyright (c) 2026 Gerald Manweiler
  */
 
-/**
- * @section Standard library headers
- */
-
+// Standard library headers
 #include <math.h>
 #include <stdlib.h>
 
-/** 
- * @section Local library headers
- */
-
+// Local library headers
 #include "parsing_utils.h"
+
+// Definitions for parsing and validation utility functions
 
 bool isValidBoundedFloat(float value, float minimumValue, float maximumValue, bool useAbsoluteMagnitude) {
   float candidate = 0.0f;                                   // Temporarily holds the value used for comparison

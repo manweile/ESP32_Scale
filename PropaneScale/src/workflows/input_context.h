@@ -13,11 +13,10 @@
 
 #pragma once */
 
-/**
- * @section Standard library headers
- */
-
+// Standard library headers
 #include <cstdint>
+
+// Enums and Structs
 
 /**
  * @enum InputMode
@@ -61,9 +60,6 @@ struct InputContext {
   InputState state       = InputState::IDLE;                /**< Current parse state for active mode */
 };
 
-/**
- * @section External Global State Variables and Functions
- */
-
+// External Global State Variables and Functions
 extern InputContext inputCtx;                               /**< Non-blocking input context for serial workflows */
 extern void resetInputContext();                            /**< Resets input context to idle state */

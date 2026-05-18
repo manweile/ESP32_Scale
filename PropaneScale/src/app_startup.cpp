@@ -14,34 +14,21 @@
  * @copyright Copyright (c) 2026 Gerald Manweiler
  */
 
-/**
- * @section Standard library headers
- */
-
+ // Standard library headers
 #include <Arduino.h>                                        // Arduino core library for Serial communication and basic types
 #include <EEPROM.h>                                         // EEPROM library for persistent storage of calibration and tare values
 
-/**
- * @subsection Third party library headers
- */
-
+// Third party library headers
 #include "HX711.h"                                          // HX711 library for interfacing with the load cell amplifier to read weight data
 
-
-/** 
- * @section Local library headers
- */
-
+// Local library headers
 #include "config.h"                                         // Configuration constants for the ESP32-based propane level scale
 #include "src/eeprom_store.h"                               // EEPROM storage functions
 #include "src/parsing_utils.h"                              // Utility functions for validating and parsing input values
 #include "src/runtime_report.h"                             // For printStartupSummary
 #include "src/workflows/startup_tare_workflow.h"            // For computeStartupNotEmptyThreshold
 
-/**
- * @section External Global State Variables and Functions
- */
-
+// External Global State Variables and Functions
 extern float calibrationFactor;
 extern bool eepromReady;
 extern HX711 scale; 
@@ -49,9 +36,7 @@ extern float knownWeight;
 extern float maxPropane;
 extern float tankTare;
 
-/**
- * @section Definitions for application startup initialization functions
- */
+ // Definitions for application startup initialization functions
 
 void initializeApp() {
   // need to check if eeprom is ready before trying to load values, and if not, use defaults and continue without eeprom functionality

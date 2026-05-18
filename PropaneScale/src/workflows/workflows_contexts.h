@@ -13,11 +13,10 @@
 
 #pragma once
 
-/**
- * @section Standard library headers
- */
-
+// Standard library headers
 #include <cstdint>
+
+// Calibration Enums and Structs
 
 /**
  * @enum CalMode
@@ -73,6 +72,7 @@ struct CalContext {
   unsigned long stateStartMs              = 0;              /**< millis() when current state was entered */
 };
 
+// Level Enums and Structs
 
 /**
  * @enum LevelState
@@ -101,6 +101,8 @@ struct LevelContext {
   LevelState    state               = LevelState::IDLE;     /**< current state within the level read workflow */
   unsigned long stateStartMs        = 0;                    /**< millis() when WAIT_LOAD state was entered */
 };
+
+// Tare Enums and Structs
 
 /**
  * @enum TareState
@@ -131,10 +133,7 @@ struct TareContext {
   unsigned long stateStartMs = 0;                           /**< millis() when WAIT_STABLE state was entered */
 };
 
-/**
- * @section External Global State Variables
- */
-
+// External global State Variables
 extern CalContext calCtx;                                   /**< Calibration context instance to hold state for calibration workflows */
 extern LevelContext levelCtx;                               /**< Level read context instance to hold state for the level read workflow */
 extern TareContext tareCtx;                                 /**< Startup tare context instance */

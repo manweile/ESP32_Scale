@@ -11,42 +11,28 @@
  * @copyright Copyright (c) 2024 Gerald Manweiler
  */
 
-/**
- * @section Standard library headers
- */
-
+// Standard library headers
 #include <Arduino.h>
 #include <math.h>
 #include <stdio.h>
 
-/**
- * @subsection Third party library headers
- */
-
+// Third party library headers
 #include "HX711.h"                                          // HX711 library for interfacing with the load cell amplifier to read weight data
 
-/**
- * @section Local library headers
- */
-
+// Local library headers
 #include "config.h"                                         // Configuration constants for the ESP32-based propane level scale
 #include "src/eeprom_store.h"                               // EEPROM storage functions
 #include "src/scale_io.h"                                   // Input/output functions for user workflows and HX711 interactions
 #include "src/workflows/workflows_contexts.h"               // Context definitions for non-blocking workflows
 
-/**
- * @section External Global State Variables and Functions
- */
-
+// External Global State Variables and Functions
 extern float calibrationFactor;                             // Calibration factor for converting raw HX711 readings to weight in pounds
 extern float knownWeight;                                   // Known weight for calibration
 extern HX711 scale;                                         // HX711 instance owned by PropaneScale.ino
 extern const char CALIBRATION_SAVE_FAILURE_MSG[];           // Message to display when saving calibration factor to EEPROM fails
 extern const char CALIBRATION_SAVE_SUCCESS_MSG[];           // Message to display when saving calibration factor to EEPROM succeeds
 
-/**
- * @section Private Helper Functions
- */
+// Private Helper Functions
 
 /**
  * @brief Queues the current manual calibration reading snapshot when needed.
@@ -97,8 +83,6 @@ static bool queueManualAdjustmentSnapshot() {
  * For AUTO and MANUAL modes, tares, measures the noise threshold, and transitions to WAIT_LOAD.
  * Declared and Implemented as a static function to allow reuse of the WAIT_EMPTY -> WAIT_LOAD transition logic
  * for both auto-confirming an empty condition after timeout and force-confirming an empty condition from user input. 
- *
- * @return {void} No value is returned.
  *
  * @throws {none} This function does not throw exceptions.
  */
@@ -160,9 +144,7 @@ static void transitionFromWaitEmpty() {
   calCtx.state        = CalState::WAIT_LOAD;
 }
 
-/**
- * @section Definitions for calibration workflow functions
- */
+// Definitions for calibration workflow functions
 
 void automaticCalibration() {
   if (calCtx.state != CalState::IDLE) {

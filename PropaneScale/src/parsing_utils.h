@@ -15,16 +15,18 @@
 
 #pragma once
 
+// Declarations for parsing and validation utility functions
+
 /**
  * @brief Validates that a float value is finite and within specified bounds.
  *
  * @details Checks if a float value is finite and within specified bounds, with an option to use absolute magnitude for the check.
  *
- * @param value The float value to validate.
- * @param minimumValue The minimum allowable value.
- * @param maximumValue The maximum allowable value.
- * @param useAbsoluteMagnitude If true, the absolute value of the float is used for validation.
- * @return true if the value is valid, false otherwise.
+ * @param value {float} The float value to validate.
+ * @param minimumValue {float} The minimum allowable value.
+ * @param maximumValue {float} The maximum allowable value.
+ * @param useAbsoluteMagnitude {bool} If true, the absolute value of the float is used for validation.
+ * @return {bool} True if the value is valid, false otherwise.
  *
  * @throws {none} This function does not throw exceptions.
  */
@@ -36,8 +38,8 @@ bool isValidBoundedFloat(float value, float minimumValue, float maximumValue, bo
  * @details Attempts to parse a float value from the input string.
  * Validates that the entire string is a valid float representation and that the parsed value is non-negative.
  *
- * @param {const char*} text Input text to parse.
- * @param {float&} outValue Parsed output value on success.
+ * @param text {const char*} Input text to parse.
+ * @param outValue {float&} Parsed output value on success.
  * @return {bool} True if parsing succeeds and the value is non-negative.
  *
  * @throws {none} This function does not throw exceptions.

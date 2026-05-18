@@ -13,14 +13,14 @@
 
 #pragma once
 
+// Declarations for calibration workflow functions
+
 /**
  * @brief Starts the automatic calibration workflow.
  *
  * @details Validates that no calibration is already running, checks scale readiness,
  * prints the initial prompts, and sets the calibration context to begin waiting for
  * an empty scale. The workflow continues asynchronously through tickCalibration().
- *
- * @return {void} No value is returned.
  *
  * @throws {none} This function does not throw exceptions.
  */
@@ -33,8 +33,7 @@ void automaticCalibration();
  * Handles cancel ('q'/'Q') from WAIT_EMPTY and WAIT_LOAD, and factor adjustment
  * ('+', '-', 's', 'q') from the ADJUSTING state.
  *
- * @param {char} serialchar The received serial character.
- * @return {void} No value is returned.
+ * @param serialchar {char} The received serial character.
  *
  * @throws {none} This function does not throw exceptions.
  */
@@ -48,8 +47,6 @@ void handleCalibrationInput(char serialchar);
  * prints the initial prompts, and sets the calibration context to begin waiting for
  * an empty scale. The workflow continues asynchronously through tickCalibration().
  *
- * @return {void} No value is returned.
- *
  * @throws {none} This function does not throw exceptions.
  */
 void manualCalibration();
@@ -60,8 +57,6 @@ void manualCalibration();
  * @details Validates that no calibration is already running, checks scale readiness,
  * prints the initial prompts, and sets the calibration context to begin waiting for
  * an empty scale in REZERO mode. The workflow continues asynchronously through tickCalibration().
- *
- * @return {void} No value is returned.
  *
  * @throws {none} This function does not throw exceptions.
  */
@@ -78,8 +73,6 @@ void reZero();
  *    - AUTO: automatic calibration measurement
  *    - MANUAL: manual adjustment based on the active mode
  * - ADJUSTING: handles manual calibration adjustments
- *
- * @return {void} No value is returned.
  *
  * @throws {none} This function does not throw exceptions.
  */

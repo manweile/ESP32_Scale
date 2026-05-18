@@ -15,12 +15,12 @@
 
 #pragma once
 
+// Declarations for application startup initialization functions
+
 /**
  * @brief Initializes the application.
  * 
  * @details Performs necessary setting up the HX711 scale interface and applies calibration from EEPROM.
- * 
- * @return {void} No value is returned.
  * 
  * @throws {none} This function does not throw exceptions.
  */

@@ -14,6 +14,8 @@
 
 #pragma once
 
+// Declarations for level read workflow functions
+
 /**
  * @brief Handles input for the liquid level read workflow.
  *
@@ -21,7 +23,7 @@
  * It routes 'q' to cancel the workflow when waiting for tank placement or settling, 
  * and ignores newlines to prevent interference with command processing.
  * 
- * @param incoming The incoming character from the serial interface.
+ * @param incoming {char} The incoming character from the serial interface.
  *
  * @return {bool} Returns true if the input was handled by the level read workflow, false otherwise.
  *
@@ -37,8 +39,6 @@ bool handleLevelReadInput(char incoming);
  * polling for tank placement. The workflow continues asynchronously through
  * tickLevelRead().
  *
- * @return {void} No value is returned.
- *
  * @throws {none} This function does not throw exceptions.
  */
 void liquidLevel();
@@ -53,8 +53,6 @@ void liquidLevel();
  *   placement motion is still in progress.
  * - READING: takes a final averaged measurement, computes and prints propane
  *   weight and fill percentage, then resets to IDLE.
- *
- * @return {void} No value is returned.
  *
  * @throws {none} This function does not throw exceptions.
  */
