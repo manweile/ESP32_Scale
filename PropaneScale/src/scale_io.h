@@ -116,3 +116,54 @@ float readAveragedUnits(int readings, int samplesPerReading);
  * @throws {none} This function does not throw exceptions.
  */
 void saveRuntimeTareOffset();
+
+// @todo sort alphabetically
+// --- Non-blocking sampler implementation
+/**
+ * @brief Starts a non-blocking sampling batch to read and average weight readings from the scale.
+ * 
+ * @details Initializes the internal state of the non-blocking sampler to begin accumulating readings across multiple loop() ticks.
+ *
+ * @param readings {int} Number of readings to average.
+ * @param samplesPerReading {int} Number of samples per reading.
+ * @return {bool} True when the batch was started successfully; false otherwise.
+ * 
+ * @throws {none} This function does not throw exceptions.
+ */
+bool startSampleBatch(int readings, int samplesPerReading);
+
+/**
+ * @brief Polls the non-blocking sampler to accumulate a single reading.
+ * 
+ * @details Should be called frequently from loop() or tick functions.
+ * Performs at most one HX711 read per call when the scale is ready.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+void pollSample();
+
+/**
+ * @brief Checks if the non-blocking sample batch has completed.
+ * 
+ * @return {bool} True if the sample batch is done; false otherwise.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+bool isSampleDone();
+
+/**
+ * @brief Retrieves the result of the last completed non-blocking sample batch.
+ * 
+ * @param outAvg {float&} Reference to a float variable where the average result will be stored if available.
+ * @return {bool} True when a valid result was written to `outAvg`; false when no completed result exists.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+bool getSampleResult(float &outAvg);
+
+/**
+ * @brief Cancels any in-progress non-blocking sample batch.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+void cancelSampleBatch();

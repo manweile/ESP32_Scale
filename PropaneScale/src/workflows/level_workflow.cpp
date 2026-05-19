@@ -88,8 +88,18 @@ void tickLevelRead() {
       return;
     }
 
-    float measuredUnits = readAveragedUnits(1, POLL_SAMPLES);
-    if (!isfinite(measuredUnits)) {
+    // Non-blocking detection: start a single-sample batch if none running,
+    // then poll until result is available.
+    if (!isSampleDone()) {
+      // start batch only if not already running; ignore failure when already running
+      startSampleBatch(1, POLL_SAMPLES);
+      // poll once to attempt an immediate read if HX711 ready
+      pollSample();
+      return;
+    }
+
+    float measuredUnits = 0.0f;
+    if (!getSampleResult(measuredUnits) || !isfinite(measuredUnits)) {
       printScaleNotReadyDiagnostic("tank placement detection");
       Serial.println("Level read cancelled.");
       levelCtx.state = LevelState::IDLE;
@@ -118,10 +128,18 @@ void tickLevelRead() {
   }
 
   if (levelCtx.state == LevelState::READING) {
-    Serial.println("Reading tank weight...");
-    float rawWeight = readAveragedUnits(CAL_SAMPLES, LIVE_SAMPLES);
+    // Start a non-blocking batch for the final reading and poll until complete.
+    // Print the status message only when a new batch is started.
+    if (!isSampleDone()) {
+      if (startSampleBatch(CAL_SAMPLES, LIVE_SAMPLES)) {
+        Serial.println("Reading tank weight...");
+      }
+      pollSample();
+      return;
+    }
 
-    if (!isfinite(rawWeight)) {
+    float rawWeight = 0.0f;
+    if (!getSampleResult(rawWeight) || !isfinite(rawWeight)) {
       printScaleNotReadyDiagnostic("final tank reading");
       Serial.println("Level read cancelled.");
       levelCtx.state = LevelState::IDLE;
