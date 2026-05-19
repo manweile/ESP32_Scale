@@ -140,6 +140,14 @@ Phase 3 — Polish & Deployment (1-2 days)
 2. Add BLE GATT service to ESP32 firmware (brief patch to repository in /src or main sketch to include BLE server code).
 3. Create a documentation page and a minimal Web Bluetooth prototype in a new `web` folder.
 
+## Suggested next steps
+- Add a minimal web prototype (static files in a new `web/` folder) that implements connect/telemetry and a simple UI.  I can implement this in JavaScript or TypeScript; tell me which you prefer and which UI approach (vanilla, Preact, Svelte, React).
+- Add an ESP32 firmware patch that exposes the recommended BLE GATT service/characteristics (small change to PropaneScale.ino) so the web app can connect and control the device.
+- Create an issue or project board with the tasks from the plan to track progress and assign priorities.
+- Create a PR that implements both the firmware BLE service and the web prototype (I will need the target branch name and explicit confirmation to proceed with changes).
+
+Choose one and I'll proceed with the implementation.
+
 ---
 
 This file was added to the repository to document the plan for a Web Bluetooth application for the ESP32 Propane Scale.
