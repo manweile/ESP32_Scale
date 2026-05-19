@@ -1,168 +1,150 @@
 # ESP32 Propane Scale
 
-An ESP32-based scale for measuring propane tank fill level.
+Compact ESP32-based propane tank scale that measures tank weight, subtracts the tank tare, and reports the propane weight and fill percentage.
 
-- Weighs the tank
-- subtracts the known empty-tank tare
-- reports the calculated propane weight and fill percentage
+## Versions
 
-## Hardware
+1. Serial monitor
+2. Web BLE
+3. Wifi
 
-| Component | Part | Count |
-| --------- | ---- | ----- |
-| Microcontroller | [SparkFun ESP32 Thing (DEV-13907)](https://www.sparkfun.com/sparkfun-esp32-thing.html) | 1 |
-| Load cell amplifier | [SparkFun HX711 (BOB-13879)](https://www.sparkfun.com/sparkfun-load-cell-amplifier-hx711.html) | 1 |
-| Load cell | [Sparkfun 50 kg (SEN-10245)](https://www.sparkfun.com/load-sensor-50kg-generic.html) | 4 |
+## Quick highlights
 
-### HX711 Wiring
+- Weighs tanks using four load cells + HX711 amplifier
+- Supports automatic and manual calibration workflows
+- Saves calibration/tare values to EEPROM
+- Built with `arduino-cli` and VS Code tasks for rapid iteration
 
-| HX711 Pin | ESP32 Pin | Purpose |
-| --------- | --------- | ------- |
-| CLK | GPIO 4 | Clock Input |
-| DOUT | GPIO 16 | Data Output |
-| VDD | 5V | Load Cell Analog Voltage |
-| VCC | 3V3 | Logic Level Voltage |
-| GND | GND | Common Ground |
+## Quick Start
 
-### Load Cell Combination Wiring
+1. Install Arduino CLI
+2. Install Espressif toolchain
+3. Install ESP32 board support and the HX711 library
+4. Open this workspace in VS Code. Use the provided tasks to build/flash (see 'Tasks' section)
+5. Edit `PropaneScale/config.h` to set the pins and default calibration/tare values before flashing
+6. Connect to a serial console at `115200` to interact with the command interface
 
-For the [Sparkfun 50 kg (SEN-10245)](https://www.sparkfun.com/load-sensor-50kg-generic.html), per the [SparkFun HX711 (BOB-13879)](https://www.sparkfun.com/sparkfun-load-cell-amplifier-hx711.html) schematic, the center tap is red, the positive lead is white, and the negative lead is black.
+## Building and Uploading
 
-This is confirmed by resistance measurement:
+Building & Uploading can be done with VS Code compound task calls:
 
-| Wire Pair | Resistance |
-| --------- | ---------- |
-| White to Red | 870 ohms |
-| White to Black | 1500 ohms |
-| Red to Black | 870 ohms |
+- `ESP32 Thing Quick Compile & Quick Flash`
+- `ESP32 Thing Clean Rebuild & Quick Flash`
+- Refer to building and upload section for details
 
-The high resistance pair is the excitation pair. This is the white (+) to black (-) pair.
+### Building
 
-The remaining wire is the center tap. This the red wire.
+Building is being done via arduino-cli.
 
-While you can use the [Sparkfun Load Cell Combinator (BOB-13878)](https://www.sparkfun.com/sparkfun-load-sensor-combinator.html).
+- Using arduino-cli for convenience
+- Have experience with it
+- Already installed and configured
+- Precludes having to re-learn CMake & Ninja
+- Use the included VS Code tasks: `ESP32 Thing Quick Compile`, `ESP32 Thing Clean Rebuild`
+- The FQBN (full qualified board name) is hard coded because the project is esp32 specific
+- Example arduino-cli build command (used by the tasks):
 
-If you refer to the [SparkFun HX711 (BOB-13879)](https://www.sparkfun.com/sparkfun-load-cell-amplifier-hx711.html) schematic, you can directly solder up the 4 load cells and not use the combinator breakout.
+  ```bash
+  arduino-cli compile -v --fqbn esp32:esp32:esp32thing PropaneScale
+  ```
 
-## Software Dependencies
+### Upload
 
-- [SparkFun HX711 Arduino Library](https://github.com/sparkfun/SparkFun_HX711_Arduino_Library)
-- Arduino ESP32 board support (`esp32:esp32`)
+Uploading is done via esptool.exe
 
-Install the HX711 library via Arduino CLI:
+- Planning on eventually using esp tools entirely for build and upload
+- Since esp32 is only chip used, it is hard coded, as is the upload speed, write flash location, and binary file
+- the *.ino.merged.bin file must be used for an esp32
+- Use the include VS Code tasks:
+  - `ESP32 Thing Quick Flash`
+    - This task uses `esp32-thing-quick-flash.ps1` powershell script, which in turn calls `list_ports.py`
+    - These scripts return the com port the esp32 thing is attached to
+    - Example cli:
 
-```bash
-arduino-cli lib install "SparkFun HX711"
-```
+    ```bash
+    esptool.exe --chip esp32 --port COM3 --baud 921600 write-flash -z 0x0 D:/MyArduino/Projects/ESP32_Scale/PropaneScale/build/esp32.esp32.esp32thing/PropaneScale.ino.merged.bin
+    ```
 
-## Building
+  - `ESPTool ESP32 COMPort Merged Bin Upload`
+    - This task needs com port import
+    - The com port input uses `list_ports.py` directly
+    - Example cli:
 
-Currently this project is using arduino-cli for building.
-
-Eventually, will switch to complete ESP-IDF toolchain.
-
-```bash
-arduino-cli compile -v --fqbn "${input:FQBN}" "${workspaceFolder}/PropaneScale"
-arduino-cli compile -v --clean --fqbn "${input:FQBN}" "${workspaceFolder}/PropaneScale"
-arduino-cli compile -v --clean --fqbn "${input:FQBN}" --build-property 'build.extra_flags=-Og -g3' "${workspaceFolder}/PropaneScale"
-```
-
-Upload:
-
-```bash
-arduino-cli upload -v -p "${input:COMPort}" --fqbn "${input:FQBN}" --input-dir "${workspaceFolder}/PropaneScale/build/${input:FQBNDIR}" "${workspaceFolder}/PropaneScale"
-
-esptool.exe --verbose --chip esp32 --port "${input:COMPort}" --baud "${input:espUploadSpeed}" write-flash -z 0x0 "${input:openMergedBinDialog}"
-```
-
-VS Code tasks for compile, clean rebuild, upload, and serial monitor are provided in `.vscode/tasks.json`.
+    ```bash
+    esptool.exe --chip esp32 --port COM4 --baud 921600 write-flash -z 0x0 D:/MyArduino/Projects/ESP32_Scale/PropaneScale/build/esp32.esp32.esp32thing/PropaneScale.ino.merged.bin
+    ```
 
 ## Configuration
 
-Edit `PropaneScale/config.h` to change defaults before flashing:
+- Edit `PropaneScale/config.h` to change:
+  - `CLK_PIN`, `DOUT_PIN` (HX711 pins)
+    - While these can be almost any of the available pins, using 16 & 17 so the JTAG pins (12, 13, 14, 15) remain open
+  - `BAUD` (serial baud rate)
+    - Needs to be 115200, as that is the hard coded default boot speed of the ESP32 Thing
+    - using any other speed results in ascii garbage hen the REST button is hit
+  - `DEF_CALIBRATION_FACTOR`
+    - Computed by running SparkFun_HX711_Calibration.ino in examples directory and noting the value
+  - `DEF_KNOWN_WEIGHT`
+    - The sample weight used to compute the default calibration factor
+  - `DEF_TANK_TARE`
+    - midpoint of average 20 lb tank tares
+  - `DEF_MAX_PROPANE`
+    - the legal maximum of propane for 20 lb tank: 80% x 20 = 16
 
-| Constant | Default | Description |
-| -------- | ------- | ----------- |
-| `CLK_PIN` | 4 | HX711 clock pin |
-| `DOUT_PIN` | 16 | HX711 data pin |
-| `BAUD` | 115200 | Serial baud rate |
-| `DEF_CALIBRATION_FACTOR` | -10422.95 | Initial HX711 scale factor |
-| `DEF_KNOWN_WEIGHT` | 36.8 | Reference weight for automatic calibration (lbs) |
-| `DEF_TANK_TARE` | 23.5 | Empty tank tare weight (lbs) — 30 lb tank default |
-| `DEF_MAX_PROPANE` | 24.0 | Maximum legal propane fill (lbs) — 80% of 30 lb tank capacity |
-| `PLATEN_TARE` | 0.33125 | Platform platen tare weight (lbs) |
+## Hardware Summary
 
-Commented-out presets for 20 lb and 50 lb reference weights are also provided.
+- Microcontroller: SparkFun ESP32 Thing (DEV-13907)
+- Amplifier: SparkFun HX711 (BOB-13879)
+- Load cells: SparkFun 50 kg (SEN-10245) — 4x in a full-bridge arrangement
 
-## EEPROM Persistence
+### HX711 pins (default)
 
-Three values are stored in ESP32 EEPROM across power cycles:
-
-| Value | Magic | Byte addresses |
-| ----- | ----- | -------------- |
-| Calibration factor | `CAL1` | 0–7 |
-| Tank tare | `TARE` | 8–15 |
-| Max propane weight | `MAXP` | 16–23 |
-
-Each record uses a 4-byte magic marker followed by a 4-byte float. If the magic is absent, the compiled-in default is written to EEPROM on first boot.
+| HX711 | ESP32 |
+| --- | --- |
+| CLK | GPIO 17 |
+| DOUT | GPIO 16 |
 
 ## Serial Command Interface
 
-Connect at **115200 baud**. On startup the device prompts you to confirm the scale is empty before taring.
+- Commands:
+  - `a` — Automatic calibration
+  - `c` — Print current runtime values
+  - `d` — Reset EEPROM value to default configuration
+  - `e` — Print EEPROM values
+  - `h` — Print menu
+  - `m` — Manual calibration (use `+` / `-`, save with `s`)
+  - `k` - Set known weight for calibrations (enter value, `s` to save)
+  - `l` — Single reading of propane weight and level
+  - `p` — Set tank tare (enter value, `s` to save)
+  - `q` — Cancellation for all input workflows
+  - `r` — Re-zero scale, `q` to force-confirm
+  - `t` - Set tank tare (enter value, `s` to save)
 
-| Command | Description |
-| ------- | ----------- |
-| `a` | Automatic calibration — tares empty scale, detects placed weight, computes factor |
-| `e` | Display all saved EEPROM values with validity status |
-| `l` | Display one propane reading |
-| `m` | Manual calibration — adjust factor with `+`/`-` keys, save with `q` |
-| `p` | Set propane tank tare weight (enter value + Enter, then `s` to save) |
-| `w` | Set maximum legal propane weight (enter value + Enter to save) |
-| `z` | Re-zero scale (prompts to remove all weight first) |
-
-### Propane Reading Output Format
+## Output example
 
 ```text
 Scale load: 39.5 lbs, Calculated propane: 15.7 lbs, Level: 65.4%
 ```
 
-- **Scale load** — raw weight reported by HX711 after calibration
-- **Calculated propane** — scale load minus tank tare and platen tare
-- **Level** — propane weight as a percentage of max legal fill
+## Project Layout
 
-## Calibration Workflow
+- [PropaneScale](PropaneScale): main sketch
+- `config.h` (pin and calibration constants)
+- Documentation under the `Documentation/` folder
+- Examples under the `Examples/` folder
 
-### Automatic (recommended)
+## Development Notes
 
-1. Send `a`
-2. Confirm scale is empty (`y`)
-3. Place the known reference weight defined by `DEF_KNOWN_WEIGHT`
-4. Factor is computed and saved automatically
+- This workspace includes tasks for build/flash and a Doxygen setup in `Documentation/Doxygen/`.
+- See `Documentation/Copilot/` for notes and design plans.
 
-### Manual
+Contributing
 
-1. Send `m`
-2. Confirm scale is empty (`y`)
-3. Place a known weight
-4. Adjust with `+` / `-` until the reading matches the known weight (step halves on direction reversal)
-5. Send `q` to accept and save
+- Fixes, improvements, and pull requests welcome. Please open issues describing bugs or requested features.
 
-## Tank Tare Reference Values
+License
 
-| Tank size | Typical empty tare |
-| --------- | ------------------ |
-| 20 lb | 16–18 lbs |
-| 30 lb | 23–26 lbs |
+- This repository does not include a license file. Add one if you intend to publish the code.
 
-Set the tare for the specific tank using the `p` command, then save to EEPROM.
-
-## Project Structure
-
-```text
-PropaneScale/
-  PropaneScale.ino   Main sketch
-  config.h           Pin assignments, calibration constants, EEPROM layout
-Documentation/       Fritzing schematics and component data sheets
-Examples/            Reference sketches (HX711 examples, IoT hello-world)
-3D/STL/              3D-printable enclosure parts
-```
+---
+Updated README: streamlined quick-start, build tasks, and configuration notes.
