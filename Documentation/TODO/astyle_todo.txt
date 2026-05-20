@@ -1,3 +1,5 @@
 1) verify Astyle is running on file save
 2) verify Astyle is running pre-commit
 3) verify Astyle running on git hub
+4) REVIEW aSTYLE RULES
+  a) want 1 space after //
