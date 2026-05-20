@@ -17,6 +17,16 @@
 // Declarations for input/output functions for user workflows and HX711 interactions
 
 /**
+ * @brief Cancels any in-progress non-blocking sample batch.
+ * 
+ * @details Resets the non-blocking sampler state to stop any in-progress batch and clear results.
+ * Used by workflows to cancel long-running sampling operations.
+ * 
+ * @throws {none} This function does not throw exceptions.
+ */
+void cancelSampleBatch();
+
+/**
  * @brief Computes the load-detection threshold from measured noise.
  *
  * @details Reads the current unloaded noise from the scale, multiplies it by 20
@@ -62,6 +72,31 @@ bool ensureScaleReady(const char* operation);
 void flushSerialInput();
 
 /**
+ * @brief Retrieves the result of the last completed non-blocking sample batch.
+ * 
+ * @details Writes the average to `outAvg` and marks the result as consumed.
+ * Used by workflows to check for results from non-blocking sampling batches without blocking.
+ * 
+ * @param outAvg {float&} Reference to a float variable where the average result will be stored if available.
+ * @return {bool} True when a valid result was written to `outAvg`; false when no completed result exists.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+bool getSampleResult(float &outAvg);
+
+/**
+ * @brief Checks if the non-blocking sample batch has completed.
+ * 
+ * @details Used by workflows to check for completion of non-blocking sampling batches without blocking.
+ * A batch is considered done when it is not running and has taken at least one reading.
+ * 
+ * @return {bool} True if the sample batch is done; false otherwise.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+bool isSampleDone();
+
+/**
  * @brief Prints a standardized HX711 not-ready diagnostic.
  *
  * @details Used across workflows to keep timeout/not-ready messaging consistent.
@@ -71,6 +106,16 @@ void flushSerialInput();
  * @throws {none} This function does not throw exceptions.
  */
 void printScaleNotReadyDiagnostic(const char* operation);
+
+/**
+ * @brief Polls the non-blocking sampler to accumulate a single reading.
+ * 
+ * @details Should be called frequently from loop() or tick functions.
+ * Performs at most one HX711 read per call when the scale is ready.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+void pollSample();
 
 /**
  * @brief Queues a serial message for non-blocking transmission.
@@ -85,7 +130,6 @@ void printScaleNotReadyDiagnostic(const char* operation);
  * @throws {none} This function does not throw exceptions.
  */
 bool queueSerialOutput(const char* message);
-
 
 // @todo readAveragedUnits() uses wait_ready_timeout() per iteration so it no longer spins
 // indefinitely, but it still blocks loop() for up to HX711_READY_TIMEOUT_MS per reading
@@ -117,8 +161,6 @@ float readAveragedUnits(int readings, int samplesPerReading);
  */
 void saveRuntimeTareOffset();
 
-// @todo sort alphabetically
-// --- Non-blocking sampler implementation
 /**
  * @brief Starts a non-blocking sampling batch to read and average weight readings from the scale.
  * 
@@ -132,38 +174,3 @@ void saveRuntimeTareOffset();
  */
 bool startSampleBatch(int readings, int samplesPerReading);
 
-/**
- * @brief Polls the non-blocking sampler to accumulate a single reading.
- * 
- * @details Should be called frequently from loop() or tick functions.
- * Performs at most one HX711 read per call when the scale is ready.
- *
- * @throws {none} This function does not throw exceptions.
- */
-void pollSample();
-
-/**
- * @brief Checks if the non-blocking sample batch has completed.
- * 
- * @return {bool} True if the sample batch is done; false otherwise.
- *
- * @throws {none} This function does not throw exceptions.
- */
-bool isSampleDone();
-
-/**
- * @brief Retrieves the result of the last completed non-blocking sample batch.
- * 
- * @param outAvg {float&} Reference to a float variable where the average result will be stored if available.
- * @return {bool} True when a valid result was written to `outAvg`; false when no completed result exists.
- *
- * @throws {none} This function does not throw exceptions.
- */
-bool getSampleResult(float &outAvg);
-
-/**
- * @brief Cancels any in-progress non-blocking sample batch.
- *
- * @throws {none} This function does not throw exceptions.
- */
-void cancelSampleBatch();

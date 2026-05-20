@@ -16,9 +16,8 @@
 #include <Arduino.h>                                        // Arduino core library for Serial communication and basic types
 #include <math.h>                                           // Math library for fabsf() and other mathematical functions
 #include <string.h>                                         // String helpers for non-blocking serial queue management
-// C++ utilities for compile-time feature detection
-#include <type_traits>
-#include <utility>
+#include <type_traits>                                      // For std::void_t and type traits used in compile-time feature detection
+#include <utility>                                          // For std::declval used in compile-time feature detection
 
 // Third party library headers
 #include "HX711.h"                                          // HX711 library for interfacing with the load cell amplifier to read weight data
@@ -28,25 +27,38 @@
 #include "eeprom_store.h"                                   // EEPROM storage functions
 #include "scale_io.h"                                       // Input/output functions for user workflows and HX711 interactions
 
-// External Global State Variables
-extern HX711 scale;                                         // HX711 instance for interacting with the load cell amplifier
-
-// Compile-time feature detection for HX711 readiness helpers.
-// Detect whether HX711 provides `is_ready()` or `wait_ready_timeout()` and
-// provide a portable wrapper `hx711_is_ready_nonblocking()`.
+/**
+ * @namespace hx711_utils
+ * 
+ * @brief Compile-time feature detection for HX711 readiness helpers.
+ * 
+ * @details Uses C++17's `std::void_t` and SFINAE (Substitution Failure Is Not An Error) 
+ * to detect the presence of `is_ready()` and `wait_ready_timeout()` methods in the HX711 class.
+ * Used for non-blocking readiness checks without worrying about which HX711 library version is being used.
+ */
 namespace hx711_utils {
-  template <typename T, typename = void>
+  template <typename T, typename = void>                    /**< Detect presence of `is_ready()` method exists */
   struct has_is_ready : std::false_type {};
 
-  template <typename T>
+  template <typename T>                                     /**< Specialization of `has_is_ready` if `is_ready()` method exists */
   struct has_is_ready<T, std::void_t<decltype(std::declval<T&>().is_ready())>> : std::true_type {};
 
-  template <typename T, typename = void>
+  template <typename T, typename = void>                    /**< Detect presence of `wait_ready_timeout()` method exists */
   struct has_wait_ready_timeout : std::false_type {};
 
-  template <typename T>
+  template <typename T>                                     /**< Specialization of `has_wait_ready_timeout` if `wait_ready_timeout()` method exists */
   struct has_wait_ready_timeout<T, std::void_t<decltype(std::declval<T&>().wait_ready_timeout(0))>> : std::true_type {};
 
+  /**
+   * @brief Portable wrapper to check if the HX711 is ready without blocking.
+   * 
+   * @details Uses compile-time feature detection to determine which method to call for checking HX711 readiness.
+   * 
+   * @param s {HX711&} HX711 instance to check for readiness
+   * @return true if the HX711 is ready, false otherwise
+   * 
+   * @throws {none} This function does not throw exceptions.
+   */
   static inline bool hx711_is_ready_nonblocking(HX711 &s) {
     if constexpr (has_is_ready<HX711>::value) {
       return s.is_ready();
@@ -58,7 +70,8 @@ namespace hx711_utils {
   }
 }
 
-// Non-blocking sampler internal state
+// Non-blocking Sampler Internal State Struct
+
 /**
  * @struct NonBlockingSampler
  * 
@@ -74,15 +87,18 @@ struct NonBlockingSampler {
   int    readingsTaken     = 0;                             /**< number of readings taken so far in the current batch */
   double totalUnits        = 0.0;                           /**< accumulated units from all readings in the current batch */
   bool   running           = false;                         /**< indicates if a batch is currently running */
-  float  lastResult        = NAN;                           /**< last computed average result for the batch */
+  float  lastResult        = NAN;                           /**< last computed average result for the batch; NAN indicates no result yet */
 };
 
-//  Private Static Constants and Variables
-static constexpr size_t SERIAL_CAPACITY = 2048;             // Capacity of the internal serial output queue in bytes
-static NonBlockingSampler sampler;                          // Instance of the non-blocking sampler to manage state for non-blocking sampling batches across workflows
-static size_t serialLength = 0;                             // Current length of data in the serial output queue
-static size_t serialOffset = 0;                             // Current offset for reading from the serial output queue
-static char serialQueue[SERIAL_CAPACITY];                   // Internal buffer for queued serial output
+// External Global State Variables
+extern HX711 scale;                                         /**< HX711 instance for interacting with the load cell amplifier */
+
+// Private Static Constants and Variables
+static constexpr size_t SERIAL_CAPACITY = 2048;             /**< Capacity of the internal serial output queue in bytes */
+static NonBlockingSampler sampler;                          /**< Manages state for non-blocking sampling batches across workflows */
+static size_t serialLength = 0;                             /**< Current length of data in the serial output queue */
+static size_t serialOffset = 0;                             /**< Current offset for reading from the serial output queue */
+static char serialQueue[SERIAL_CAPACITY];                   /**< Internal buffer for queued serial output */
 
 // Private Definitions & Declarations for input/output helper functions
 
@@ -181,6 +197,13 @@ static bool queueSerialOutput(const char* message, size_t messageLength) {
  * @section Public Definitions for input/output functions
  */
 
+void cancelSampleBatch() {
+  sampler.running = false;
+  sampler.readingsTaken = 0;
+  sampler.totalUnits = 0.0;
+  sampler.lastResult = NAN;
+}
+
 float computeLoadDetectThreshold(float minimumThresholdLbs) {
   float noise = fabsf(readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES));
   float threshold = noise * 20.0f;
@@ -237,14 +260,36 @@ void flushSerialInput() {
   }
 }
 
-bool queueSerialOutput(const char* message) {
-  // want to avoid calling strlen() on a null pointer, 
-  // so treat null as empty message that is successfully queued
-  if (message == nullptr) {
-    return true;
-  }
+bool getSampleResult(float &outAvg) {
+  if (!isSampleDone()) return false;
 
-  return queueSerialOutput(message, strlen(message));
+  outAvg = sampler.lastResult;
+  sampler.readingsTaken = 0;
+  // NAN indicates no valid result until next batch completes
+  sampler.lastResult = NAN;
+
+  return true;
+}
+
+bool isSampleDone() {
+  return (!sampler.running && sampler.readingsTaken > 0);
+}
+
+void pollSample() {
+  if (!sampler.running) return;
+
+  // If HX711 isn't ready right now, return immediately — non-blocking.
+  if (!hx711_utils::hx711_is_ready_nonblocking(scale)) return;
+
+  // Read one sample (one averaged unit) so pollSample performs minimal blocking
+  float value = scale.get_units(1);
+  sampler.totalUnits += static_cast<double>(value);
+  sampler.readingsTaken++;
+
+  if (sampler.readingsTaken >= sampler.totalReadings) {
+    sampler.lastResult = static_cast<float>(sampler.totalUnits / sampler.readingsTaken);
+    sampler.running = false;
+  }
 }
 
 void printScaleNotReadyDiagnostic(const char* operation) {
@@ -256,6 +301,16 @@ void printScaleNotReadyDiagnostic(const char* operation) {
   Serial.println('.');
   Serial.println("Check HX711 wiring, power, and data pins (DOUT/CLK).");
   Serial.println();
+}
+
+bool queueSerialOutput(const char* message) {
+  // want to avoid calling strlen() on a null pointer, 
+  // so treat null as empty message that is successfully queued
+  if (message == nullptr) {
+    return true;
+  }
+
+  return queueSerialOutput(message, strlen(message));
 }
 
 float readAveragedUnits(int readings, int samplesPerReading) {
@@ -292,8 +347,6 @@ void saveRuntimeTareOffset() {
   }
 }
 
-// @todo sort alphabetically
-// --- Non-blocking sampler implementation
 bool startSampleBatch(int readings, int samplesPerReading) {
   if (readings <= 0) return false;
   if (sampler.running) return false; // already running
@@ -305,41 +358,4 @@ bool startSampleBatch(int readings, int samplesPerReading) {
   sampler.running = true;
   sampler.lastResult = NAN;
   return true;
-}
-
-void pollSample() {
-  if (!sampler.running) return;
-
-  // If HX711 isn't ready right now, return immediately — non-blocking.
-  if (!hx711_utils::hx711_is_ready_nonblocking(scale)) return;
-
-  // Read one sample (one averaged unit) so pollSample performs minimal blocking
-  float value = scale.get_units(1);
-  sampler.totalUnits += static_cast<double>(value);
-  sampler.readingsTaken++;
-
-  if (sampler.readingsTaken >= sampler.totalReadings) {
-    sampler.lastResult = static_cast<float>(sampler.totalUnits / sampler.readingsTaken);
-    sampler.running = false;
-  }
-}
-
-bool isSampleDone() {
-  return (!sampler.running && sampler.readingsTaken > 0);
-}
-
-bool getSampleResult(float &outAvg) {
-  if (!isSampleDone()) return false;
-  outAvg = sampler.lastResult;
-  // mark result consumed
-  sampler.readingsTaken = 0;
-  sampler.lastResult = NAN;
-  return true;
-}
-
-void cancelSampleBatch() {
-  sampler.running = false;
-  sampler.readingsTaken = 0;
-  sampler.totalUnits = 0.0;
-  sampler.lastResult = NAN;
 }
