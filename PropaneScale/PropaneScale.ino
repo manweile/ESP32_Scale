@@ -48,7 +48,7 @@ InputContext inputCtx;                                      /**< Non-blocking in
 LevelContext levelCtx;                                      /**< Level read context instance to hold state for the level read workflow */
 TareContext tareCtx;                                        /**< Startup tare context instance */
 
-// // Definitions & Declarations for State Machine Functions
+// Definitions & Declarations for State Machine Functions
 
 /**
  * @brief Resets the input context to its initial state.
