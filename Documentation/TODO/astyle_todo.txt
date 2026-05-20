@@ -3,3 +3,14 @@
 3) verify Astyle running on git hub
 4) REVIEW aSTYLE RULES
   a) want 1 space after //
+  b) no trailing spaces
+  c) global class vars: PascalCase eg HX711 Scale;
+  d) global vars: PascalCase eg float CalibrationFactor = 0.0f;
+  e) global constants: ALL_CAPS eg extern const char CALIBRATION_SAVE_FAILURE_MSG[];
+  f) structs: PascalCase eg struct CalContext
+  g) struct members: camelCase eg int    totalReadings     = 0;
+  h) enums: PascalCase eg enum class CalState : uint8_t {
+  i) enum members: ALL_CAPS eg WAIT_EMPTY = 1
+  j) local vars: camelCase eg bool haveSample = false;
+  k) local constants: camelCase eg const int probeReads = LIVE_SAMPLES;
+  l) functions: camelCase eg static bool queueSerialOutput
