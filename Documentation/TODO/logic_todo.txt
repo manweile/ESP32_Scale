@@ -1,0 +1,19 @@
+1) remove this from D:\MyArduino\Projects\ESP32_Scale\PropaneScale\src\workflows\startup_tare_workflow.cpp.63:
+Not-empty threshold: >= 35.50 lbs (tank tare + max propane + margin).
+Stability tolerance: +/- 1.50 lbs once below not-empty threshold.
+
+2) current runtime values doesn't need the eeprom output
+Current Runtime Values
+EEPROM ready: yes
+Calibration factor: -10420.86
+Known calibration weight: 26.00 lbs
+Max propane weight: 16.00 lbs
+Tank tare: 17.50 lbs
+Calibration mode: 0 (NONE)
+Calibration state: 0 (IDLE)
+Level state: 0 (IDLE)
+Tare state: 0 (IDLE)
+Input mode: 0 (NONE)
+Input state: 0 (IDLE)
+
+3) all timeouts can be 15 seconds, so change settling to use CONFIRM_TIMEOUT_MS and remove CAL_SETTLE_DELAY_MS
