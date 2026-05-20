@@ -92,22 +92,23 @@
     // path to openOCD executable, 
     // default to "openocd" which should work if it's in PATH, 
     // otherwise user can provide full path to openocd.exe
-    // {
-    //   "id": "openocdPath",
-    //   "type": "promptString",
-    //   "description": "OpenOCD executable path",
-    //   "default": "openocd"
-    // },
-    // // path to openOCD scripts directory, 
-    // // which contains interface/ and target/ subdirectories, 
-    // // default to the typical installation path for OpenOCD for ESP32 on Windows, 
-    // // but user can provide a different path if needed
-    // {
-    //   "id": "openocdScriptsDir",
-    //   "type": "promptString",
-    //   "description": "OpenOCD scripts directory (contains interface/ and target/)",
-    //   "default": "C:/Espressif/tools/openocd-esp32/share/openocd/scripts"
-    // }
+    {
+      "id": "openocdPath",
+      "type": "promptString",
+      "description": "OpenOCD executable path",
+      "default": "openocd"
+    },
+
+    // path to openOCD scripts directory, 
+    // which contains interface/ and target/ subdirectories, 
+    // default to the typical installation path for OpenOCD for ESP32 on Windows, 
+    // but user can provide a different path if needed
+    {
+      "id": "openocdScriptsDir",
+      "type": "promptString",
+      "description": "OpenOCD scripts directory (contains interface/ and target/)",
+      "default": "C:/Espressif/tools/openocd-esp32/share/openocd/scripts"
+    }
 
   ],
 
@@ -165,28 +166,6 @@
     //     "focus": false,
     //     "panel": "shared"
     //   },
-    //   "problemMatcher": []
-    // },
-
-    // FQBN Debug File Compile
-    // arduino-cli compile task with verbose output and clean build,
-    // uses the FQBN input to specify the board configuration, 
-    // and sets the build.extra_flags property to include -Og for better debugging and -g3 for maximum debug info in the binary
-    // command line: arduino-cli compile -v --clean --fqbn esp32:esp32:esp32thing --build-property "build.extra_flags=-Og -g3" D:/MyArduino/Projects/ESP32_Scale/PropaneScale
-    // {
-    //   "label": "FQBN Debug File Compile",
-    //   "type": "shell",
-    //   "command": "arduino-cli",
-    //   "args": [
-    //     "compile",
-    //     "-v",
-    //     "--clean",
-    //     "--fqbn",
-    //     "${input:FQBN}",
-    //     "--build-property",
-    //     "build.extra_flags=-Og -g3",
-    //     "${workspaceFolder}/PropaneScale"
-    //   ],
     //   "problemMatcher": []
     // },
 
@@ -287,6 +266,27 @@
       "problemMatcher": []
     },
     
+    // ESP32 Thing Debug File Compile
+    // arduino-cli compile task with verbose output and clean build,
+    // uses the esp32:esp32:esp32thing FQBN to specify the board configuration,
+    // and sets the build.extra_flags property to include -Og for better debugging and -g3 for maximum debug info in the binary
+    // command line: arduino-cli compile -v --clean --fqbn esp32:esp32:esp32thing --build-property "build.extra_flags=-Og -g3" D:/MyArduino/Projects/ESP32_Scale/PropaneScale
+    {
+      "label": "ESP32 Thing Debug File Compile",
+      "type": "shell",
+      "command": "arduino-cli",
+      "args": [
+        "compile",
+        "-v",
+        "--clean",
+        "--fqbn", "esp32:esp32:esp32thing",
+        "--build-property",
+        "build.extra_flags=-Og -g3",
+        "${workspaceFolder}/PropaneScale"
+      ],
+      "problemMatcher": []
+    },
+
     // Powershell tasks
     
     // ESP32 Thing Quick Flash
