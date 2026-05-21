@@ -53,7 +53,7 @@ constexpr float MINIMUM_LOAD_WEIGHT = 1.0f;                 /**< Minimum load in
 
 // Timing Constants for Non-blocking Workflows
 constexpr unsigned long CAL_SETTLE_DELAY_MS = 5000UL;       /**< Time to wait for load to mechanically settle before taking calibration reading */
-constexpr unsigned long HX711_READY_TIMEOUT_MS = 120UL;     /**< Maximum time to wait for the HX711 to become ready during blocking reads */
+constexpr unsigned long HX711_READY_TIMEOUT_MS = 100UL;     /**< Maximum time to wait for the HX711 to become ready during blocking reads */
 constexpr unsigned long CONFIRM_TIMEOUT_MS = 15000UL;       /**< Wait time for user &auto confirmations during startup tare workflow/calibration */
 
 // Startup Tare Constants & Functions
