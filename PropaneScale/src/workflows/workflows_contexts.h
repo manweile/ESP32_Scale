@@ -70,6 +70,7 @@ struct CalContext {
   int           stableEmptyChecks         = 0;              /**< consecutive empty-scale readings in WAIT_EMPTY */
   CalState      state                     = CalState::IDLE; /**< current state within the calibration workflow */
   unsigned long stateStartMs              = 0;              /**< millis() when current state was entered */
+  int           sampleJobId               = 0;              /**< job id for enqueued sampling requests (0 when none) */
 };
 
 // Level Enums and Structs
