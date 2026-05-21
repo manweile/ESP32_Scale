@@ -132,9 +132,18 @@ static bool queueSerialOutput(const char* message, size_t messageLength) {
  */
 
 float computeLoadDetectThreshold(float minimumThresholdLbs) {
-  float noise = fabsf(readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES));
+  float rawNoise = readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES);
+
+  // we can't have a NaN or +- infinity threshold
+  if (!isfinite(rawNoise)) {
+    return minimumThresholdLbs;
+  }
+
+  // balance between avoiding false detects from noise while still detecting real loads above the noise floor
+  float noise = fabsf(rawNoise);
   float threshold = noise * 20.0f;
-  return (threshold >= minimumThresholdLbs) ? threshold : minimumThresholdLbs;
+
+  return fmaxf(threshold, minimumThresholdLbs);
 }
 
 void drainQueuedSerialOutput() {
@@ -172,7 +181,6 @@ bool ensureScaleReady(const char* operation) {
   bool ready = false;
   
   ready = scale.wait_ready_timeout(HX711_READY_TIMEOUT_MS) && hasResponsiveHx711Signal();
-
   if (ready) {
     return true;
   }

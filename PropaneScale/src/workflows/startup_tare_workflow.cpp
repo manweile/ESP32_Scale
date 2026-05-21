@@ -47,10 +47,12 @@ void beginTare() {
 
   scale.set_scale(calibrationFactor);
 
-  // Establish baseline before tare; stability is checked relative to this reading.
+  // Establish baseline before tare; 
+  // stability is checked relative to this reading.
   tareCtx.baseline = readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES);
 
-  // if the HX711 is not producing a valid signal, skip the tare workflow instead of blocking on instability.
+  // if the HX711 is not producing a valid signal,
+  // skip the tare workflow instead of blocking on instability.
   if (!isfinite(tareCtx.baseline)) {
     printScaleNotReadyDiagnostic("startup tare");
     tareCtx.state = TareState::SKIP;

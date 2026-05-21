@@ -82,12 +82,16 @@ void tickLevelRead() {
   }
 
   if (levelCtx.state == LevelState::WAIT_LOAD) {
+    // always check for timeout first to avoid long waits if tank is never placed;
+    // if it's just a slow read, we'll check again on the next tick
     if ((millis() - levelCtx.stateStartMs) >= CONFIRM_TIMEOUT_MS) {
       Serial.println("Tank placement timed out; cancelled.");
       levelCtx.state = LevelState::IDLE;
       return;
     }
 
+    // bad scale check to avoid long blocking if HX711 is not responding; 
+    // if it's just a slow read, we'll check again on the next tick
     float measuredUnits = readAveragedUnits(1, POLL_SAMPLES);
     if (!isfinite(measuredUnits)) {
       printScaleNotReadyDiagnostic("tank placement detection");
@@ -119,6 +123,8 @@ void tickLevelRead() {
 
   if (levelCtx.state == LevelState::READING) {
     Serial.println("Reading tank weight...");
+    // bad scale check to avoid long blocking if HX711 is not responding;
+    // if it's just a slow read, we'll check again on the next tick
     float rawWeight = readAveragedUnits(CAL_SAMPLES, LIVE_SAMPLES);
     if (!isfinite(rawWeight)) {
       printScaleNotReadyDiagnostic("final tank reading");
