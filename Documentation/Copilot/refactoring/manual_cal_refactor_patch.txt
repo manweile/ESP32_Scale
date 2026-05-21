@@ -17,8 +17,6 @@ struct CalContext {
   CalMode       mode                      = CalMode::NONE;  /**< current calibration mode */
   CalState      state                     = CalState::IDLE; /**< current state within workflow */
   unsigned long stateStartMs              = 0;              /**< millis() when current state was entered */
-  int           stableEmptyChecks         = 0;              /**< consecutive empty-scale readings in WAIT_EMPTY */
-  int           loadDetectChecks          = 0;              /**< consecutive above-threshold load detection checks */
   float         loadDetectThreshold       = 0.0f;           /**< noise-derived threshold for weight detection */
   float         measuredUnits             = 0.0f;           /**< last averaged reading in pounds */
 
@@ -86,13 +84,11 @@ Manual patch example for `PropaneScale/src/workflows/workflows_contexts.h` (appl
 -  int           lastFactorHundredth       = 0;              /**< manual mode: last displayed factor, scaled by 100 (2 decimal places) */
 -  int           lastReadingTenth          = 0;              /**< manual mode: last displayed reading, scaled by 10 (1 decimal place) */
 -  int           lastStepTenThousandth     = 0;              /**< manual mode: last displayed step, scaled by 10000 (4 decimal places) */
--  int           loadDetectChecks          = 0;              /**< calibration mode: consecutive above-threshold load detection checks */
 -  float         loadDetectThreshold       = 0.0f;           /**< noise-derived threshold for weight detection */
 -  float         measuredUnits             = 0.0f;           /**< last averaged reading in pounds */
 -  float         minStep                   = 0.0f;           /**< manual mode: floor for adjustmentStep */
 -  CalMode       mode                      = CalMode::NONE;  /**< current calibration mode, or NONE when not in a calibration workflow */
 -  float         originalCalibrationFactor = 0.0f;           /**< manual mode: calibration factor captured at start for cancel/restore */
--  int           stableEmptyChecks         = 0;              /**< consecutive empty-scale readings in WAIT_EMPTY */
 -  CalState      state                     = CalState::IDLE; /**< current state within the calibration workflow */
 -  unsigned long stateStartMs              = 0;              /**< millis() when current state was entered */
 -};
