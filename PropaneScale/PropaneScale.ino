@@ -116,8 +116,12 @@ void tickTare() {
   // still in WAIT_STABLE, need to quick check scale is ready to avoid long blocking
   if ((millis() - tareCtx.stateStartMs) >= CONFIRM_TIMEOUT_MS) {
 
-    // scoped to avoid unused variable warning in non-timeout path
-    float m = readAveragedUnits(1, POLL_SAMPLES);
+    // Use non-blocking averaged read driven by loop() ticks
+    float m;
+    if (!nonBlockingAvgUnits(1, POLL_SAMPLES, m)) {
+      // averaging in progress; try again on next loop tick
+      return;
+    }
     
     // bad scale reading, warn user to check hardware
     if (!isfinite(m)) {
@@ -160,8 +164,12 @@ void tickTare() {
 
   // probably at stable point where we can update state
   // verify scale reading is valid before doing any processing
-  float m = readAveragedUnits(1, POLL_SAMPLES);
-  
+  float m;
+  if (!nonBlockingAvgUnits(1, POLL_SAMPLES, m)) {
+    // averaging in progress; continue on next loop tick
+    return;
+  }
+
   if (!isfinite(m)) {
     printScaleNotReadyDiagnostic("startup tare");
     tareCtx.state = TareState::SKIP;
