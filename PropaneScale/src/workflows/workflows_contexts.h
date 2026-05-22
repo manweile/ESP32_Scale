@@ -41,12 +41,12 @@ enum class AvgPhase : uint8_t {
  * @details Contains variables to manage the state of a non-blocking averaging operation.
  */
 struct AvgContext {
+  bool active           = false;                            /**< Whether a non-blocking operation is active */
+  int collected         = 0;                                /**< Number of readings collected so far */  
+  int index             = 0;                                /**< Current reading index */
   int requestedReadings = 0;                                /**< Number of readings requested (outer loop) */
   int samplesPerReading = 0;                                /**< Samples per averaged reading */
-  int index             = 0;                                /**< Current reading index */
-  int collected         = 0;                                /**< Number of readings collected so far */
   float total           = 0.0f;                             /**< Accumulated total of readings */
-  bool active           = false;                            /**< Whether a non-blocking operation is active */
 };
 
 /**
@@ -160,6 +160,9 @@ enum class TareState : uint8_t {
  */
 struct TareContext {
   float         baseline     = 0.0f;                        /**< Initial scale reading used as the stability reference */
+  bool          baselinePending  = false;                   /**< baseline averaging requested and in progress */
+  int           baselineReadings = 0;                       /**< requested outer readings for baseline */
+  int           baselineSamples  = 0;                       /**< samples per reading for baseline */
   int           stableChecks = 0;                           /**< Consecutive readings within tolerance of baseline */
   TareState     state        = TareState::IDLE;             /**< Current state within the startup tare workflow */
   unsigned long stateStartMs = 0;                           /**< millis() when WAIT_STABLE state was entered */

@@ -82,7 +82,6 @@ void tickTare() {
   // fast idle detect to save cycles when we are not in a tare workflow
   if (tareCtx.state == TareState::IDLE) return;
 
-  // primary happy path
   if (tareCtx.state == TareState::TARE) {
     Serial.println("Stable scale detected, proceeding with tare.");
     scale.tare();
@@ -93,7 +92,6 @@ void tickTare() {
     return;
   }
 
-  // alternate happy path where user skipped taring
   if (tareCtx.state == TareState::SKIP) {
     Serial.println("Continuing without startup tare.");
     Serial.println("Remove propane weight and send 'r' to re-zero when ready.");
@@ -108,9 +106,31 @@ void tickTare() {
     char c = Serial.read();
     if (c == 'q' || c == 'Q') {
       Serial.println("Startup tare skipped by user.");
+      tareCtx.baselinePending = false;
       tareCtx.state = TareState::SKIP;
       return;
     }
+  }
+
+  // will only see this on application initialization
+  if (tareCtx.baselinePending) {
+    // scale not ready, try again next tick
+    float base;
+    if (!nonBlockingAvgUnits(tareCtx.baselineReadings, tareCtx.baselineSamples, base)) {
+      return;
+    }
+
+    tareCtx.baselinePending = false;
+
+    // bad scale reading, warn user to check hardware and skip tare workflow
+    if (!isfinite(base)) {
+      printScaleNotReadyDiagnostic("startup tare");
+      tareCtx.state = TareState::SKIP;
+      return;
+    }
+
+    // good scale reading, continue into regular WAIT_STABLE processing
+    tareCtx.baseline = base;
   }
 
   // still in WAIT_STABLE, need to quick check scale is ready to avoid long blocking
