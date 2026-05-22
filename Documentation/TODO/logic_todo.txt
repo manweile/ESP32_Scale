@@ -17,3 +17,8 @@ Input mode: 0 (NONE)
 Input state: 0 (IDLE)
 
 3) all timeouts can be 15 seconds, so change settling to use CONFIRM_TIMEOUT_MS and remove CAL_SETTLE_DELAY_MS
+
+4) verify InputContext inputCtx; is supposed to be in PropaneScale.ino
+
+5) refer to copilot session from May 21 on Github for moving Serial.available() out of tickCalibration.
+handleCalibrationInput should be doing that logic.
