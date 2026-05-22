@@ -59,6 +59,7 @@ void liquidLevel() {
     return;
   }
 
+  // we always ensure the scale is ready before starting the workflow
   scale.set_scale(calibrationFactor);
 
   levelCtx.loadDetectThreshold = computeLoadDetectThreshold(MINIMUM_LOAD_WEIGHT);
