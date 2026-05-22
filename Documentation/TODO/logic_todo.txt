@@ -20,7 +20,24 @@ Input state: 0 (IDLE)
 
 4) verify InputContext inputCtx; is supposed to be in PropaneScale.ino
 
-5) refer to copilot session from May 21 on Github for moving Serial.available() out of tickCalibration.
+5) have all user input handled by 'handle*Input(char incoming) functions
+to modify:
+note see 5a
+Remove Serial Input Handling from `tickCalibration
+calibration_workflow.cpp: handleCalibrationInput
+
+currently existing:
+input_known_weight.cpp: handleKnownWeightInput
+input_propane_weight.cpp: handlePropaneWeightInput
+input_tank_tare.cpp: handleTankTareInput
+level_workflow.cpp: handleLevelReadInput
+
+to add:
+see 5b 
+Extract SKIP handling from `tickTare()` on PropaneScale.ino into a dedicated
+input handler `handleStartupTareInput()` in the startup tare workflow module.
+
+a) refer to copilot session from May 21 on Github for moving Serial.available() out of tickCalibration.
 handleCalibrationInput should be doing that logic.
 
 data:
@@ -165,3 +182,94 @@ If not, move the user-input logic that was previously in `tickCalibration` into 
 ---
 
 If you'd like an actual patch/diff for your project files, just ask!
+
+b) Detailed proposal: Extract SKIP handling from `tickTare()` into a dedicated
+input handler `handleStartupTareInput()` in the startup tare workflow module.
+
+Goal
+----
+Move the Serial/input-specific logic that handles the user-skipped-tare
+(`TareState::SKIP`) out of `tickTare()` in `PropaneScale.ino` and into a
+well-scoped function implemented in `src/workflows/startup_tare_workflow.cpp`.
+This clarifies responsibilities: `tickTare()` remains the pure state/timing
+progression, while input/Serial interaction is handled by a separate function.
+
+Motivation
+----------
+- Improve separation of concerns: state machine vs. input handling.
+- Simplify unit testing and local reasoning about `tickTare()` logic.
+- Make future refactor (moving more of the startup-tare workflow into a
+  separate compilation unit) lower risk and more incremental.
+
+Design options
+--------------
+1) Lightweight: implement `handleStartupTareInput()` in
+   `src/workflows/startup_tare_workflow.cpp` using `extern TareContext tareCtx;`
+   and calling existing global helpers like `helpMenu()` and `Serial` directly.
+   - Pros: minimal changes to other files, fast to implement.
+   - Cons: keeps global coupling via `extern` declarations.
+
+2) Cleaner API: add accessors and callbacks to reduce globals. Example:
+   - Keep `TareContext` module-local and provide `startupTare_handleInput(char c)`
+     that takes input and returns an enum/action. Or pass in function pointers
+     for `helpMenu()` and `saveRuntimeTareOffset()`.
+   - Pros: better encapsulation and testability.
+   - Cons: larger refactor and more call-site updates.
+
+Suggested Implementation (practical, incremental)
+-----------------------------------------------
+1. Add declaration to `src/workflows/startup_tare_workflow.h`:
+   - `void handleStartupTareInput();`  // polls Serial & handles SKIP->IDLE
+
+2. Create or update `src/workflows/startup_tare_workflow.cpp`:
+   - Implement `handleStartupTareInput()` with the existing SKIP branch logic:
+
+      // alternate happy path where user skipped taring
+      if (tareCtx.state == TareState::SKIP) {
+        Serial.println("Continuing without startup tare.");
+        Serial.println("Remove propane weight and send 'r' to re-zero when ready.");
+        tareCtx.state = TareState::IDLE;
+        helpMenu();
+        return;
+      }
+
+   - Use `extern TareContext tareCtx;` at top of the .cpp to reference the global
+     context (incremental change). Include any headers needed to reference
+     `helpMenu()` and Serial.
+
+3. Update `PropaneScale.ino`:
+   - Remove the SKIP branch from `tickTare()` and replace/augment the function
+     so that `tickTare()` calls `handleStartupTareInput()` when appropriate, or
+     that the main `loop()` calls `handleStartupTareInput()` before or after
+     `tickTare()` depending on desired timing.
+
+4. Build & test
+   - Compile with `arduino-cli compile --fqbn esp32:esp32:esp32thing PropaneScale`
+   - Test device behavior for these flows: normal tare, user pressed 'q', user
+     pressed 'q' then confirmed re-zero, user skipped startup tare.
+
+Risks & mitigation
+------------------
+- Risk: introducing undefined references if required headers aren't included.
+  Mitigation: add required `extern` declarations and include headers in the new
+  .cpp, or prefer passing callbacks.
+- Risk: timing change if main `loop()` ordering changes. Mitigation: keep
+  `handleStartupTareInput()` lightweight and call it in the same relative
+  position as the previous code (after the early `tareCtx.state` checks).
+
+Follow-up improvements (optional)
+-------------------------------
+- Move `TareContext tareCtx;` into the startup_tare module and provide
+  controlled getters/setters to remove externs.
+- Convert Serial polling to an injected input callback so it can be mocked
+  in unit tests.
+
+Checklist (for implementation)
+- [ ] Add declaration to `src/workflows/startup_tare_workflow.h`
+- [ ] Implement handler in `src/workflows/startup_tare_workflow.cpp`
+- [ ] Update `PropaneScale.ino` to remove SKIP branch and call handler
+- [ ] Compile and run hardware tests
+- [ ] Consider further encapsulation (optional)
+
+Author: GitHub Copilot (assistant)
+Date: 2026-05-22
