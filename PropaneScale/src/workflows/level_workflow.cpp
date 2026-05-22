@@ -38,6 +38,7 @@ bool handleLevelReadInput(char incoming) {
   if (levelCtx.state == LevelState::WAIT_LOAD || levelCtx.state == LevelState::SETTLING) {
     if (incoming == 'q' || incoming == 'Q') {
       Serial.println("Level read cancelled.");
+      levelCtx.avgPending = false;
       levelCtx.state = LevelState::IDLE;
     } else if (incoming != '\r' && incoming != '\n') {
       Serial.print("Invalid level read key: '");
@@ -87,16 +88,23 @@ void tickLevelRead() {
     // if it's just a slow read, we'll check again on the next tick
     if ((millis() - levelCtx.stateStartMs) >= CONFIRM_TIMEOUT_MS) {
       Serial.println("Tank placement timed out; cancelled.");
+      levelCtx.avgPending = false;
       levelCtx.state = LevelState::IDLE;
       return;
     }
 
-    // bad scale check to avoid long blocking if HX711 is not responding; 
-    // if it's just a slow read, we'll check again on the next tick
-    float measuredUnits = readAveragedUnits(1, POLL_SAMPLES);
+    // bad scale check to avoid long blocking if HX711 is not responding;
+    // use non-blocking averaged read driven by loop() ticks
+    float measuredUnits;
+    if (!nonBlockingAvgUnits(1, POLL_SAMPLES, measuredUnits)) {
+      // averaging in progress; try again on next tick
+      return;
+    }
+
     if (!isfinite(measuredUnits)) {
       printScaleNotReadyDiagnostic("tank placement detection");
       Serial.println("Level read cancelled.");
+      levelCtx.avgPending = false;
       levelCtx.state = LevelState::IDLE;
       return;
     }
@@ -107,6 +115,7 @@ void tickLevelRead() {
       snprintf(buf, sizeof(buf), "Tank detected. Settling for %lu seconds before final read...\n",
                settleSeconds);
       Serial.print(buf);
+      levelCtx.avgPending = false;
       levelCtx.stateStartMs = millis();
       levelCtx.state = LevelState::SETTLING;
     }
@@ -118,15 +127,29 @@ void tickLevelRead() {
       return;
     }
 
+    levelCtx.avgPending = false;
     levelCtx.state = LevelState::READING;
     return;
   }
 
   if (levelCtx.state == LevelState::READING) {
-    Serial.println("Reading tank weight...");
+    // Print the prompt only once when starting the averaging
+    if (!levelCtx.avgPending) {
+      levelCtx.avgPending = true;
+      Serial.println("Reading tank weight...");
+    }
+
     // bad scale check to avoid long blocking if HX711 is not responding;
-    // if it's just a slow read, we'll check again on the next tick
-    float rawWeight = readAveragedUnits(CAL_SAMPLES, LIVE_SAMPLES);
+    // use non-blocking averaged read driven by loop() ticks
+    float rawWeight;
+    if (!nonBlockingAvgUnits(CAL_SAMPLES, LIVE_SAMPLES, rawWeight)) {
+      // averaging still in progress; continue next tick
+      return;
+    }
+
+    // finished averaging
+    levelCtx.avgPending = false;
+
     if (!isfinite(rawWeight)) {
       printScaleNotReadyDiagnostic("final tank reading");
       Serial.println("Level read cancelled.");
@@ -148,5 +171,6 @@ void tickLevelRead() {
     Serial.print(buf);
 
     levelCtx.state = LevelState::IDLE;
+    levelCtx.avgPending = false;
   }
 }

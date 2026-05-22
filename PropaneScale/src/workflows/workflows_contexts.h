@@ -128,6 +128,7 @@ enum class LevelState : uint8_t {
  * so each loop() tick can advance the workflow without blocking.
  */
 struct LevelContext {
+  bool          avgPending          = false;                /**< whether a non-blocking average is in progress for this workflow */  
   float         loadDetectThreshold = 0.0f;                 /**< noise-derived threshold used to detect tank placement */
   LevelState    state               = LevelState::IDLE;     /**< current state within the level read workflow */
   unsigned long stateStartMs        = 0;                    /**< millis() when WAIT_LOAD state was entered */
