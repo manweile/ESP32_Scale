@@ -62,6 +62,32 @@ bool ensureScaleReady(const char* operation);
 void flushSerialInput();
 
 /**
+ * @brief Non-blocking averaged units reader driven by loop() ticks.
+ *
+ * @details Starts or advances a non-blocking averaging operation that polls
+ * `scale.is_ready()` once per invocation. Call this from `loop()` (or a
+ * workflow tick) repeatedly until it returns `true`, at which point
+ * `outAvg` will contain the averaged reading in pounds. While the operation
+ * is in-progress, the function returns `false` and `outAvg` is unspecified.
+ * This helper is intended for use by workflows that must remain responsive
+ * (for example automatic calibration) and must be polled regularly.
+ *
+ * @param readings {int} Number of readings to average (each reading may itself
+ *   average multiple samples via `scale.get_units(samplesPerReading)`).
+ * @param samplesPerReading {int} Number of samples passed to `get_units()` per
+ *   reading. Typical values: `POLL_SAMPLES` or `LIVE_SAMPLES`.
+ * @param outAvg {float&} Output parameter set to the computed average in pounds
+ *   when the function returns `true`.
+ * @return {bool} `true` when the averaged reading is complete and `outAvg` is valid;
+ *   `false` when the operation is still in progress and must be called again.
+ *
+ * @note This implementation maintains a single internal active operation and is
+ * not reentrant. Use only from the automatic calibration workflow as currently
+ * implemented in this project.
+ */
+bool nonBlockingAvgUnits(int readings, int samplesPerReading, float &outAvg);
+
+/**
  * @brief Prints a standardized HX711 not-ready diagnostic.
  *
  * @details Used across workflows to keep timeout/not-ready messaging consistent.

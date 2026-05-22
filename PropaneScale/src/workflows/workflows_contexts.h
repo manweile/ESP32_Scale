@@ -19,6 +19,37 @@
 // Calibration Enums and Structs
 
 /**
+ * @enum AvgPhase
+ *
+ * @brief Named phases for the non-blocking averaging helper used during calibration.
+ *
+ * @details Used to manage the multi-step averaging process during calibration without blocking.
+ */
+enum class AvgPhase : uint8_t {
+  NONE          = 0,                                        /**< No non-blocking average in progress */
+  EMPTY_CONFIRM = 1,                                        /**< Empty-scale confirmation averaging in progress */
+  LOAD_DETECT   = 2,                                        /**< Load placement detection averaging in progress */
+  FINAL_MEAS    = 3,                                        /**< Final calibration measurement averaging in progress */
+  VERIFICATION  = 4                                         /**< Verification averaging in progress */
+};
+
+/**
+ * @struct AvgContext
+ *
+ * @brief Context for the non-blocking averaging helper used across workflows.
+ *
+ * @details Contains variables to manage the state of a non-blocking averaging operation.
+ */
+struct AvgContext {
+  int requestedReadings = 0;                                /**< Number of readings requested (outer loop) */
+  int samplesPerReading = 0;                                /**< Samples per averaged reading */
+  int index             = 0;                                /**< Current reading index */
+  int collected         = 0;                                /**< Number of readings collected so far */
+  float total           = 0.0f;                             /**< Accumulated total of readings */
+  bool active           = false;                            /**< Whether a non-blocking operation is active */
+};
+
+/**
  * @enum CalMode
  *
  * @brief Enumeration of calibration modes.
@@ -56,6 +87,7 @@ enum class CalState : uint8_t {
  */
 struct CalContext {
   float         adjustmentStep            = 0.0f;           /**< manual mode: current factor nudge size */
+  AvgPhase      avgPhase                  = AvgPhase::NONE; /**< internal: non-blocking averaging phase for AUTO calibration */
   bool          hasManualDisplay          = false;          /**< manual mode: whether we have a prior display snapshot to compare against */
   int           lastDirection             = 0;              /**< manual mode: +1 = last press +, -1 = last press - */
   int           lastFactorHundredth       = 0;              /**< manual mode: last displayed factor, scaled by 100 (2 decimal places) */
@@ -67,10 +99,8 @@ struct CalContext {
   float         minStep                   = 0.0f;           /**< manual mode: floor for adjustmentStep */
   CalMode       mode                      = CalMode::NONE;  /**< current calibration mode, or NONE when not in a calibration workflow */
   float         originalCalibrationFactor = 0.0f;           /**< manual mode: calibration factor captured at start for cancel/restore */
-  int           stableEmptyChecks         = 0;              /**< consecutive empty-scale readings in WAIT_EMPTY */
   CalState      state                     = CalState::IDLE; /**< current state within the calibration workflow */
   unsigned long stateStartMs              = 0;              /**< millis() when current state was entered */
-  int           sampleJobId               = 0;              /**< job id for enqueued sampling requests (0 when none) */
 };
 
 // Level Enums and Structs

@@ -161,6 +161,7 @@ void automaticCalibration() {
     return;
   }
 
+  // need calibration factor applied for load detection and calibration factor computation
   scale.set_scale(calibrationFactor);
 
   char calPrompt[224];
@@ -180,8 +181,6 @@ void automaticCalibration() {
   calCtx.originalCalibrationFactor = calibrationFactor;
   calCtx.state = CalState::WAIT_EMPTY;
   calCtx.stateStartMs = millis();
-  calCtx.stableEmptyChecks = 0;
-  calCtx.loadDetectChecks = 0;
   calCtx.measuredUnits = 0.0f;
 }
 
@@ -213,12 +212,10 @@ void handleCalibrationInput(char serialchar) {
       return;
     }
 
-    // AUTO wouldn't have had chance to compute calibration factor change,
-    // MANUAL didn't have a chance to change it yet, 
-    // and REZERO doesn't change it at all
+    // AUTO & MANUAL wouldn't have had chance to change the calibration factor yet
+    // REZERO doesn't change it at all
 
     if (calCtx.mode == CalMode::AUTO || calCtx.mode == CalMode::MANUAL) {
-      // restore the factor that was active before the calibration workflow
       Serial.println("Calibration cancelled. Changes were not saved.");
       calibrationFactor = calCtx.originalCalibrationFactor;
       scale.set_scale(calibrationFactor);
@@ -234,26 +231,29 @@ void handleCalibrationInput(char serialchar) {
   }
 
   // workflow - in manual adjustment state
+  // possible input +, -, s, q (adjust calibration factor up/down, save, cancel)
   if (calCtx.state == CalState::ADJUSTING) {
-    if (serialchar == '+') {
 
+    // last direction indicates which 'direction' we are adjusting in
+    // same direction: keep the same step
+    // switched direction: reduce the step to allow finer adjustments
+    // we always halve the step on direction switch to allow for finer control, 
+    // but we also enforce a minimum step size to prevent it from getting too small and making adjustments impossible
+
+    if (serialchar == '+') {
       if (calCtx.lastDirection == -1) {
         calCtx.adjustmentStep = max(calCtx.adjustmentStep * 0.5f, calCtx.minStep);
       }
       calibrationFactor  += calCtx.adjustmentStep;
       calCtx.lastDirection = 1;
-
     } else if (serialchar == '-') {
-
       if (calCtx.lastDirection == 1) {
         calCtx.adjustmentStep = max(calCtx.adjustmentStep * 0.5f, calCtx.minStep);
       }
-
       calibrationFactor  -= calCtx.adjustmentStep;
       calCtx.lastDirection = -1;
 
     } else if (serialchar == 's' || serialchar == 'S') {
-
       char buf[80];
       snprintf(buf, sizeof(buf), "Manual calibration complete, computed calibration factor: %.2f\n", calibrationFactor);
       Serial.print(buf);
@@ -268,7 +268,6 @@ void handleCalibrationInput(char serialchar) {
       calCtx.mode  = CalMode::NONE;
 
     } else if (serialchar == 'q' || serialchar == 'Q') {
-
       calibrationFactor = calCtx.originalCalibrationFactor;
       scale.set_scale(calibrationFactor);
       Serial.println("Manual calibration cancelled. Changes were not saved.");
@@ -298,6 +297,7 @@ void manualCalibration() {
   if (step == 0.0f) step    = 10.0f;
   if (minStep == 0.0f) minStep = 0.001f;
 
+  // need calibration factor applied for load detection and calibration factor computation
   scale.set_scale(calibrationFactor);
 
   char calPrompt[224];
@@ -320,8 +320,6 @@ void manualCalibration() {
   calCtx.minStep = minStep;
   calCtx.mode = CalMode::MANUAL;
   calCtx.originalCalibrationFactor = calibrationFactor;
-  calCtx.stableEmptyChecks = 0;
-  calCtx.loadDetectChecks = 0;
   calCtx.state = CalState::WAIT_EMPTY;
   calCtx.stateStartMs = millis();
 }
@@ -336,6 +334,7 @@ void reZero() {
     return;
   }
 
+  // need calibration factor applied for load detection
   scale.set_scale(calibrationFactor);
 
   char calPrompt[288];
@@ -355,8 +354,6 @@ void reZero() {
   calCtx.mode = CalMode::REZERO;
   calCtx.state = CalState::WAIT_EMPTY;
   calCtx.stateStartMs = millis();
-  calCtx.stableEmptyChecks = 0;
-  calCtx.loadDetectChecks = 0;
   calCtx.measuredUnits = 0.0f;
 }
 
@@ -401,14 +398,13 @@ void tickCalibration() {
     // Only check for empty at timeout, not on every tick
     if ((millis() - calCtx.stateStartMs) >= CONFIRM_TIMEOUT_MS) {
 
-      calCtx.measuredUnits = readAveragedUnits(1, POLL_SAMPLES);
-      if (!isfinite(calCtx.measuredUnits)) {
-        printScaleNotReadyDiagnostic("empty-scale confirmation");
-        Serial.println("Calibration cancelled.");
-        calCtx.state = CalState::IDLE;
-        calCtx.mode  = CalMode::NONE;
+      float tmpAvg = 0.0f;
+      if (!nonBlockingAvgUnits(1, POLL_SAMPLES, tmpAvg)) {
+        calCtx.avgPhase = AvgPhase::EMPTY_CONFIRM;
         return;
       }
+      calCtx.avgPhase = AvgPhase::NONE;
+      calCtx.measuredUnits = tmpAvg;
 
       bool emptyDetected = fabsf(calCtx.measuredUnits) <= MINIMUM_LOAD_WEIGHT;
       if (emptyDetected) {
@@ -438,14 +434,13 @@ void tickCalibration() {
       return;
     }
 
-    calCtx.measuredUnits = readAveragedUnits(1, POLL_SAMPLES);
-    if (!isfinite(calCtx.measuredUnits)) {
-      printScaleNotReadyDiagnostic("weight placement detection");
-      Serial.println("Calibration cancelled.");
-      calCtx.state = CalState::IDLE;
-      calCtx.mode  = CalMode::NONE;
+    float tmpAvg = 0.0f;
+    if (!nonBlockingAvgUnits(1, POLL_SAMPLES, tmpAvg)) {
+      calCtx.avgPhase = AvgPhase::LOAD_DETECT; // in-progress
       return;
     }
+    calCtx.avgPhase = AvgPhase::NONE;
+    calCtx.measuredUnits = tmpAvg;
 
     if (fabsf(calCtx.measuredUnits) < calCtx.loadDetectThreshold) {
       Serial.println("Weight placement timed out; calibration cancelled.");
@@ -473,10 +468,28 @@ void tickCalibration() {
 
     // workflow - auto calibration takes a measurement and computes new factor and saves to eeprom
     if (calCtx.mode == CalMode::AUTO) {
-      Serial.println("Measuring stable reading...");
 
-      // take final measurement to compute calibration factor
-      calCtx.measuredUnits = readAveragedUnits(CAL_SAMPLES, LIVE_SAMPLES);
+      // Print a measuring message both when starting the final measurement
+      // and on subsequent ticks while the non-blocking operation is in-progress.
+      if (calCtx.avgPhase == AvgPhase::NONE) {
+        Serial.println("Measuring stable reading...");
+        float tmp = 0.0f;
+        if (!nonBlockingAvgUnits(CAL_SAMPLES, LIVE_SAMPLES, tmp)) {
+          calCtx.avgPhase = AvgPhase::FINAL_MEAS; // final measurement in-progress
+          return;
+        }
+        calCtx.avgPhase = AvgPhase::NONE;
+        calCtx.measuredUnits = tmp;
+      }
+
+      if (calCtx.avgPhase == AvgPhase::FINAL_MEAS) {
+        float tmp = 0.0f;
+        if (!nonBlockingAvgUnits(CAL_SAMPLES, LIVE_SAMPLES, tmp)) {
+          return; // still measuring
+        }
+        calCtx.measuredUnits = tmp;
+        calCtx.avgPhase = AvgPhase::NONE;
+      }
 
       if (knownWeight == 0.0f || calCtx.measuredUnits == 0.0f) {
         Serial.println("Automatic calibration failed: invalid known weight or reading.");
@@ -490,7 +503,11 @@ void tickCalibration() {
       scale.set_scale(calibrationFactor);
 
       // re-read to confirm factor produces correct output
-      float verifiedUnits = readAveragedUnits(CAL_SAMPLES, LIVE_SAMPLES);
+      float verifiedUnits = 0.0f;
+      if (!nonBlockingAvgUnits(CAL_SAMPLES, LIVE_SAMPLES, verifiedUnits)) {
+        calCtx.avgPhase = AvgPhase::VERIFICATION; // verification in-progress
+        return;
+      }
 
       char buf[224];
       bool saveSucceeded = saveToEeprom(calibrationFactor, CAL_EEPROM_MAGIC, CAL_EEPROM_MAGIC_ADDR, CAL_EEPROM_VALUE_ADDR);

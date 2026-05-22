@@ -24,6 +24,7 @@
 #include "config.h"                                         // Configuration constants for the ESP32-based propane level scale
 #include "eeprom_store.h"                                   // EEPROM storage functions
 #include "scale_io.h"                                       // Input/output functions for user workflows and HX711 interactions
+#include "workflows/workflows_contexts.h"                   // Workflow context types for managing state across non-blocking workflow steps
 
 // External Global State Variables
 extern HX711 scale;                                         // HX711 instance for interacting with the load cell amplifier
@@ -193,6 +194,45 @@ void flushSerialInput() {
   while (Serial.available()) {
     Serial.read();
   }
+}
+
+bool nonBlockingAvgUnits(int readings, int samplesPerReading, float &outAvg) {
+  static AvgContext avgState;
+
+  // Start a new operation when parameters differ from the active request
+  if (!avgState.active || avgState.requestedReadings != readings || avgState.samplesPerReading != samplesPerReading) {
+    avgState.requestedReadings = readings;
+    avgState.samplesPerReading = samplesPerReading;
+    avgState.index = 0;
+    avgState.collected = 0;
+    avgState.total = 0.0f;
+    avgState.active = true;
+  }
+
+  // If scale isn't ready right now, caller should call again later
+  if (!scale.is_ready()) {
+    return false;
+  }
+
+  // Take a single averaged reading (samplesPerReading) when ready
+  float units = scale.get_units(samplesPerReading);
+  avgState.total += units;
+  avgState.collected++;
+  avgState.index++;
+
+  // When we've got the requested number of readings, finish and return result
+  if (avgState.index >= avgState.requestedReadings) {
+    if (avgState.collected == 0) {
+      outAvg = NAN;
+    } else {
+      outAvg = avgState.total / static_cast<float>(avgState.collected);
+    }
+    avgState.active = false;
+    return true;
+  }
+
+  // Not finished yet
+  return false;
 }
 
 bool queueSerialOutput(const char* message) {
