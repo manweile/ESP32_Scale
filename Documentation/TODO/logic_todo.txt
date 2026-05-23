@@ -273,3 +273,5 @@ Checklist (for implementation)
 
 Author: GitHub Copilot (assistant)
 Date: 2026-05-22
+
+6) check if any scale.wait_ready_timeout usage is acceptable in web ble & wifiS
