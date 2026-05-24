@@ -16,7 +16,7 @@
 // Standard library headers
 #include <cstdint>
 
-// Calibration Enums and Structs
+// Averaging Enums and Structs
 
 /**
  * @enum AvgPhase
@@ -48,6 +48,28 @@ struct AvgContext {
   int samplesPerReading = 0;                                /**< Samples per averaged reading */
   float total           = 0.0f;                             /**< Accumulated total of readings */
 };
+
+/**
+ * @struct ThresholdAvgContext
+ *
+ * @brief Dedicated context for asynchronous threshold computation used by the
+ * liquid level workflow.
+ *
+ * @details Mirrors the minimal state required to drive a multi-read average
+ * operation across loop() ticks. Placing this in the workflows header makes
+ * the context visible to both workflows and helper implementations.
+ */
+struct ThresholdAvgContext {
+  bool   active            = false;                         /**< whether an async threshold op is active */
+  int    collected         = 0;                             /**< number of readings collected */
+  int    index             = 0;                             /**< current read iteration index */
+  float  minimumThreshold  = 0.0f;                          /**< minimum threshold floor captured at start */
+  int    requestedReadings = 0;                             /**< outer loop count of averaged readings */
+  int    samplesPerReading = 0;                             /**< samples per get_units() call */
+  float  total             = 0.0f;                          /**< accumulated reading total */
+};
+
+// Calibration Enums and Structs
 
 /**
  * @enum CalMode
@@ -101,29 +123,12 @@ struct CalContext {
   float         originalCalibrationFactor = 0.0f;           /**< manual mode: calibration factor captured at start for cancel/restore */
   CalState      state                     = CalState::IDLE; /**< current state within the calibration workflow */
   unsigned long stateStartMs              = 0;              /**< millis() when current state was entered */
+  bool          thresholdPending          = false;          /**< whether an async threshold computation is pending */
+  unsigned long thresholdStartMs          = 0;              /**< millis() when async threshold computation was started */
 };
 
 // Level Enums and Structs
 
-/**
- * @struct ThresholdAvgContext
- *
- * @brief Dedicated context for asynchronous threshold computation used by the
- * liquid level workflow.
- *
- * @details Mirrors the minimal state required to drive a multi-read average
- * operation across loop() ticks. Placing this in the workflows header makes
- * the context visible to both workflows and helper implementations.
- */
-struct ThresholdAvgContext {
-  bool   active            = false;                         /**< whether an async threshold op is active */
-  int    collected         = 0;                             /**< number of readings collected */
-  int    index             = 0;                             /**< current read iteration index */
-  float  minimumThreshold  = 0.0f;                          /**< minimum threshold floor captured at start */
-  int    requestedReadings = 0;                             /**< outer loop count of averaged readings */
-  int    samplesPerReading = 0;                             /**< samples per get_units() call */
-  float  total             = 0.0f;                          /**< accumulated reading total */
-};
 
 /**
  * @enum LevelState
@@ -193,6 +198,7 @@ struct TareContext {
 // External global State Variables
 extern AvgContext avgCtx;                                   /**< Averaging context instance to hold state for non-blocking computations */
 extern CalContext calCtx;                                   /**< Calibration context instance to hold state for workflows */
+extern ThresholdAvgContext calThresholdCtx;                 /**< Calibration threshold averaging context instance */
 extern LevelContext levelCtx;                               /**< Level read context instance to hold state for workflow */
 extern TareContext tareCtx;                                 /**< Startup tare context instance to hold state for workflow */
-extern ThresholdAvgContext ThresholdAvgCtx;                 /**< Threshold averaging context instance to hold state for non-blocking computation */
+extern ThresholdAvgContext levelThresholdCtx;               /**< Level threshold averaging context instance */

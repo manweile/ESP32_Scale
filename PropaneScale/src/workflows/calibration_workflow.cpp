@@ -82,15 +82,13 @@ static bool queueManualAdjustmentSnapshot() {
 /**
  * @brief Advances the calibration context from WAIT_EMPTY to the next appropriate state.
  *
- * @details For REZERO mode, tares the scale and returns to IDLE.
- * For AUTO and MANUAL modes, tares, measures the noise threshold, and transitions to WAIT_LOAD.
- * Declared and Implemented as a static function to allow reuse of the WAIT_EMPTY -> WAIT_LOAD transition logic
- * for both auto-confirming an empty condition after timeout and force-confirming an empty condition from user input. 
+ * @details Used for AUTO, MANUAL, REZERO modes, 
+ * declared and implemented as a static function to allow reuse of the WAIT_EMPTY -> WAIT_LOAD transition logic.
  *
  * @throws {none} This function does not throw exceptions.
  */
 static void transitionFromWaitEmpty() {
-  // workflow - waiting on user to remove all weight from platen
+  // workflow - user has removed weight from scale, or user has force-confirmed empty reading in REZERO mode
   if (calCtx.mode == CalMode::REZERO) {
     scale.set_scale();
     scale.tare();
@@ -107,17 +105,11 @@ static void transitionFromWaitEmpty() {
   scale.tare();
   saveRuntimeTareOffset();
   calCtx.loadDetectChecks = 0;
-  calCtx.loadDetectThreshold = computeLoadDetectThreshold(MINIMUM_LOAD_WEIGHT);
 
-  // isfinite because it handle NaN and +- infinities in one function
-  if (!isfinite(calCtx.loadDetectThreshold) || calCtx.loadDetectThreshold < MINIMUM_LOAD_WEIGHT) {
-    calCtx.loadDetectThreshold = MINIMUM_LOAD_WEIGHT;
-  }
-  // cap the load detect threshold at a maximum to prevent overflow issues with very noisy scales, 
-  // which would cause the threshold to become non-finite and break the workflow
-  if (calCtx.loadDetectThreshold > (MINIMUM_LOAD_WEIGHT * 8.0f)) {
-    calCtx.loadDetectThreshold = MINIMUM_LOAD_WEIGHT * 8.0f;
-  }
+  // start asynchronous calibration threshold computation
+  startCalLoadDetect(MINIMUM_LOAD_WEIGHT);
+  calCtx.thresholdPending = true;
+  calCtx.thresholdStartMs = millis();
 
   // workflow - auto calibration waiting on user to place known weight on scale after empty confirmation
   if (calCtx.mode == CalMode::AUTO) {
@@ -218,6 +210,10 @@ void handleCalibrationInput(char serialchar) {
     if (calCtx.mode == CalMode::AUTO || calCtx.mode == CalMode::MANUAL) {
       Serial.println("Calibration cancelled. Changes were not saved.");
       calibrationFactor = calCtx.originalCalibrationFactor;
+      if (calCtx.thresholdPending) {
+        cancelCalLoadDetect();
+        calCtx.thresholdPending = false;
+      }
       scale.set_scale(calibrationFactor);
     }
     
@@ -399,7 +395,7 @@ void tickCalibration() {
     if ((millis() - calCtx.stateStartMs) >= CONFIRM_TIMEOUT_MS) {
 
       float tmpAvg = 0.0f;
-      if (!nonBlockingAvgUnits(1, POLL_SAMPLES, tmpAvg)) {
+      if (!averageUnits(1, POLL_SAMPLES, tmpAvg)) {
         calCtx.avgPhase = AvgPhase::EMPTY_CONFIRM;
         return;
       }
@@ -428,14 +424,38 @@ void tickCalibration() {
 
   // workflow - waiting on user to place known weight on scale after empty confirmation
   if (calCtx.state == CalState::WAIT_LOAD) {
-    unsigned long elapsedMs = millis() - calCtx.stateStartMs;
 
+    // If threshold computation is pending, have to poll it first
+    if (calCtx.thresholdPending) {
+      float thr = 0.0f;
+      if (!pollCalLoadDetect(thr)) {
+        return;
+      }
+
+      // enforce sanity bounds on the computed threshold to guard against edge cases:
+      // noise is very low (which could cause false positives)
+      // noise is very high (which could cause false negatives and user confusion). 
+
+      calCtx.loadDetectThreshold = thr;
+      if (!isfinite(calCtx.loadDetectThreshold) || calCtx.loadDetectThreshold < MINIMUM_LOAD_WEIGHT) {
+        calCtx.loadDetectThreshold = MINIMUM_LOAD_WEIGHT;
+      }
+
+      if (calCtx.loadDetectThreshold > (MINIMUM_LOAD_WEIGHT * 8.0f)) {
+        calCtx.loadDetectThreshold = MINIMUM_LOAD_WEIGHT * 8.0f;
+      }
+
+      calCtx.thresholdPending = false;
+      calCtx.stateStartMs = millis();
+    }
+
+    unsigned long elapsedMs = millis() - calCtx.stateStartMs;
     if (elapsedMs < CONFIRM_TIMEOUT_MS) {
       return;
     }
 
     float tmpAvg = 0.0f;
-    if (!nonBlockingAvgUnits(1, POLL_SAMPLES, tmpAvg)) {
+    if (!averageUnits(1, POLL_SAMPLES, tmpAvg)) {
       calCtx.avgPhase = AvgPhase::LOAD_DETECT; // in-progress
       return;
     }
@@ -474,8 +494,8 @@ void tickCalibration() {
       if (calCtx.avgPhase == AvgPhase::NONE) {
         Serial.println("Measuring stable reading...");
         float tmp = 0.0f;
-        if (!nonBlockingAvgUnits(CAL_SAMPLES, LIVE_SAMPLES, tmp)) {
-          calCtx.avgPhase = AvgPhase::FINAL_MEAS; // final measurement in-progress
+        if (!averageUnits(CAL_SAMPLES, LIVE_SAMPLES, tmp)) {
+          calCtx.avgPhase = AvgPhase::FINAL_MEAS;
           return;
         }
         calCtx.avgPhase = AvgPhase::NONE;
@@ -484,7 +504,7 @@ void tickCalibration() {
 
       if (calCtx.avgPhase == AvgPhase::FINAL_MEAS) {
         float tmp = 0.0f;
-        if (!nonBlockingAvgUnits(CAL_SAMPLES, LIVE_SAMPLES, tmp)) {
+        if (!averageUnits(CAL_SAMPLES, LIVE_SAMPLES, tmp)) {
           return; // still measuring
         }
         calCtx.measuredUnits = tmp;
@@ -504,7 +524,7 @@ void tickCalibration() {
 
       // re-read to confirm factor produces correct output
       float verifiedUnits = 0.0f;
-      if (!nonBlockingAvgUnits(CAL_SAMPLES, LIVE_SAMPLES, verifiedUnits)) {
+      if (!averageUnits(CAL_SAMPLES, LIVE_SAMPLES, verifiedUnits)) {
         calCtx.avgPhase = AvgPhase::VERIFICATION; // verification in-progress
         return;
       }
@@ -526,7 +546,6 @@ void tickCalibration() {
 
     // workflow - manual calibration transitions to adjustment state with user input
     if (calCtx.mode == CalMode::MANUAL) {
-      // serial input handled by handleCalibrationInput()
       queueSerialOutput("Adjust calibration until the reading matches the known weight.\n"
             "Send '+' to increase calibration factor\n"
             "Send '-' to decrease calibration factor\n"

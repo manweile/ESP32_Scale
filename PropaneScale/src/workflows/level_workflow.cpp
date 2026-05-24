@@ -115,7 +115,7 @@ void tickLevelRead() {
     // bad scale check to avoid long blocking if HX711 is not responding;
     // use non-blocking averaged read driven by loop() ticks
     float measuredUnits;
-    if (!nonBlockingAvgUnits(1, POLL_SAMPLES, measuredUnits)) {
+    if (!averageUnits(1, POLL_SAMPLES, measuredUnits)) {
       // averaging in progress; try again on next tick
       return;
     }
@@ -163,7 +163,7 @@ void tickLevelRead() {
     // bad scale check to avoid long blocking if HX711 is not responding;
     // use non-blocking averaged read driven by loop() ticks
     float rawWeight;
-    if (!nonBlockingAvgUnits(CAL_SAMPLES, LIVE_SAMPLES, rawWeight)) {
+    if (!averageUnits(CAL_SAMPLES, LIVE_SAMPLES, rawWeight)) {
       // averaging still in progress; continue next tick
       return;
     }

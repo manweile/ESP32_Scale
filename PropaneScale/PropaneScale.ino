@@ -116,7 +116,7 @@ void tickTare() {
   if (tareCtx.baselinePending) {
     // scale not ready, try again next tick
     float base;
-    if (!nonBlockingAvgUnits(tareCtx.baselineReadings, tareCtx.baselineSamples, base)) {
+    if (!averageUnits(tareCtx.baselineReadings, tareCtx.baselineSamples, base)) {
       return;
     }
 
@@ -138,7 +138,7 @@ void tickTare() {
 
     // Use non-blocking averaged read driven by loop() ticks
     float m;
-    if (!nonBlockingAvgUnits(1, POLL_SAMPLES, m)) {
+    if (!averageUnits(1, POLL_SAMPLES, m)) {
       // averaging in progress; try again on next loop tick
       return;
     }
@@ -185,7 +185,7 @@ void tickTare() {
   // probably at stable point where we can update state
   // verify scale reading is valid before doing any processing
   float m;
-  if (!nonBlockingAvgUnits(1, POLL_SAMPLES, m)) {
+  if (!averageUnits(1, POLL_SAMPLES, m)) {
     // averaging in progress; continue on next loop tick
     return;
   }

@@ -30,8 +30,9 @@
 extern HX711 scale;                                         // HX711 instance for interacting with the load cell amplifier
 
 // Global Averaging Context Variables
-AvgContext AvgCtx;                                          // Averaging context instance to hold state for non-blocking average computations
-ThresholdAvgContext ThresholdAvgCtx;                        // Threshold averaging context for asynchronous threshold computation in level workflow
+AvgContext avgCtx;                                          // Averaging context instance to hold state for non-blocking average computations
+ThresholdAvgContext levelThresholdCtx;                      // Level threshold averaging context for asynchronous threshold computation
+ThresholdAvgContext calThresholdCtx;                        // Calibration threshold averaging context for asynchronous threshold computation
 
 //  Private Static Constants and Variables
 static constexpr size_t SERIAL_CAPACITY = 2048;              // Capacity of the internal serial output queue in bytes
@@ -136,26 +137,54 @@ static bool queueSerialOutput(const char* message, size_t messageLength) {
  * @section Public Definitions for input/output functions
  */
 
- void cancelLevelLoadDetect() {
-  ThresholdAvgCtx.active = false;
-  ThresholdAvgCtx.index = 0;
-  ThresholdAvgCtx.collected = 0;
-  ThresholdAvgCtx.total = 0.0f;
-}
-
-float computeLoadDetectThreshold(float minimumThresholdLbs) {
-  float rawNoise = readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES);
-
-  // we can't have a NaN or +- infinity threshold
-  if (!isfinite(rawNoise)) {
-    return minimumThresholdLbs;
+ bool averageUnits(int readings, int samplesPerReading, float &outAvg) {
+    if (!avgCtx.active || avgCtx.requestedReadings != readings || avgCtx.samplesPerReading != samplesPerReading) {
+    avgCtx.requestedReadings = readings;
+    avgCtx.samplesPerReading = samplesPerReading;
+    avgCtx.index = 0;
+    avgCtx.collected = 0;
+    avgCtx.total = 0.0f;
+    avgCtx.active = true;
   }
 
-  // balance between avoiding false detects from noise while still detecting real loads above the noise floor
-  float noise = fabsf(rawNoise);
-  float threshold = noise * 20.0f;
+  // If scale isn't ready right now, caller should call again later
+  if (!scale.is_ready()) {
+    return false;
+  }
 
-  return fmaxf(threshold, minimumThresholdLbs);
+  // Take a single averaged reading (samplesPerReading) when ready
+  float units = scale.get_units(samplesPerReading);
+  avgCtx.total += units;
+  avgCtx.collected++;
+  avgCtx.index++;
+
+  // When we've got the requested number of readings, finish and return result
+  if (avgCtx.index >= avgCtx.requestedReadings) {
+    if (avgCtx.collected == 0) {
+      outAvg = NAN;
+    } else {
+      outAvg = avgCtx.total / static_cast<float>(avgCtx.collected);
+    }
+    avgCtx.active = false;
+    return true;
+  }
+
+  // Not finished yet
+  return false;
+}
+
+void cancelCalLoadDetect() {
+  calThresholdCtx.active = false;
+  calThresholdCtx.index = 0;
+  calThresholdCtx.collected = 0;
+  calThresholdCtx.total = 0.0f;
+}
+
+void cancelLevelLoadDetect() {
+  levelThresholdCtx.active = false;
+  levelThresholdCtx.index = 0;
+  levelThresholdCtx.collected = 0;
+  levelThresholdCtx.total = 0.0f;
 }
 
 void drainQueuedSerialOutput() {
@@ -207,44 +236,44 @@ void flushSerialInput() {
   }
 }
 
-bool nonBlockingAvgUnits(int readings, int samplesPerReading, float &outAvg) {
-    if (!AvgCtx.active || AvgCtx.requestedReadings != readings || AvgCtx.samplesPerReading != samplesPerReading) {
-    AvgCtx.requestedReadings = readings;
-    AvgCtx.samplesPerReading = samplesPerReading;
-    AvgCtx.index = 0;
-    AvgCtx.collected = 0;
-    AvgCtx.total = 0.0f;
-    AvgCtx.active = true;
+bool pollCalLoadDetect(float &outThreshold) {
+  if (!calThresholdCtx.active) {
+    return false;
   }
 
-  // If scale isn't ready right now, caller should call again later
   if (!scale.is_ready()) {
     return false;
   }
 
-  // Take a single averaged reading (samplesPerReading) when ready
-  float units = scale.get_units(samplesPerReading);
-  AvgCtx.total += units;
-  AvgCtx.collected++;
-  AvgCtx.index++;
+  float units = scale.get_units(calThresholdCtx.samplesPerReading);
+  calThresholdCtx.total += units;
+  calThresholdCtx.collected++;
+  calThresholdCtx.index++;
 
-  // When we've got the requested number of readings, finish and return result
-  if (AvgCtx.index >= AvgCtx.requestedReadings) {
-    if (AvgCtx.collected == 0) {
-      outAvg = NAN;
+  if (calThresholdCtx.index >= calThresholdCtx.requestedReadings) {
+    float avg;
+    if (calThresholdCtx.collected == 0) {
+      avg = NAN;
     } else {
-      outAvg = AvgCtx.total / static_cast<float>(AvgCtx.collected);
+      avg = calThresholdCtx.total / static_cast<float>(calThresholdCtx.collected);
     }
-    AvgCtx.active = false;
+
+    calThresholdCtx.active = false;
+
+    if (!isfinite(avg)) {
+      outThreshold = calThresholdCtx.minimumThreshold;
+    } else {
+      float noise = fabsf(avg);
+      outThreshold = fmaxf(noise * 20.0f, calThresholdCtx.minimumThreshold);
+    }
     return true;
   }
 
-  // Not finished yet
   return false;
 }
 
 bool pollLevelLoadDetect(float &outThreshold) {
-  if (!ThresholdAvgCtx.active) {
+  if (!levelThresholdCtx.active) {
     return false;
   }
 
@@ -252,26 +281,26 @@ bool pollLevelLoadDetect(float &outThreshold) {
     return false;
   }
 
-  float units = scale.get_units(ThresholdAvgCtx.samplesPerReading);
-  ThresholdAvgCtx.total += units;
-  ThresholdAvgCtx.collected++;
-  ThresholdAvgCtx.index++;
+  float units = scale.get_units(levelThresholdCtx.samplesPerReading);
+  levelThresholdCtx.total += units;
+  levelThresholdCtx.collected++;
+  levelThresholdCtx.index++;
 
-  if (ThresholdAvgCtx.index >= ThresholdAvgCtx.requestedReadings) {
+  if (levelThresholdCtx.index >= levelThresholdCtx.requestedReadings) {
     float avg;
-    if (ThresholdAvgCtx.collected == 0) {
+    if (levelThresholdCtx.collected == 0) {
       avg = NAN;
     } else {
-      avg = ThresholdAvgCtx.total / static_cast<float>(ThresholdAvgCtx.collected);
+      avg = levelThresholdCtx.total / static_cast<float>(levelThresholdCtx.collected);
     }
 
-    ThresholdAvgCtx.active = false;
+    levelThresholdCtx.active = false;
 
     if (!isfinite(avg)) {
-      outThreshold = ThresholdAvgCtx.minimumThreshold;
+      outThreshold = levelThresholdCtx.minimumThreshold;
     } else {
       float noise = fabsf(avg);
-      outThreshold = fmaxf(noise * 20.0f, ThresholdAvgCtx.minimumThreshold);
+      outThreshold = fmaxf(noise * 20.0f, levelThresholdCtx.minimumThreshold);
     }
     return true;
   }
@@ -300,30 +329,6 @@ void printScaleNotReadyDiagnostic(const char* operation) {
   Serial.println();
 }
 
-float readAveragedUnits(int readings, int samplesPerReading) {
-  float avgWeight = 0.0f;               // Computed average weight in pounds to return at the end of the function.
-  int   collected  = 0;                 // Number of samples actually read (may be less than requested if HX711 not ready)
-  float totalUnits = 0.0f;              // Accumulator summing weight readings across all iterations for averaging
-  
-  // Use bounded wait to avoid infinite blocking while preserving the original
-  // per-reading averaging semantics used across workflows.
-  for (int readingIndex = 0; readingIndex < readings; ++readingIndex) {
-    if (!scale.wait_ready_timeout(HX711_READY_TIMEOUT_MS)) {
-      continue;
-    }
-
-    totalUnits += scale.get_units(samplesPerReading);
-    collected++;
-  }
-
-  if (collected == 0) {
-    return NAN;
-  }
-
-  avgWeight = totalUnits / collected;
-  return avgWeight;
-}
-
 void saveRuntimeTareOffset() {
   float offsetToSave = static_cast<float>(scale.get_offset());
   if (!saveToEeprom(offsetToSave,
@@ -334,12 +339,22 @@ void saveRuntimeTareOffset() {
   }
 }
 
+void startCalLoadDetect(float minimumThresholdLbs) {
+  calThresholdCtx.requestedReadings = UNLOAD_CHECK_COUNT;
+  calThresholdCtx.samplesPerReading = LIVE_SAMPLES;
+  calThresholdCtx.index = 0;
+  calThresholdCtx.collected = 0;
+  calThresholdCtx.total = 0.0f;
+  calThresholdCtx.minimumThreshold = minimumThresholdLbs;
+  calThresholdCtx.active = true;
+}
+
 void startLevelLoadDetect(float minimumThresholdLbs) {
-  ThresholdAvgCtx.requestedReadings = UNLOAD_CHECK_COUNT;
-  ThresholdAvgCtx.samplesPerReading = LIVE_SAMPLES;
-  ThresholdAvgCtx.index = 0;
-  ThresholdAvgCtx.collected = 0;
-  ThresholdAvgCtx.total = 0.0f;
-  ThresholdAvgCtx.minimumThreshold = minimumThresholdLbs;
-  ThresholdAvgCtx.active = true;
+  levelThresholdCtx.requestedReadings = UNLOAD_CHECK_COUNT;
+  levelThresholdCtx.samplesPerReading = LIVE_SAMPLES;
+  levelThresholdCtx.index = 0;
+  levelThresholdCtx.collected = 0;
+  levelThresholdCtx.total = 0.0f;
+  levelThresholdCtx.minimumThreshold = minimumThresholdLbs;
+  levelThresholdCtx.active = true;
 }
