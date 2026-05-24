@@ -276,4 +276,9 @@ Date: 2026-05-22
 
 6) check if any scale.wait_ready_timeout usage is acceptable in web ble & wifiS
 
-7) move static avgContext avgState; out of nonBlockingAvgUnits and place it somewhere after line 32 in scale_io.cpp
+7) get agent to propose but not implement:
+a reentrant averaging logic level and calibration threshold averaging.
+the level and workflow and 3 calibration workflows are never concurrent.
+the averaging helper operates on a caller-supplied context so multiple independent samplers can share the same implementation without globals.
+do not use a wrapper around non-blocking average units function.
+analyze existing usage of non-blocking average units function to ensure proposed reentrant will not cause any regression bugs.
