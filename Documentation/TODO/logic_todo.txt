@@ -275,3 +275,5 @@ Author: GitHub Copilot (assistant)
 Date: 2026-05-22
 
 6) check if any scale.wait_ready_timeout usage is acceptable in web ble & wifiS
+
+7) move static avgContext avgState; out of nonBlockingAvgUnits and place it somewhere after line 32 in scale_io.cpp
