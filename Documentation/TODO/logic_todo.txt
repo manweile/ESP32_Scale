@@ -276,9 +276,16 @@ Date: 2026-05-22
 
 6) check if any scale.wait_ready_timeout usage is acceptable in web ble & wifiS
 
-7) get agent to propose but not implement:
+7) AvgContext and ThresholdAvgContext are nearly identical.
+Keep the minimumThreshold field present (unused) to avoid changing the struct layout and externs; leaving it zero-initialized is fine.
+Update the declaration/definition where AvgContext avgCtx exists to ThresholdAvgContext avgCtx.
+Verify all call sites and externs in workflows_contexts.h and scale_io.cpp so symbols match.
+rename ThresholdAvgContext → AvgContext (single canonical type) for clearer intent.
+
+8) get agent to propose but not implement:
 a reentrant averaging logic level and calibration threshold averaging.
 the level and workflow and 3 calibration workflows are never concurrent.
 the averaging helper operates on a caller-supplied context so multiple independent samplers can share the same implementation without globals.
 do not use a wrapper around non-blocking average units function.
 analyze existing usage of non-blocking average units function to ensure proposed reentrant will not cause any regression bugs.
+
