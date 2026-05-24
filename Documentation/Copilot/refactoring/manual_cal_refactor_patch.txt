@@ -1,5 +1,7 @@
 Minimal Nested `ManualCal` Refactor Proposal
 
+NB needs re-analysis, changes made to CalContext after this was generated!
+
 Summary:
 - Move manual-only `CalContext` fields into a nested `ManualCal` struct named `manual`.
 - Keep shared workflow fields at top-level in `CalContext`.
