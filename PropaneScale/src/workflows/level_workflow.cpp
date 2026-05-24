@@ -39,6 +39,9 @@ bool handleLevelReadInput(char incoming) {
     if (incoming == 'q' || incoming == 'Q') {
       Serial.println("Level read cancelled.");
       levelCtx.avgPending = false;
+      // cancel any in-progress async threshold computation
+      cancelLevelLoadDetect();
+      levelCtx.thresholdPending = false;
       levelCtx.state = LevelState::IDLE;
     } else if (incoming != '\r' && incoming != '\n') {
       Serial.print("Invalid level read key: '");
@@ -63,7 +66,9 @@ void liquidLevel() {
   // we always ensure the scale is ready before starting the workflow
   scale.set_scale(calibrationFactor);
 
-  levelCtx.loadDetectThreshold = computeLoadDetectThreshold(MINIMUM_LOAD_WEIGHT);
+  startLevelLoadDetect(MINIMUM_LOAD_WEIGHT);
+  levelCtx.thresholdPending = true;
+  levelCtx.thresholdStartMs = millis();
   levelCtx.stateStartMs        = millis();
   levelCtx.state               = LevelState::WAIT_LOAD;
 
@@ -89,8 +94,22 @@ void tickLevelRead() {
     if ((millis() - levelCtx.stateStartMs) >= CONFIRM_TIMEOUT_MS) {
       Serial.println("Tank placement timed out; cancelled.");
       levelCtx.avgPending = false;
+      // cancel any pending threshold computation
+      cancelLevelLoadDetect();
+      levelCtx.thresholdPending = false;
       levelCtx.state = LevelState::IDLE;
       return;
+    }
+
+    // If threshold computation is still pending, poll it first.
+    if (levelCtx.thresholdPending) {
+      float thr = 0.0f;
+      if (!pollLevelLoadDetect(thr)) {
+        // threshold still being computed; try again next tick
+        return;
+      }
+      levelCtx.loadDetectThreshold = thr;
+      levelCtx.thresholdPending = false;
     }
 
     // bad scale check to avoid long blocking if HX711 is not responding;
@@ -105,6 +124,8 @@ void tickLevelRead() {
       printScaleNotReadyDiagnostic("tank placement detection");
       Serial.println("Level read cancelled.");
       levelCtx.avgPending = false;
+      cancelLevelLoadDetect();
+      levelCtx.thresholdPending = false;
       levelCtx.state = LevelState::IDLE;
       return;
     }

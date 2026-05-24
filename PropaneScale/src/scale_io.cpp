@@ -29,6 +29,10 @@
 // External Global State Variables
 extern HX711 scale;                                         // HX711 instance for interacting with the load cell amplifier
 
+// Global Averaging Context Variables
+AvgContext AvgCtx;                                          // Averaging context instance to hold state for non-blocking average computations
+ThresholdAvgContext ThresholdAvgCtx;                        // Threshold averaging context for asynchronous threshold computation in level workflow
+
 //  Private Static Constants and Variables
 static constexpr size_t SERIAL_CAPACITY = 2048;              // Capacity of the internal serial output queue in bytes
 static size_t serialLength = 0;                              // Current length of data in the serial output queue
@@ -132,6 +136,13 @@ static bool queueSerialOutput(const char* message, size_t messageLength) {
  * @section Public Definitions for input/output functions
  */
 
+ void cancelLevelLoadDetect() {
+  ThresholdAvgCtx.active = false;
+  ThresholdAvgCtx.index = 0;
+  ThresholdAvgCtx.collected = 0;
+  ThresholdAvgCtx.total = 0.0f;
+}
+
 float computeLoadDetectThreshold(float minimumThresholdLbs) {
   float rawNoise = readAveragedUnits(UNLOAD_CHECK_COUNT, LIVE_SAMPLES);
 
@@ -197,16 +208,13 @@ void flushSerialInput() {
 }
 
 bool nonBlockingAvgUnits(int readings, int samplesPerReading, float &outAvg) {
-  static AvgContext avgState;
-
-  // Start a new operation when parameters differ from the active request
-  if (!avgState.active || avgState.requestedReadings != readings || avgState.samplesPerReading != samplesPerReading) {
-    avgState.requestedReadings = readings;
-    avgState.samplesPerReading = samplesPerReading;
-    avgState.index = 0;
-    avgState.collected = 0;
-    avgState.total = 0.0f;
-    avgState.active = true;
+    if (!AvgCtx.active || AvgCtx.requestedReadings != readings || AvgCtx.samplesPerReading != samplesPerReading) {
+    AvgCtx.requestedReadings = readings;
+    AvgCtx.samplesPerReading = samplesPerReading;
+    AvgCtx.index = 0;
+    AvgCtx.collected = 0;
+    AvgCtx.total = 0.0f;
+    AvgCtx.active = true;
   }
 
   // If scale isn't ready right now, caller should call again later
@@ -216,22 +224,58 @@ bool nonBlockingAvgUnits(int readings, int samplesPerReading, float &outAvg) {
 
   // Take a single averaged reading (samplesPerReading) when ready
   float units = scale.get_units(samplesPerReading);
-  avgState.total += units;
-  avgState.collected++;
-  avgState.index++;
+  AvgCtx.total += units;
+  AvgCtx.collected++;
+  AvgCtx.index++;
 
   // When we've got the requested number of readings, finish and return result
-  if (avgState.index >= avgState.requestedReadings) {
-    if (avgState.collected == 0) {
+  if (AvgCtx.index >= AvgCtx.requestedReadings) {
+    if (AvgCtx.collected == 0) {
       outAvg = NAN;
     } else {
-      outAvg = avgState.total / static_cast<float>(avgState.collected);
+      outAvg = AvgCtx.total / static_cast<float>(AvgCtx.collected);
     }
-    avgState.active = false;
+    AvgCtx.active = false;
     return true;
   }
 
   // Not finished yet
+  return false;
+}
+
+bool pollLevelLoadDetect(float &outThreshold) {
+  if (!ThresholdAvgCtx.active) {
+    return false;
+  }
+
+  if (!scale.is_ready()) {
+    return false;
+  }
+
+  float units = scale.get_units(ThresholdAvgCtx.samplesPerReading);
+  ThresholdAvgCtx.total += units;
+  ThresholdAvgCtx.collected++;
+  ThresholdAvgCtx.index++;
+
+  if (ThresholdAvgCtx.index >= ThresholdAvgCtx.requestedReadings) {
+    float avg;
+    if (ThresholdAvgCtx.collected == 0) {
+      avg = NAN;
+    } else {
+      avg = ThresholdAvgCtx.total / static_cast<float>(ThresholdAvgCtx.collected);
+    }
+
+    ThresholdAvgCtx.active = false;
+
+    if (!isfinite(avg)) {
+      outThreshold = ThresholdAvgCtx.minimumThreshold;
+    } else {
+      float noise = fabsf(avg);
+      outThreshold = fmaxf(noise * 20.0f, ThresholdAvgCtx.minimumThreshold);
+    }
+    return true;
+  }
+
   return false;
 }
 
@@ -288,4 +332,14 @@ void saveRuntimeTareOffset() {
                     HX711_OFFSET_EEPROM_VALUE_ADDR)) {
     Serial.println("Warning: failed to save runtime tare offset to EEPROM.");
   }
+}
+
+void startLevelLoadDetect(float minimumThresholdLbs) {
+  ThresholdAvgCtx.requestedReadings = UNLOAD_CHECK_COUNT;
+  ThresholdAvgCtx.samplesPerReading = LIVE_SAMPLES;
+  ThresholdAvgCtx.index = 0;
+  ThresholdAvgCtx.collected = 0;
+  ThresholdAvgCtx.total = 0.0f;
+  ThresholdAvgCtx.minimumThreshold = minimumThresholdLbs;
+  ThresholdAvgCtx.active = true;
 }

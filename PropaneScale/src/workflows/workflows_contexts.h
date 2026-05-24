@@ -106,6 +106,26 @@ struct CalContext {
 // Level Enums and Structs
 
 /**
+ * @struct ThresholdAvgContext
+ *
+ * @brief Dedicated context for asynchronous threshold computation used by the
+ * liquid level workflow.
+ *
+ * @details Mirrors the minimal state required to drive a multi-read average
+ * operation across loop() ticks. Placing this in the workflows header makes
+ * the context visible to both workflows and helper implementations.
+ */
+struct ThresholdAvgContext {
+  bool   active            = false;                         /**< whether an async threshold op is active */
+  int    collected         = 0;                             /**< number of readings collected */
+  int    index             = 0;                             /**< current read iteration index */
+  float  minimumThreshold  = 0.0f;                          /**< minimum threshold floor captured at start */
+  int    requestedReadings = 0;                             /**< outer loop count of averaged readings */
+  int    samplesPerReading = 0;                             /**< samples per get_units() call */
+  float  total             = 0.0f;                          /**< accumulated reading total */
+};
+
+/**
  * @enum LevelState
  *
  * @brief Enumeration of states for the liquid level read workflow.
@@ -132,6 +152,8 @@ struct LevelContext {
   float         loadDetectThreshold = 0.0f;                 /**< noise-derived threshold used to detect tank placement */
   LevelState    state               = LevelState::IDLE;     /**< current state within the level read workflow */
   unsigned long stateStartMs        = 0;                    /**< millis() when WAIT_LOAD state was entered */
+  bool          thresholdPending    = false;                /**< whether an async threshold computation is pending */
+  unsigned long thresholdStartMs    = 0;                    /**< millis() when async threshold computation was started */
 };
 
 // Tare Enums and Structs
@@ -159,16 +181,18 @@ enum class TareState : uint8_t {
  * state so each loop() tick can advance the workflow without blocking.
  */
 struct TareContext {
-  float         baseline     = 0.0f;                        /**< Initial scale reading used as the stability reference */
+  float         baseline         = 0.0f;                    /**< Initial scale reading used as the stability reference */
   bool          baselinePending  = false;                   /**< baseline averaging requested and in progress */
   int           baselineReadings = 0;                       /**< requested outer readings for baseline */
   int           baselineSamples  = 0;                       /**< samples per reading for baseline */
-  int           stableChecks = 0;                           /**< Consecutive readings within tolerance of baseline */
-  TareState     state        = TareState::IDLE;             /**< Current state within the startup tare workflow */
-  unsigned long stateStartMs = 0;                           /**< millis() when WAIT_STABLE state was entered */
+  int           stableChecks     = 0;                       /**< Consecutive readings within tolerance of baseline */
+  TareState     state            = TareState::IDLE;         /**< Current state within the workflow */
+  unsigned long stateStartMs     = 0;                       /**< millis() when WAIT_STABLE state was entered */
 };
 
 // External global State Variables
-extern CalContext calCtx;                                   /**< Calibration context instance to hold state for calibration workflows */
-extern LevelContext levelCtx;                               /**< Level read context instance to hold state for the level read workflow */
-extern TareContext tareCtx;                                 /**< Startup tare context instance */
+extern AvgContext avgCtx;                                   /**< Averaging context instance to hold state for non-blocking computations */
+extern CalContext calCtx;                                   /**< Calibration context instance to hold state for workflows */
+extern LevelContext levelCtx;                               /**< Level read context instance to hold state for workflow */
+extern TareContext tareCtx;                                 /**< Startup tare context instance to hold state for workflow */
+extern ThresholdAvgContext ThresholdAvgCtx;                 /**< Threshold averaging context instance to hold state for non-blocking computation */

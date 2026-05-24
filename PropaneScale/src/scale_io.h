@@ -17,6 +17,15 @@
 // Declarations for input/output functions for user workflows and HX711 interactions
 
 /**
+ * @brief Cancels an in-progress level load-detection threshold computation.
+ * 
+ * @details If a threshold computation is active, resets the internal state so that the pending operation is cancelled.
+ * 
+ * @throws {none} This function does not throw exceptions.
+ */
+void cancelLevelLoadDetect();
+
+/**
  * @brief Computes the load-detection threshold from measured noise.
  *
  * @details Reads the current unloaded noise from the scale, multiplies it by 20
@@ -88,6 +97,21 @@ void flushSerialInput();
 bool nonBlockingAvgUnits(int readings, int samplesPerReading, float &outAvg);
 
 /**
+ * @brief Polls the level load-detection threshold computation for completion.
+ * 
+ * @details If a threshold computation is active, advances the operation by polling the HX711 for new readings and updating the internal state. 
+ *  When the requested number of readings has been collected, computes the final threshold value, stores it in `outThreshold`, and returns true. 
+ * If no operation is active or the operation is still in progress, returns false and `outThreshold` is unspecified.
+ * 
+ * @param outThreshold {float&} Output parameter set to the computed threshold in pounds when the function returns `true`.
+ * @return {bool} true when the threshold computation is complete and `outThreshold` is valid; 
+ * `false` otherwise when the operation is still in progress or no operation is active.
+ * 
+ * @throws {none} This function does not throw exceptions.
+ */
+bool pollLevelLoadDetect(float &outThreshold);
+
+/**
  * @brief Prints a standardized HX711 not-ready diagnostic.
  *
  * @details Used across workflows to keep timeout/not-ready messaging consistent.
@@ -141,3 +165,14 @@ float readAveragedUnits(int readings, int samplesPerReading);
  * @throws {none} This function does not throw exceptions.
  */
 void saveRuntimeTareOffset();
+
+/**
+ * @brief Starts an asynchronous level load-detection threshold computation.
+ * 
+ * @details Initializes the internal state to begin collecting readings from the HX711.
+ * 
+ * @param minimumThresholdLbs {float} Floor value for the computed threshold in pounds.
+ * 
+ * @throws {none} This function does not throw exceptions.
+ */
+void startLevelLoadDetect(float minimumThresholdLbs);
