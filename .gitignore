@@ -11,3 +11,4 @@ Documentation/Doxygen/doxygen/
 Scale.txt
 ESP32_COM4.CoolTerm.Settings
 ESP32_COM4.CoolTermSettings
+*.orig
