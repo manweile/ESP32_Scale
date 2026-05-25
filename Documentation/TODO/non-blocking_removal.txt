@@ -77,7 +77,7 @@ Integration details
 - For callers that previously relied on `averageUnits()` semantics (which used `get_units(samplesPerReading)`), implement a small adapter that maps the old state machine to the new one (use `sampleCtx` or reuse `avgCtx` fields for minimal edits).
 
 Error handling and diagnostics
-- If `pollSample()` times out, record a diagnostic string and optionally call `printScaleNotReadyDiagnostic()` in non-production builds (or when a debug flag is enabled). Production code should handle timeout gracefully (e.g., cancel workflow, report failure to UI).
+- If `pollSample()` times out, record a diagnostic string and optionally call `printDiagnostic()` in non-production builds (or when a debug flag is enabled). Production code should handle timeout gracefully (e.g., cancel workflow, report failure to UI).
 - Keep `ensureScaleReady()` limited to setup and diagnostics: it may still call `wait_ready_timeout()` for user-visible checks, but avoid calling it in runtime flows.
 
 Performance considerations
