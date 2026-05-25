@@ -2,6 +2,8 @@
 Not-empty threshold: >= 35.50 lbs (tank tare + max propane + margin).
 Stability tolerance: +/- 1.50 lbs once below not-empty threshold.
 
+TODO
+
 2) current runtime values doesn't need the eeprom output
 Current Runtime Values
 EEPROM ready: yes
@@ -16,9 +18,15 @@ Tare state: 0 (IDLE)
 Input mode: 0 (NONE)
 Input state: 0 (IDLE)
 
+LEAVE THIS AS IS
+
 3) all timeouts can be 15 seconds, so change settling to use CONFIRM_TIMEOUT_MS and remove CAL_SETTLE_DELAY_MS
 
+TODO 
+
 4) verify InputContext inputCtx; is supposed to be in PropaneScale.ino
+
+YES IT DOES. NEEDED by resetINputContext, WHICH MUST REMAIN IN PropaneScale.ino.
 
 5) have all user input handled by 'handle*Input(char incoming) functions
 to modify:
@@ -32,12 +40,9 @@ input_propane_weight.cpp: handlePropaneWeightInput
 input_tank_tare.cpp: handleTankTareInput
 level_workflow.cpp: handleLevelReadInput
 
-to add:
-see 5b 
-Extract SKIP handling from `tickTare()` on PropaneScale.ino into a dedicated
-input handler `handleStartupTareInput()` in the startup tare workflow module.
+TODO 
 
-a) refer to copilot session from May 21 on Github for moving Serial.available() out of tickCalibration.
+refer to copilot session from May 21 on Github for moving Serial.available() out of tickCalibration.
 handleCalibrationInput should be doing that logic.
 
 data:
@@ -183,7 +188,12 @@ If not, move the user-input logic that was previously in `tickCalibration` into 
 
 If you'd like an actual patch/diff for your project files, just ask!
 
-b) Detailed proposal: Extract SKIP handling from `tickTare()` into a dedicated
+6) Extract SKIP handling from `tickTare()` on PropaneScale.ino into a dedicated
+input handler `handleStartupTareInput()` in the startup tare workflow module.
+
+DONE
+
+Detailed proposal: Extract SKIP handling from `tickTare()` into a dedicated
 input handler `handleStartupTareInput()` in the startup tare workflow module.
 
 Goal
@@ -274,18 +284,23 @@ Checklist (for implementation)
 Author: GitHub Copilot (assistant)
 Date: 2026-05-22
 
-6) check if any scale.wait_ready_timeout usage is acceptable in web ble & wifiS
+7) check if any scale.wait_ready_timeout usage is acceptable in web ble and/or wifi
 
-7) AvgContext and ThresholdAvgContext are nearly identical.
+NO. All have been removed.
+
+8) AvgContext and ThresholdAvgContext are nearly identical.
 Keep the minimumThreshold field present (unused) to avoid changing the struct layout and externs; leaving it zero-initialized is fine.
 Update the declaration/definition where AvgContext avgCtx exists to ThresholdAvgContext avgCtx.
 Verify all call sites and externs in workflows_contexts.h and scale_io.cpp so symbols match.
 rename ThresholdAvgContext → AvgContext (single canonical type) for clearer intent.
 
-8) get agent to propose but not implement:
+DONE
+
+9) get agent to propose but not implement:
 a reentrant averaging logic level and calibration threshold averaging.
 the level and workflow and 3 calibration workflows are never concurrent.
 the averaging helper operates on a caller-supplied context so multiple independent samplers can share the same implementation without globals.
 do not use a wrapper around non-blocking average units function.
 analyze existing usage of non-blocking average units function to ensure proposed reentrant will not cause any regression bugs.
 
+NOT SURE THIS NEEDED ANYMORE
