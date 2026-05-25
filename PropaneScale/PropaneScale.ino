@@ -124,7 +124,7 @@ void tickTare() {
 
     // bad scale reading, warn user to check hardware and skip tare workflow
     if (!isfinite(base)) {
-      printScaleNotReadyDiagnostic("startup tare");
+      printDiagnostic("startup tare");
       tareCtx.state = TareState::SKIP;
       return;
     }
@@ -145,7 +145,7 @@ void tickTare() {
     
     // bad scale reading, warn user to check hardware
     if (!isfinite(m)) {
-      printScaleNotReadyDiagnostic("startup tare");
+      printDiagnostic("startup tare");
       tareCtx.state = TareState::SKIP;
       return;
     }
@@ -191,7 +191,7 @@ void tickTare() {
   }
 
   if (!isfinite(m)) {
-    printScaleNotReadyDiagnostic("startup tare");
+    printDiagnostic("startup tare");
     tareCtx.state = TareState::SKIP;
     return;
   }
