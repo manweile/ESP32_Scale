@@ -1,12 +1,12 @@
 /**
  * @file input_known_weight.cpp
  * @author Gerald Manweiler
- * 
+ *
  * @brief Header file for handling user input workflow to update the tank tare value.
- * 
+ *
  * @details Processes one serial character per loop() iteration,
  * managing the stepwise collection of a new tank tare value and user confirmation to save or cancel.
- * 
+ *
  * @version 0.1
  * @date 2026-05-07
  * @copyright Copyright (c) 2026 Gerald Manweiler
@@ -30,7 +30,8 @@ extern void resetInputContext();                            // Resets the input 
 
 // Definitions for tank tare input functions
 
-void handleTankTareInput(char incoming) {
+void handleTankTareInput(char incoming)
+{
   // ignore carriage return characters to prevent interference with parsing logic
   if (incoming == '\r') {
     return;
@@ -64,7 +65,7 @@ void handleTankTareInput(char incoming) {
 
       tankTare = inputCtx.parsedValue;
       bool eepromSuccess = saveToEeprom(tankTare, TARE_EEPROM_MAGIC, TARE_EEPROM_MAGIC_ADDR, TARE_EEPROM_VALUE_ADDR);
-      
+
       if (!eepromSuccess) {
         queueSerialOutput("Failed to save tank tare to EEPROM.\n");
       } else {
@@ -72,6 +73,7 @@ void handleTankTareInput(char incoming) {
         snprintf(buf, sizeof(buf), "Tank tare saved successfully: %.2f lbs\n", tankTare);
         queueSerialOutput(buf);
       }
+
       resetInputContext();
       return;
     }
@@ -80,8 +82,8 @@ void handleTankTareInput(char incoming) {
     return;
   }
 
-  // workflow - collecting numeric value text 
-  // waiting cancel, newline, or save command, 
+  // workflow - collecting numeric value text
+  // waiting cancel, newline, or save command,
   // ignore other characters except for buffering valid numeric input
   if (inputCtx.state == InputState::ENTER_VALUE) {
 
@@ -147,8 +149,8 @@ void handleTankTareInput(char incoming) {
 
       if (!parseSuccess || !validValue) {
         char buf[96];
-        snprintf(buf, sizeof(buf), 
-                 "Invalid tank tare. Enter a number from %.2f to %.2f lbs, or 'q' to cancel.\n", 
+        snprintf(buf, sizeof(buf),
+                 "Invalid tank tare. Enter a number from %.2f to %.2f lbs, or 'q' to cancel.\n",
                  MIN_PLAUSIBLE_WEIGHT, MAX_PROJECT_WEIGHT);
         Serial.print(buf);
         inputCtx.index = 0;
@@ -177,12 +179,13 @@ void handleTankTareInput(char incoming) {
         snprintf(buf, sizeof(buf), "Tank tare saved successfully: %.2f lbs\n", tankTare);
         queueSerialOutput(buf);
       }
+
       resetInputContext();
       return;
     }
 
     bool isValidChar = inputCtx.index < static_cast<int>(sizeof(inputCtx.buffer) - 1);
-    
+
     if (isValidChar) {
       inputCtx.buffer[inputCtx.index++] = incoming;
     } else {
@@ -190,6 +193,7 @@ void handleTankTareInput(char incoming) {
       inputCtx.index = 0;
       inputCtx.buffer[0] = '\0';
     }
+
     return;
   }
 
@@ -197,7 +201,8 @@ void handleTankTareInput(char incoming) {
   resetInputContext();
 }
 
-void tankTareUpdate() {
+void tankTareUpdate()
+{
   if (inputCtx.mode != InputMode::NONE) {
     Serial.println("Tank tare input workflow already in progress. Send 'q' to cancel first.");
     return;

@@ -2,19 +2,19 @@
 /**
  * @file app_startup.cpp
  * @author Gerald Manweiler
- * 
+ *
  * @brief Application startup initialization implementation for the propane scale project.
- * 
+ *
  * @details Implements helper functions used to initialize the application before the main
  * startup tare workflow begins.
- * 
+ *
  * @version 0.1
  * @date 2026-05-14
- * 
+ *
  * @copyright Copyright (c) 2026 Gerald Manweiler
  */
 
- // Standard library headers
+// Standard library headers
 #include <Arduino.h>                                        // Arduino core library for Serial communication and basic types
 #include <EEPROM.h>                                         // EEPROM library for persistent storage of calibration and tare values
 
@@ -26,24 +26,25 @@
 #include "src/eeprom_store.h"                               // EEPROM storage functions
 #include "src/parsing_utils.h"                              // Utility functions for validating and parsing input values
 #include "src/runtime_report.h"                             // For printStartupSummary
-#include "src/workflows/startup_tare_workflow.h"            // For computeStartupNotEmptyThreshold
+#include "src/workflows/startup_tare_workflow.h"            // For computeThreshold
 
 // External Global State Variables and Functions
 extern float calibrationFactor;
 extern bool eepromReady;
-extern HX711 scale; 
+extern HX711 scale;
 extern float knownWeight;
 extern float maxPropane;
 extern float tankTare;
 
- // Definitions for application startup initialization functions
+// Definitions for application startup initialization functions
 
-void initializeApp() {
+void initializeApp()
+{
   // need to check if eeprom is ready before trying to load values, and if not, use defaults and continue without eeprom functionality
   eepromReady = EEPROM.begin(EEPROM_SIZE_BYTES);
 
-  // complete eeprom begin failure means we have to use the hard coded defaults and cannot persist any changes, 
-  // but we can still operate the scale with the default calibration factor and tare values, 
+  // complete eeprom begin failure means we have to use the hard coded defaults and cannot persist any changes,
+  // but we can still operate the scale with the default calibration factor and tare values,
   // so we should not halt execution, just warn the user and continue
   if (!eepromReady) {
     Serial.println("EEPROM init failed. Using defaults.");
@@ -52,23 +53,26 @@ void initializeApp() {
     maxPropane        = DEF_MAX_PROPANE;
     tankTare          = DEF_TANK_TARE;
   } else {
-    // for each persisted value, use the magic marker if present and valid, 
+    // for each persisted value, use the magic marker if present and valid,
     // otherwise use the default and save it to eeprom for next time
-    // this way if one value becomes corrupted, it does not affect the others, 
+    // this way if one value becomes corrupted, it does not affect the others,
     // user can still get a valid reading with defaults ,
     // and can fix the corrupted value by re-saving it
 
     // @todo replace each 'loaded' with exact var for value getting from eeprom
-    // ie loadedCalibrationFactor, loadedKnownWeight, etc. 
-    // to make it more clear in the code that these are the loaded values being validated 
+    // ie loadedCalibrationFactor, loadedKnownWeight, etc.
+    // to make it more clear in the code that these are the loaded values being validated
     // before assignment to the global state vars
 
     float loaded = 0.0f;
-    if (loadFromEeprom(loaded, CAL_EEPROM_MAGIC_ADDR, CAL_EEPROM_MAGIC, CAL_EEPROM_VALUE_ADDR) && isValidBoundedFloat(loaded, CAL_FACTOR_ABS_MIN, CAL_FACTOR_ABS_MAX, true)) {
+
+    if (loadFromEeprom(loaded, CAL_EEPROM_MAGIC_ADDR, CAL_EEPROM_MAGIC, CAL_EEPROM_VALUE_ADDR)
+        && isValidBoundedFloat(loaded, CAL_FACTOR_ABS_MIN, CAL_FACTOR_ABS_MAX, true)) {
       calibrationFactor = loaded;
     } else {
       calibrationFactor = DEF_CALIBRATION_FACTOR;
       Serial.println("Calibration factor not found or invalid; using default.");
+
       if (!saveToEeprom(calibrationFactor, CAL_EEPROM_MAGIC, CAL_EEPROM_MAGIC_ADDR, CAL_EEPROM_VALUE_ADDR)) {
         Serial.println(CALIBRATION_SAVE_FAILURE_MSG);
       } else {
@@ -76,11 +80,13 @@ void initializeApp() {
       }
     }
 
-    if (loadFromEeprom(loaded, KNOWN_WEIGHT_EEPROM_MAGIC_ADDR, KNOWN_WEIGHT_EEPROM_MAGIC, KNOWN_WEIGHT_EEPROM_VALUE_ADDR) && isValidBoundedFloat(loaded, MIN_PLAUSIBLE_WEIGHT, MAX_PROJECT_WEIGHT)) {
+    if (loadFromEeprom(loaded, KNOWN_WEIGHT_EEPROM_MAGIC_ADDR, KNOWN_WEIGHT_EEPROM_MAGIC, KNOWN_WEIGHT_EEPROM_VALUE_ADDR)
+        && isValidBoundedFloat(loaded, MIN_PLAUSIBLE_WEIGHT, MAX_PROJECT_WEIGHT)) {
       knownWeight = loaded;
     } else {
       knownWeight = DEF_KNOWN_WEIGHT;
       Serial.println("Known calibration weight not found or invalid; using default.");
+
       if (!saveToEeprom(knownWeight, KNOWN_WEIGHT_EEPROM_MAGIC, KNOWN_WEIGHT_EEPROM_MAGIC_ADDR, KNOWN_WEIGHT_EEPROM_VALUE_ADDR)) {
         Serial.println("Failure saving default known calibration weight to EEPROM.");
       } else {
@@ -88,11 +94,13 @@ void initializeApp() {
       }
     }
 
-    if (loadFromEeprom(loaded, MAX_PROPANE_EEPROM_MAGIC_ADDR, MAX_PROPANE_EEPROM_MAGIC, MAX_PROPANE_EEPROM_VALUE_ADDR) && isValidBoundedFloat(loaded, MIN_PLAUSIBLE_WEIGHT, MAX_PROJECT_WEIGHT)) {
+    if (loadFromEeprom(loaded, MAX_PROPANE_EEPROM_MAGIC_ADDR, MAX_PROPANE_EEPROM_MAGIC, MAX_PROPANE_EEPROM_VALUE_ADDR)
+        && isValidBoundedFloat(loaded, MIN_PLAUSIBLE_WEIGHT, MAX_PROJECT_WEIGHT)) {
       maxPropane = loaded;
     } else {
       maxPropane = DEF_MAX_PROPANE;
       Serial.println("Max propane weight not found or invalid; using default.");
+
       if (!saveToEeprom(maxPropane, MAX_PROPANE_EEPROM_MAGIC, MAX_PROPANE_EEPROM_MAGIC_ADDR, MAX_PROPANE_EEPROM_VALUE_ADDR)) {
         Serial.println("Failure saving default max propane weight to EEPROM.");
       } else {
@@ -100,11 +108,13 @@ void initializeApp() {
       }
     }
 
-    if (loadFromEeprom(loaded, TARE_EEPROM_MAGIC_ADDR, TARE_EEPROM_MAGIC, TARE_EEPROM_VALUE_ADDR) && isValidBoundedFloat(loaded, MIN_PLAUSIBLE_WEIGHT, MAX_PROJECT_WEIGHT)) {
+    if (loadFromEeprom(loaded, TARE_EEPROM_MAGIC_ADDR, TARE_EEPROM_MAGIC, TARE_EEPROM_VALUE_ADDR)
+        && isValidBoundedFloat(loaded, MIN_PLAUSIBLE_WEIGHT, MAX_PROJECT_WEIGHT)) {
       tankTare = loaded;
     } else {
       tankTare = DEF_TANK_TARE;
       Serial.println("Tank tare not found or invalid; using default.");
+
       if (!saveToEeprom(tankTare, TARE_EEPROM_MAGIC, TARE_EEPROM_MAGIC_ADDR, TARE_EEPROM_VALUE_ADDR)) {
         Serial.println("Failure saving default tank tare to EEPROM.");
       } else {
@@ -117,6 +127,7 @@ void initializeApp() {
 
   // Restore previously saved runtime tare offset so startup empty/load checks use a known-empty reference.
   float savedRuntimeOffset = 0.0f;
+
   if (loadFromEeprom(savedRuntimeOffset,
                      HX711_OFFSET_EEPROM_MAGIC_ADDR,
                      HX711_OFFSET_EEPROM_MAGIC,

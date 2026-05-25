@@ -1,0 +1,4 @@
+1) add a task that launches coolterm
+can have optional input file dialog for settings file
+
+2) get all openOcd/esp-prog debug tasks working

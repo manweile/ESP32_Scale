@@ -2,6 +2,8 @@
 Not-empty threshold: >= 35.50 lbs (tank tare + max propane + margin).
 Stability tolerance: +/- 1.50 lbs once below not-empty threshold.
 
+TODO
+
 2) current runtime values doesn't need the eeprom output
 Current Runtime Values
 EEPROM ready: yes
@@ -16,4 +18,289 @@ Tare state: 0 (IDLE)
 Input mode: 0 (NONE)
 Input state: 0 (IDLE)
 
+LEAVE THIS AS IS
+
 3) all timeouts can be 15 seconds, so change settling to use CONFIRM_TIMEOUT_MS and remove CAL_SETTLE_DELAY_MS
+
+TODO 
+
+4) verify InputContext inputCtx; is supposed to be in PropaneScale.ino
+
+YES IT DOES. NEEDED by resetINputContext, WHICH MUST REMAIN IN PropaneScale.ino.
+
+5) have all user input handled by 'handle*Input(char incoming) functions
+to modify:
+note see 5a
+Remove Serial Input Handling from `tickCalibration
+calibration_workflow.cpp: handleCalibrationInput
+
+currently existing:
+input_known_weight.cpp: handleKnownWeightInput
+input_propane_weight.cpp: handlePropaneWeightInput
+input_tank_tare.cpp: handleTankTareInput
+level_workflow.cpp: handleLevelReadInput
+
+TODO 
+
+refer to copilot session from May 21 on Github for moving Serial.available() out of tickCalibration.
+handleCalibrationInput should be doing that logic.
+
+data:
+- file: "PropaneScale/PropaneScale.ino"
+  line: 221
+  snippet: "if (!Serial.available()) {"
+- file: "PropaneScale/src/workflows/calibration_workflow.cpp"
+  line: 373
+  snippet: "if (Serial.available()) {"
+- file: "PropaneScale/src/scale_io.cpp"
+  line: 68
+  snippet: "while (Serial.available()) {"
+- file: "Examples/mine/mine.ino"
+  line: 126
+  snippet: "if (Serial.available()) {"
+- file: "Examples/mine/mine.ino"
+  line: 206
+  snippet: "while (Serial.available()) {"
+- file: "Examples/mine/mine.ino"
+  line: 209
+  snippet: "if (Serial.available()) {"
+- file: "Examples/mine/copilot_scale.ino"
+  line: 290
+  snippet: "while (Serial.available()) {"
+- file: "Examples/mine/copilot_scale.ino"
+  line: 413
+  snippet: "if (Serial.available()) {"
+- file: "Examples/mine/copilot_scale.ino"
+  line: 989
+  snippet: "if (Serial.available()) {"
+- file: "Examples/mine/copilot_scale.ino"
+  line: 1072
+  snippet: "while (Serial.available()) {"
+  
+Here is a concrete refactoring example (diff) based on your actual project structure for moving all calibration user input handling to `handleCalibrationInput`. This refactor assumes your main Arduino loop is in **PropaneScale/PropaneScale.ino** and it already calls `tickCalibration()` (or will after this change):
+
+---
+
+### 1. **Remove Serial Input Handling from `tickCalibration`**
+
+**Before:** (in `PropaneScale/src/workflows/calibration_workflow.cpp`)
+```cpp
+if (calCtx.state == CalState::WAIT_EMPTY) {
+    if (Serial.available()) {
+        char c = Serial.read();
+        // User input handling for 'q', 'z'...
+    }
+    // ...timeout logic
+}
+```
+
+**After:**  
+```cpp
+if (calCtx.state == CalState::WAIT_EMPTY) {
+    // Only handle timeout logic here.
+    // User input is now handled in handleCalibrationInput() by the main loop.
+    // ...timeout logic
+}
+```
+
+> Remove the entire `Serial.available()` block and all user input checking from **tickCalibration**.
+
+---
+
+### 2. **Update Main loop() in PropaneScale.ino**
+
+#### Find your current main loop (example context from results):
+
+```cpp
+void loop() {
+    // ...other variable declarations...
+    // Main loop body...
+}
+```
+
+**Insert this code before calling tickCalibration():**
+```cpp
+    // If calibration is active and a serial character is available, route it to handleCalibrationInput
+    if (calCtx.state != CalState::IDLE && Serial.available()) {
+        char c = Serial.read();
+        handleCalibrationInput(c);
+    }
+
+    tickCalibration();
+```
+
+**Full Example Integration:**
+```cpp
+void loop() {
+    // ...other variables, logic...
+
+    // Calibration input refactor (add these lines):
+    if (calCtx.state != CalState::IDLE && Serial.available()) {
+        char c = Serial.read();
+        handleCalibrationInput(c);
+    }
+
+    tickCalibration();
+
+    // ...rest of your loop logic, if any
+}
+```
+> Be sure to include `#include "src/workflows/workflows_contexts.h"` or wherever `calCtx` and related states are defined.
+
+---
+
+### 3. **Review and Update Comments for Clarity**
+
+Update any relevant comments in both `tickCalibration()` and your `loop()` to explain that:
+- User input is now directed exclusively through `handleCalibrationInput()`.
+- `tickCalibration()` only advances state based on timing and sensor logic.
+
+---
+
+### 4. **Sanity Check handleCalibrationInput**
+
+No changes are necessary if `handleCalibrationInput(char)` already handles all relevant states/inputs (WAIT_EMPTY, ADJUSTING, etc.).  
+If not, move the user-input logic that was previously in `tickCalibration` into the corresponding `handleCalibrationInput` state branch.
+
+---
+
+## Summary of Improved Flow
+
+- **loop()**:
+    - Reads and routes input to `handleCalibrationInput()` if calibration is active.
+    - Always calls `tickCalibration()` to advance the non-blocking state machine.
+
+- **handleCalibrationInput()**:
+    - Handles ALL user calibration input logic per-state.
+
+- **tickCalibration()**:
+    - Handles timeouts, sensor readings, and ordinary state transitions only.
+
+---
+
+## Resulting Advantages
+
+- **Single responsibility**: All calibration input logic in one place.
+- **Non-blocking**: `loop()` stays responsive.
+- **Easy to maintain** and reason about calibration workflow logic.
+
+---
+
+If you'd like an actual patch/diff for your project files, just ask!
+
+6) Extract SKIP handling from `tickTare()` on PropaneScale.ino into a dedicated
+input handler `handleStartupTareInput()` in the startup tare workflow module.
+
+DONE
+
+Detailed proposal: Extract SKIP handling from `tickTare()` into a dedicated
+input handler `handleStartupTareInput()` in the startup tare workflow module.
+
+Goal
+----
+Move the Serial/input-specific logic that handles the user-skipped-tare
+(`TareState::SKIP`) out of `tickTare()` in `PropaneScale.ino` and into a
+well-scoped function implemented in `src/workflows/startup_tare_workflow.cpp`.
+This clarifies responsibilities: `tickTare()` remains the pure state/timing
+progression, while input/Serial interaction is handled by a separate function.
+
+Motivation
+----------
+- Improve separation of concerns: state machine vs. input handling.
+- Simplify unit testing and local reasoning about `tickTare()` logic.
+- Make future refactor (moving more of the startup-tare workflow into a
+  separate compilation unit) lower risk and more incremental.
+
+Design options
+--------------
+1) Lightweight: implement `handleStartupTareInput()` in
+   `src/workflows/startup_tare_workflow.cpp` using `extern TareContext tareCtx;`
+   and calling existing global helpers like `helpMenu()` and `Serial` directly.
+   - Pros: minimal changes to other files, fast to implement.
+   - Cons: keeps global coupling via `extern` declarations.
+
+2) Cleaner API: add accessors and callbacks to reduce globals. Example:
+   - Keep `TareContext` module-local and provide `startupTare_handleInput(char c)`
+     that takes input and returns an enum/action. Or pass in function pointers
+     for `helpMenu()` and `saveRuntimeTareOffset()`.
+   - Pros: better encapsulation and testability.
+   - Cons: larger refactor and more call-site updates.
+
+Suggested Implementation (practical, incremental)
+-----------------------------------------------
+1. Add declaration to `src/workflows/startup_tare_workflow.h`:
+   - `void handleStartupTareInput();`  // polls Serial & handles SKIP->IDLE
+
+2. Create or update `src/workflows/startup_tare_workflow.cpp`:
+   - Implement `handleStartupTareInput()` with the existing SKIP branch logic:
+
+      // alternate happy path where user skipped taring
+      if (tareCtx.state == TareState::SKIP) {
+        Serial.println("Continuing without startup tare.");
+        Serial.println("Remove propane weight and send 'r' to re-zero when ready.");
+        tareCtx.state = TareState::IDLE;
+        helpMenu();
+        return;
+      }
+
+   - Use `extern TareContext tareCtx;` at top of the .cpp to reference the global
+     context (incremental change). Include any headers needed to reference
+     `helpMenu()` and Serial.
+
+3. Update `PropaneScale.ino`:
+   - Remove the SKIP branch from `tickTare()` and replace/augment the function
+     so that `tickTare()` calls `handleStartupTareInput()` when appropriate, or
+     that the main `loop()` calls `handleStartupTareInput()` before or after
+     `tickTare()` depending on desired timing.
+
+4. Build & test
+   - Compile with `arduino-cli compile --fqbn esp32:esp32:esp32thing PropaneScale`
+   - Test device behavior for these flows: normal tare, user pressed 'q', user
+     pressed 'q' then confirmed re-zero, user skipped startup tare.
+
+Risks & mitigation
+------------------
+- Risk: introducing undefined references if required headers aren't included.
+  Mitigation: add required `extern` declarations and include headers in the new
+  .cpp, or prefer passing callbacks.
+- Risk: timing change if main `loop()` ordering changes. Mitigation: keep
+  `handleStartupTareInput()` lightweight and call it in the same relative
+  position as the previous code (after the early `tareCtx.state` checks).
+
+Follow-up improvements (optional)
+-------------------------------
+- Move `TareContext tareCtx;` into the startup_tare module and provide
+  controlled getters/setters to remove externs.
+- Convert Serial polling to an injected input callback so it can be mocked
+  in unit tests.
+
+Checklist (for implementation)
+- [ ] Add declaration to `src/workflows/startup_tare_workflow.h`
+- [ ] Implement handler in `src/workflows/startup_tare_workflow.cpp`
+- [ ] Update `PropaneScale.ino` to remove SKIP branch and call handler
+- [ ] Compile and run hardware tests
+- [ ] Consider further encapsulation (optional)
+
+Author: GitHub Copilot (assistant)
+Date: 2026-05-22
+
+7) check if any scale.wait_ready_timeout usage is acceptable in web ble and/or wifi
+
+NO. All have been removed.
+
+8) AvgContext and ThresholdAvgContext are nearly identical.
+Keep the minimumThreshold field present (unused) to avoid changing the struct layout and externs; leaving it zero-initialized is fine.
+Update the declaration/definition where AvgContext avgCtx exists to ThresholdAvgContext avgCtx.
+Verify all call sites and externs in workflows_contexts.h and scale_io.cpp so symbols match.
+rename ThresholdAvgContext → AvgContext (single canonical type) for clearer intent.
+
+DONE
+
+9) get agent to propose but not implement:
+a reentrant averaging logic level and calibration threshold averaging.
+the level and workflow and 3 calibration workflows are never concurrent.
+the averaging helper operates on a caller-supplied context so multiple independent samplers can share the same implementation without globals.
+do not use a wrapper around non-blocking average units function.
+analyze existing usage of non-blocking average units function to ensure proposed reentrant will not cause any regression bugs.
+
+NOT SURE THIS NEEDED ANYMORE

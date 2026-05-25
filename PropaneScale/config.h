@@ -1,16 +1,16 @@
 /**
  * @file config.h
  * @author Gerald Manweiler
- * 
+ *
  * @brief Configuration constants for the ESP32-based propane level scale.
- * 
+ *
  * @details Defines constants used throughout the PropaneScale application.
- * 
+ *
  * @version 0.1
  * @date 2026-05-06
- * 
+ *
  * @copyright Copyright (c) 2026 Gerald Manweiler
- * 
+ *
  */
 
 #pragma once
@@ -23,9 +23,9 @@ constexpr int DOUT_PIN = 16;                                /**< Data output pin
 constexpr long BAUD = 115200;                                /**< Serial connection speed in bits per second */
 
 // Sampling Constants
+constexpr int AVG_SAMPLES = 1;                              /**< Single sample used in polling loops for detection only */
 constexpr int CAL_SAMPLES = 5;                              /**< Number of samples to average for calibration readings */
 constexpr int LIVE_SAMPLES = 10;                            /**< Number of samples to average for live weight readings (~1s at 10 SPS) */
-constexpr int POLL_SAMPLES = 1;                             /**< Single sample used in polling loops for detection only */
 constexpr int UNLOAD_CHECK_COUNT = 3;                       /**< Shared sample/check count for unloaded averaging and stable-empty confirmation */
 
 // Calibration & Startup Constants
@@ -53,8 +53,9 @@ constexpr float MINIMUM_LOAD_WEIGHT = 1.0f;                 /**< Minimum load in
 
 // Timing Constants for Non-blocking Workflows
 constexpr unsigned long CAL_SETTLE_DELAY_MS = 5000UL;       /**< Time to wait for load to mechanically settle before taking calibration reading */
-constexpr unsigned long HX711_READY_TIMEOUT_MS = 120UL;     /**< Maximum time to wait for the HX711 to become ready during blocking reads */
 constexpr unsigned long CONFIRM_TIMEOUT_MS = 15000UL;       /**< Wait time for user &auto confirmations during startup tare workflow/calibration */
+constexpr unsigned long POLL_TIMEOUT_MS = 1000UL;           /**< Maximum time to wait for the HX711 to become ready during polling */
+constexpr unsigned long READY_TIMEOUT_MS = 100UL;           /**< Maximum time to wait for the HX711 to become ready during blocking reads */
 
 // Startup Tare Constants & Functions
 constexpr float SETUP_EMPTY_WEIGHT = 1.5f;                  /**< Tolerance in lbs for detecting stable empty condition during startup calibration */
@@ -118,16 +119,17 @@ constexpr float MIN_PLAUSIBLE_WEIGHT = 0.1f;                /**< Minimum plausib
 
 /**
  * @brief Computes the startup not-empty threshold.
- * 
+ *
  * @details Calculates threshold in pounds above which the scale is considered to have a load on it during startup tare.
  * Implemented here to provide a single source of truth logic tied to constants in this file and avoids linker errors.
- * 
+ *
  * @param tankTareLbs {float} Tare weight of the empty tank in pounds.
  * @param maxPropaneLbs {float} Maximum legal propane weight in pounds.
  * @return constexpr float Startup not-empty threshold in pounds.
- * 
+ *
  * @throws {none} This function does not throw exceptions.
  */
-constexpr float computeStartupNotEmptyThreshold(float tankTareLbs, float maxPropaneLbs) {
-	return tankTareLbs + maxPropaneLbs + STARTUP_NOT_EMPTY_MARGIN_LBS;
+constexpr float computeThreshold(float tankTareLbs, float maxPropaneLbs)
+{
+  return tankTareLbs + maxPropaneLbs + STARTUP_NOT_EMPTY_MARGIN_LBS;
 }
