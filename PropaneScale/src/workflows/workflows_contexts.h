@@ -41,32 +41,13 @@ enum class AvgPhase : uint8_t {
  * @details Contains variables to manage the state of a non-blocking averaging operation.
  */
 struct AvgContext {
-  bool active           = false;                            /**< Whether a non-blocking operation is active */
-  int collected         = 0;                                /**< Number of readings collected so far */  
-  int index             = 0;                                /**< Current reading index */
-  int requestedReadings = 0;                                /**< Number of readings requested (outer loop) */
-  int samplesPerReading = 0;                                /**< Samples per averaged reading */
-  float total           = 0.0f;                             /**< Accumulated total of readings */
-};
-
-/**
- * @struct ThresholdAvgContext
- *
- * @brief Dedicated context for asynchronous threshold computation used by the
- * liquid level workflow.
- *
- * @details Mirrors the minimal state required to drive a multi-read average
- * operation across loop() ticks. Placing this in the workflows header makes
- * the context visible to both workflows and helper implementations.
- */
-struct ThresholdAvgContext {
-  bool   active            = false;                         /**< whether an async threshold op is active */
-  int    collected         = 0;                             /**< number of readings collected */
-  int    index             = 0;                             /**< current read iteration index */
-  float  minimumThreshold  = 0.0f;                          /**< minimum threshold floor captured at start */
-  int    requestedReadings = 0;                             /**< outer loop count of averaged readings */
-  int    samplesPerReading = 0;                             /**< samples per get_units() call */
-  float  total             = 0.0f;                          /**< accumulated reading total */
+  bool   active            = false;                         /**< Whether a non-blocking operation is active */
+  int    collected         = 0;                             /**< Number of readings collected so far */
+  int    index             = 0;                             /**< Current reading index */
+  float  minimumThreshold  = 0.0f;                          /**< Minimum threshold floor (kept for layout compatibility) */
+  int    requestedReadings = 0;                             /**< Number of readings requested (outer loop) */
+  int    samplesPerReading = 0;                             /**< Samples per averaged reading */
+  float  total             = 0.0f;                          /**< Accumulated total of readings */
 };
 
 // Calibration Enums and Structs
@@ -198,7 +179,6 @@ struct TareContext {
 // External global State Variables
 extern AvgContext avgCtx;                                   /**< Averaging context instance to hold state for non-blocking computations */
 extern CalContext calCtx;                                   /**< Calibration context instance to hold state for workflows */
-extern ThresholdAvgContext calThresholdCtx;                 /**< Calibration threshold averaging context instance */
 extern LevelContext levelCtx;                               /**< Level read context instance to hold state for workflow */
 extern TareContext tareCtx;                                 /**< Startup tare context instance to hold state for workflow */
-extern ThresholdAvgContext levelThresholdCtx;               /**< Level threshold averaging context instance */
+extern AvgContext thresholdCtx;                             /**< Shared threshold averaging context instance (used by calibration and level workflows) */

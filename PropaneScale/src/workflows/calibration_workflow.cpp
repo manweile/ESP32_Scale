@@ -106,8 +106,8 @@ static void transitionFromWaitEmpty() {
   saveRuntimeTareOffset();
   calCtx.loadDetectChecks = 0;
 
-  // start asynchronous calibration threshold computation
-  startCalLoadDetect(MINIMUM_LOAD_WEIGHT);
+  // start asynchronous threshold computation for load detection
+  startThresholdDetect(MINIMUM_LOAD_WEIGHT);
   calCtx.thresholdPending = true;
   calCtx.thresholdStartMs = millis();
 
@@ -211,7 +211,7 @@ void handleCalibrationInput(char serialchar) {
       Serial.println("Calibration cancelled. Changes were not saved.");
       calibrationFactor = calCtx.originalCalibrationFactor;
       if (calCtx.thresholdPending) {
-        cancelCalLoadDetect();
+        cancelThresholdDetect();
         calCtx.thresholdPending = false;
       }
       scale.set_scale(calibrationFactor);
@@ -428,7 +428,7 @@ void tickCalibration() {
     // If threshold computation is pending, have to poll it first
     if (calCtx.thresholdPending) {
       float thr = 0.0f;
-      if (!pollCalLoadDetect(thr)) {
+      if (!pollThresholdDetect(thr)) {
         return;
       }
 

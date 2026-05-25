@@ -17,11 +17,11 @@
 // Declarations for level read workflow functions
 
 /**
- * @brief Handles input for the liquid level read workflow.
+ * @brief Handles serial input for the liquid level read workflow.
  *
- * @details When the level read workflow is active, this function processes incoming characters from the serial interface. 
- * It routes 'q' to cancel the workflow when waiting for tank placement or settling, 
- * and ignores newlines to prevent interference with command processing.
+ * @details Processes incoming characters while in liquid level workflow
+ * Cancellation character is only acceptable input.
+ * Newlines are ignored to prevent interference with command processing.
  * 
  * @param incoming {char} The incoming character from the serial interface.
  *

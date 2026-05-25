@@ -35,12 +35,13 @@ extern bool ensureScaleReady(const char* operation);        // Checks if the HX7
 // Definitions for level read workflow functions
 
 bool handleLevelReadInput(char incoming) {
+  // workflow - waiting for load placement or settling
   if (levelCtx.state == LevelState::WAIT_LOAD || levelCtx.state == LevelState::SETTLING) {
+    
     if (incoming == 'q' || incoming == 'Q') {
       Serial.println("Level read cancelled.");
       levelCtx.avgPending = false;
-      // cancel any in-progress async threshold computation
-      cancelLevelLoadDetect();
+      cancelThresholdDetect();
       levelCtx.thresholdPending = false;
       levelCtx.state = LevelState::IDLE;
     } else if (incoming != '\r' && incoming != '\n') {
@@ -48,6 +49,7 @@ bool handleLevelReadInput(char incoming) {
       Serial.print(incoming);
       Serial.println("'. Send 'q' to cancel.");
     }
+    // made it here, so whatever the input, got handled by this workflow
     return true;
   }
   return false;
@@ -66,7 +68,7 @@ void liquidLevel() {
   // we always ensure the scale is ready before starting the workflow
   scale.set_scale(calibrationFactor);
 
-  startLevelLoadDetect(MINIMUM_LOAD_WEIGHT);
+  startThresholdDetect(MINIMUM_LOAD_WEIGHT);
   levelCtx.thresholdPending = true;
   levelCtx.thresholdStartMs = millis();
   levelCtx.stateStartMs        = millis();
@@ -88,14 +90,14 @@ void tickLevelRead() {
     return;
   }
 
+  // workflow - waiting for load placement
   if (levelCtx.state == LevelState::WAIT_LOAD) {
     // always check for timeout first to avoid long waits if tank is never placed;
     // if it's just a slow read, we'll check again on the next tick
     if ((millis() - levelCtx.stateStartMs) >= CONFIRM_TIMEOUT_MS) {
       Serial.println("Tank placement timed out; cancelled.");
       levelCtx.avgPending = false;
-      // cancel any pending threshold computation
-      cancelLevelLoadDetect();
+      cancelThresholdDetect();
       levelCtx.thresholdPending = false;
       levelCtx.state = LevelState::IDLE;
       return;
@@ -104,7 +106,7 @@ void tickLevelRead() {
     // If threshold computation is still pending, poll it first.
     if (levelCtx.thresholdPending) {
       float thr = 0.0f;
-      if (!pollLevelLoadDetect(thr)) {
+      if (!pollThresholdDetect(thr)) {
         // threshold still being computed; try again next tick
         return;
       }
@@ -112,29 +114,28 @@ void tickLevelRead() {
       levelCtx.thresholdPending = false;
     }
 
-    // bad scale check to avoid long blocking if HX711 is not responding;
-    // use non-blocking averaged read driven by loop() ticks
+    // if averaging in progress try again on next tick
     float measuredUnits;
     if (!averageUnits(1, POLL_SAMPLES, measuredUnits)) {
-      // averaging in progress; try again on next tick
       return;
     }
 
+    // bad scale check to avoid long blocking if HX711 is not responding
     if (!isfinite(measuredUnits)) {
       printScaleNotReadyDiagnostic("tank placement detection");
       Serial.println("Level read cancelled.");
       levelCtx.avgPending = false;
-      cancelLevelLoadDetect();
+      cancelThresholdDetect();
       levelCtx.thresholdPending = false;
       levelCtx.state = LevelState::IDLE;
       return;
     }
 
+    // clean signal check for load placement
     if (fabsf(measuredUnits) >= levelCtx.loadDetectThreshold) {
       char buf[80];
       unsigned long settleSeconds = CAL_SETTLE_DELAY_MS / 1000UL;
-      snprintf(buf, sizeof(buf), "Tank detected. Settling for %lu seconds before final read...\n",
-               settleSeconds);
+      snprintf(buf, sizeof(buf), "Tank detected. Settling for %lu seconds before final read...\n", settleSeconds);
       Serial.print(buf);
       levelCtx.avgPending = false;
       levelCtx.stateStartMs = millis();
@@ -143,7 +144,10 @@ void tickLevelRead() {
     return;
   }
 
+  // workflow - settling after load placement
   if (levelCtx.state == LevelState::SETTLING) {
+
+    // if settling delay hasn't elapsed, just return and check again on the next tick
     if ((millis() - levelCtx.stateStartMs) < CAL_SETTLE_DELAY_MS) {
       return;
     }
@@ -153,24 +157,24 @@ void tickLevelRead() {
     return;
   }
 
+  // workflow - taking final reading after settling
   if (levelCtx.state == LevelState::READING) {
-    // Print the prompt only once when starting the averaging
+    
+    // user needs feedback, print the prompt only once when starting the averaging
     if (!levelCtx.avgPending) {
       levelCtx.avgPending = true;
       Serial.println("Reading tank weight...");
     }
 
-    // bad scale check to avoid long blocking if HX711 is not responding;
-    // use non-blocking averaged read driven by loop() ticks
+    // averaging still in progress continue next tick
     float rawWeight;
     if (!averageUnits(CAL_SAMPLES, LIVE_SAMPLES, rawWeight)) {
-      // averaging still in progress; continue next tick
       return;
     }
 
-    // finished averaging
     levelCtx.avgPending = false;
 
+    // bad scale check to avoid long blocking if HX711 is not responding
     if (!isfinite(rawWeight)) {
       printScaleNotReadyDiagnostic("final tank reading");
       Serial.println("Level read cancelled.");
@@ -178,6 +182,7 @@ void tickLevelRead() {
       return;
     }
 
+    // negative weight against laws of physics but we'll settle for zero if it happens due to noise or scale issues
     float propaneWeight = rawWeight - tankTare - PLATEN_TARE;
     if (propaneWeight < 0.0f) {
       propaneWeight = 0.0f;

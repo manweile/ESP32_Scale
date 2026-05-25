@@ -35,22 +35,14 @@
 bool averageUnits(int readings, int samplesPerReading, float &outAvg);
 
 /**
- * @brief Cancels an in-progress calibration load-detection threshold computation.
- * 
- * @details If a threshold computation is active, resets the internal state so that the pending operation is cancelled.
- * 
- * @throws {none} This function does not throw exceptions.
- */
-void cancelCalLoadDetect();
-
-/**
- * @brief Cancels an in-progress level load-detection threshold computation.
- * 
- * @details If a threshold computation is active, resets the internal state so that the pending operation is cancelled.
+ * @brief Cancels any in-progress threshold computation used by level or calibration workflows.
+ *
+ * @details Resets the shared context so pending threshold computations are cancelled.
+ * Used when the user cancels a workflow or when a workflow finishes and needs to clean up any pending threshold computation.
  * 
  * @throws {none} This function does not throw exceptions.
  */
-void cancelLevelLoadDetect();
+void cancelThresholdDetect();
 
 /**
  * @brief Drains queued serial output without blocking.
@@ -86,28 +78,16 @@ void flushSerialInput();
 /**
  * @brief Polls the calibration load-detection threshold computation for completion.
  *
- * @details If a threshold computation is active, advances the operation by polling the HX711 for new readings and updating the internal state.
- * 
- * @param outThreshold {float&} Output parameter set to the computed threshold in pounds when the function returns `true`.
- * @return {bool} `true` when the threshold computation is complete and `outThreshold` is valid;
- *   `false` when the operation is still in progress or no operation is active.
+ * @details Verifies if the HX711 is ready for a new reading.
+ * Computes the threshold once the requested number of readings have been collected,
+ * and updates the output parameter with the computed threshold value.
  *
- * @throws {none} This function does not throw exceptions.
- */
-bool pollCalLoadDetect(float &outThreshold);
-
-/**
- * @brief Polls the level load-detection threshold computation for completion.
- * 
- * @details If a threshold computation is active, advances the operation by polling the HX711 for new readings and updating the internal state. 
- * 
- * @param outThreshold {float&} Output parameter set to the computed threshold in pounds when the function returns `true`.
- * @return {bool} true when the threshold computation is complete and `outThreshold` is valid; 
- * `false` otherwise when the operation is still in progress or no operation is active.
+ * @param outThreshold {float&} Output parameter set to the computed threshold or failsafe value.
+ * @return {bool} True when the threshold computation is complete.
  * 
  * @throws {none} This function does not throw exceptions.
  */
-bool pollLevelLoadDetect(float &outThreshold);
+bool pollThresholdDetect(float &outThreshold);
 
 /**
  * @brief Prints a standardized HX711 not-ready diagnostic.
@@ -144,24 +124,13 @@ bool queueSerialOutput(const char* message);
  */
 void saveRuntimeTareOffset();
 
-/** 
- * @brief Starts an asynchronous calibration load-detection threshold computation.
- * 
- * @details Initializes the internal state to begin collecting readings from the HX711.
- * 
- * @param minimumThresholdLbs {float} Floor value for the computed threshold in pounds.
- * 
- * @throws {none} This function does not throw exceptions.
- */
-void startCalLoadDetect(float minimumThresholdLbs);
-
 /**
- * @brief Starts an asynchronous level load-detection threshold computation.
- * 
- * @details Initializes the internal state to begin collecting readings from the HX711.
- * 
+ * @brief Starts an asynchronous threshold computation used by calibration or level workflows.
+ *
+ * @details Initializes the shared context to begin collecting readings from the HX711.
+ *
  * @param minimumThresholdLbs {float} Floor value for the computed threshold in pounds.
  * 
  * @throws {none} This function does not throw exceptions.
  */
-void startLevelLoadDetect(float minimumThresholdLbs);
+void startThresholdDetect(float minimumThresholdLbs);

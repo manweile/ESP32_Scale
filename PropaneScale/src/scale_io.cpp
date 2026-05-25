@@ -31,8 +31,7 @@ extern HX711 scale;                                         // HX711 instance fo
 
 // Global Averaging Context Variables
 AvgContext avgCtx;                                          // Averaging context instance to hold state for non-blocking average computations
-ThresholdAvgContext levelThresholdCtx;                      // Level threshold averaging context for asynchronous threshold computation
-ThresholdAvgContext calThresholdCtx;                        // Calibration threshold averaging context for asynchronous threshold computation
+AvgContext thresholdCtx;                                    // Shared threshold averaging context for both level and calibration
 
 //  Private Static Constants and Variables
 static constexpr size_t SERIAL_CAPACITY = 2048;              // Capacity of the internal serial output queue in bytes
@@ -137,7 +136,7 @@ static bool queueSerialOutput(const char* message, size_t messageLength) {
  * @section Public Definitions for input/output functions
  */
 
- bool averageUnits(int readings, int samplesPerReading, float &outAvg) {
+bool averageUnits(int readings, int samplesPerReading, float &outAvg) {
     if (!avgCtx.active || avgCtx.requestedReadings != readings || avgCtx.samplesPerReading != samplesPerReading) {
     avgCtx.requestedReadings = readings;
     avgCtx.samplesPerReading = samplesPerReading;
@@ -173,18 +172,11 @@ static bool queueSerialOutput(const char* message, size_t messageLength) {
   return false;
 }
 
-void cancelCalLoadDetect() {
-  calThresholdCtx.active = false;
-  calThresholdCtx.index = 0;
-  calThresholdCtx.collected = 0;
-  calThresholdCtx.total = 0.0f;
-}
-
-void cancelLevelLoadDetect() {
-  levelThresholdCtx.active = false;
-  levelThresholdCtx.index = 0;
-  levelThresholdCtx.collected = 0;
-  levelThresholdCtx.total = 0.0f;
+void cancelThresholdDetect() {
+  thresholdCtx.active = false;
+  thresholdCtx.index = 0;
+  thresholdCtx.collected = 0;
+  thresholdCtx.total = 0.0f;
 }
 
 void drainQueuedSerialOutput() {
@@ -236,8 +228,8 @@ void flushSerialInput() {
   }
 }
 
-bool pollCalLoadDetect(float &outThreshold) {
-  if (!calThresholdCtx.active) {
+bool pollThresholdDetect(float &outThreshold) {
+  if (!thresholdCtx.active) {
     return false;
   }
 
@@ -245,77 +237,31 @@ bool pollCalLoadDetect(float &outThreshold) {
     return false;
   }
 
-  float units = scale.get_units(calThresholdCtx.samplesPerReading);
-  calThresholdCtx.total += units;
-  calThresholdCtx.collected++;
-  calThresholdCtx.index++;
+  float units = scale.get_units(thresholdCtx.samplesPerReading);
+  thresholdCtx.total += units;
+  thresholdCtx.collected++;
+  thresholdCtx.index++;
 
-  if (calThresholdCtx.index >= calThresholdCtx.requestedReadings) {
+  if (thresholdCtx.index >= thresholdCtx.requestedReadings) {
     float avg;
-    if (calThresholdCtx.collected == 0) {
+    if (thresholdCtx.collected == 0) {
       avg = NAN;
     } else {
-      avg = calThresholdCtx.total / static_cast<float>(calThresholdCtx.collected);
+      avg = thresholdCtx.total / static_cast<float>(thresholdCtx.collected);
     }
 
-    calThresholdCtx.active = false;
+    thresholdCtx.active = false;
 
     if (!isfinite(avg)) {
-      outThreshold = calThresholdCtx.minimumThreshold;
+      outThreshold = thresholdCtx.minimumThreshold;
     } else {
       float noise = fabsf(avg);
-      outThreshold = fmaxf(noise * 20.0f, calThresholdCtx.minimumThreshold);
+      outThreshold = fmaxf(noise * 20.0f, thresholdCtx.minimumThreshold);
     }
     return true;
   }
 
   return false;
-}
-
-bool pollLevelLoadDetect(float &outThreshold) {
-  if (!levelThresholdCtx.active) {
-    return false;
-  }
-
-  if (!scale.is_ready()) {
-    return false;
-  }
-
-  float units = scale.get_units(levelThresholdCtx.samplesPerReading);
-  levelThresholdCtx.total += units;
-  levelThresholdCtx.collected++;
-  levelThresholdCtx.index++;
-
-  if (levelThresholdCtx.index >= levelThresholdCtx.requestedReadings) {
-    float avg;
-    if (levelThresholdCtx.collected == 0) {
-      avg = NAN;
-    } else {
-      avg = levelThresholdCtx.total / static_cast<float>(levelThresholdCtx.collected);
-    }
-
-    levelThresholdCtx.active = false;
-
-    if (!isfinite(avg)) {
-      outThreshold = levelThresholdCtx.minimumThreshold;
-    } else {
-      float noise = fabsf(avg);
-      outThreshold = fmaxf(noise * 20.0f, levelThresholdCtx.minimumThreshold);
-    }
-    return true;
-  }
-
-  return false;
-}
-
-bool queueSerialOutput(const char* message) {
-  // want to avoid calling strlen() on a null pointer, 
-  // so treat null as empty message that is successfully queued
-  if (message == nullptr) {
-    return true;
-  }
-
-  return queueSerialOutput(message, strlen(message));
 }
 
 void printScaleNotReadyDiagnostic(const char* operation) {
@@ -329,6 +275,16 @@ void printScaleNotReadyDiagnostic(const char* operation) {
   Serial.println();
 }
 
+bool queueSerialOutput(const char* message) {
+  // want to avoid calling strlen() on a null pointer, 
+  // so treat null as empty message that is successfully queued
+  if (message == nullptr) {
+    return true;
+  }
+
+  return queueSerialOutput(message, strlen(message));
+}
+
 void saveRuntimeTareOffset() {
   float offsetToSave = static_cast<float>(scale.get_offset());
   if (!saveToEeprom(offsetToSave,
@@ -339,22 +295,12 @@ void saveRuntimeTareOffset() {
   }
 }
 
-void startCalLoadDetect(float minimumThresholdLbs) {
-  calThresholdCtx.requestedReadings = UNLOAD_CHECK_COUNT;
-  calThresholdCtx.samplesPerReading = LIVE_SAMPLES;
-  calThresholdCtx.index = 0;
-  calThresholdCtx.collected = 0;
-  calThresholdCtx.total = 0.0f;
-  calThresholdCtx.minimumThreshold = minimumThresholdLbs;
-  calThresholdCtx.active = true;
-}
-
-void startLevelLoadDetect(float minimumThresholdLbs) {
-  levelThresholdCtx.requestedReadings = UNLOAD_CHECK_COUNT;
-  levelThresholdCtx.samplesPerReading = LIVE_SAMPLES;
-  levelThresholdCtx.index = 0;
-  levelThresholdCtx.collected = 0;
-  levelThresholdCtx.total = 0.0f;
-  levelThresholdCtx.minimumThreshold = minimumThresholdLbs;
-  levelThresholdCtx.active = true;
+void startThresholdDetect(float minimumThresholdLbs) {
+  thresholdCtx.requestedReadings = UNLOAD_CHECK_COUNT;
+  thresholdCtx.samplesPerReading = LIVE_SAMPLES;
+  thresholdCtx.index = 0;
+  thresholdCtx.collected = 0;
+  thresholdCtx.total = 0.0f;
+  thresholdCtx.minimumThreshold = minimumThresholdLbs;
+  thresholdCtx.active = true;
 }
