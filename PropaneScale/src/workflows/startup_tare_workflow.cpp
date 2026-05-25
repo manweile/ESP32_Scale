@@ -40,6 +40,7 @@ extern void helpMenu();                                     // Function to displ
 void beginTare() {
   const float startupThreshold = computeThreshold(tankTare, maxPropane);
 
+  // we always ensure the scale is ready before starting the workflow
   if (!ensureScaleReady("startup tare")) {
     tareCtx.state = TareState::SKIP;
     return;

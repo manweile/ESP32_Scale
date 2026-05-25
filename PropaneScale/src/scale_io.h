@@ -76,6 +76,20 @@ bool ensureScaleReady(const char* operation);
 void flushSerialInput();
 
 /**
+ * @brief Polls the HX711 probe operation for completion.
+ *
+ * @details Checks if the probe operation has completed within the specified timeout and collects the required number of samples.
+ *
+ * @param outResponsive {bool&} Output parameter set to true if the HX711 is responsive; false otherwise.
+ * @param timeoutMs {unsigned long} Maximum duration for the probe operation in milliseconds.
+ * @param targetSamples {int} Number of samples to collect before completing the probe.
+ * @return {bool} True when the probe operation is complete; false if it is still in progress.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+bool pollProbe(bool &outResponsive, unsigned long timeoutMs, int targetSamples);
+
+/**
  * @brief Polls the calibration load-detection threshold computation for completion.
  *
  * @details Verifies if the HX711 is ready for a new reading.
@@ -98,7 +112,7 @@ bool pollThresholdDetect(float &outThreshold);
  *
  * @throws {none} This function does not throw exceptions.
  */
-void printScaleNotReadyDiagnostic(const char* operation);
+void printDiagnostic(const char* operation);
 
 /**
  * @brief Queues a serial message for non-blocking transmission.
@@ -123,6 +137,18 @@ bool queueSerialOutput(const char* message);
  * @throws {none} This function does not throw exceptions.
  */
 void saveRuntimeTareOffset();
+
+/**
+ * @brief Starts a non-blocking probe operation to check HX711 responsiveness.
+ *
+ * @details Initializes the probe context and begins collecting readings from the HX711.
+ *
+ * @param timeoutMs {unsigned long} Maximum duration for the probe operation in milliseconds.
+ * @param targetSamples {int} Number of samples to collect before completing the probe.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+void startProbe(unsigned long timeoutMs, int targetSamples);
 
 /**
  * @brief Starts an asynchronous threshold computation used by calibration or level workflows.

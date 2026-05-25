@@ -32,6 +32,7 @@ extern HX711 scale;                                         // HX711 instance fo
 // Global Averaging Context Variables
 AvgContext avgCtx;                                          // Averaging context instance to hold state for non-blocking average computations
 AvgContext thresholdCtx;                                    // Shared threshold averaging context for both level and calibration
+ProbeContext probeCtx;                                       // Probe context instance to hold state for non-blocking HX711 responsiveness checks
 
 //  Private Static Constants and Variables
 static constexpr size_t SERIAL_CAPACITY = 2048;              // Capacity of the internal serial output queue in bytes
@@ -51,7 +52,7 @@ static char serialQueue[SERIAL_CAPACITY];                    // Internal buffer 
  * 
  * @throws {none} This function does not throw exceptions.
  */
-static bool hasResponsiveHx711Signal() {
+static bool hasSignal() {
   const int probeReads = LIVE_SAMPLES;                      // HX711 is set at 10 samples per second
   bool haveSample = false;
   long minRaw = 0;
@@ -59,7 +60,7 @@ static bool hasResponsiveHx711Signal() {
 
   for (int i = 0; i < probeReads; ++i) {
     // wait ready false means the HX711 is not responding at all
-    if (!scale.wait_ready_timeout(HX711_READY_TIMEOUT_MS)) {
+    if (!scale.wait_ready_timeout(READY_TIMEOUT_MS)) {
       return false;
     }
 
@@ -213,12 +214,12 @@ void drainQueuedSerialOutput() {
 bool ensureScaleReady(const char* operation) {
   bool ready = false;
   
-  ready = scale.wait_ready_timeout(HX711_READY_TIMEOUT_MS) && hasResponsiveHx711Signal();
+  ready = scale.wait_ready_timeout(READY_TIMEOUT_MS) && hasSignal();
   if (ready) {
     return true;
   }
 
-  printScaleNotReadyDiagnostic(operation);
+  printDiagnostic(operation);
   return ready;
 }
 
@@ -228,11 +229,45 @@ void flushSerialInput() {
   }
 }
 
+bool pollProbe(bool &outResponsive, unsigned long timeoutMs, int targetSamples) {
+  // save cycles by returning early when probe isn't active, caller should call again later when it is
+  if (!probeCtx.active) return false;
+
+  // determine configured timeout and sample target from probe context if set, else fall back to provided defaults
+  unsigned long cfgTimeout = probeCtx.timeoutMs ? probeCtx.timeoutMs : timeoutMs;
+  int cfgTargetSamples = probeCtx.targetSamples ? probeCtx.targetSamples : targetSamples;
+
+  // if we exceed the timeout, end the probe and report unresponsive
+  if ((millis() - probeCtx.startMs) > cfgTimeout) { 
+    probeCtx.active = false; 
+    outResponsive = false; 
+    return true;
+  }
+
+  // if the scale isn't ready right now, caller should call again later
+  if (!scale.is_ready()) return false;
+
+  long raw = scale.read();
+  probeCtx.samplesTaken++;
+  probeCtx.minRaw = min(probeCtx.minRaw, raw);
+  probeCtx.maxRaw = max(probeCtx.maxRaw, raw);
+
+  // once we've taken the target number of samples, we can conclude responsiveness based on signal variability and end the probe
+  if (probeCtx.samplesTaken >= cfgTargetSamples) {
+    probeCtx.active = false;
+    outResponsive = (probeCtx.maxRaw != probeCtx.minRaw);
+    return true;
+  }
+  return false;
+}
+
 bool pollThresholdDetect(float &outThreshold) {
+  // save cycles by returning early when threshold detect isn't active, caller should call again later when it is
   if (!thresholdCtx.active) {
     return false;
   }
 
+  // if the scale isn't ready right now, caller should call again later
   if (!scale.is_ready()) {
     return false;
   }
@@ -242,8 +277,10 @@ bool pollThresholdDetect(float &outThreshold) {
   thresholdCtx.collected++;
   thresholdCtx.index++;
 
+  // once we've taken the requested number of readings, we can compute the threshold and end the detection
   if (thresholdCtx.index >= thresholdCtx.requestedReadings) {
     float avg;
+    // if we didn't collect any readings, we can't compute an average, so set to NAN to trigger fallback to minimum threshold floor
     if (thresholdCtx.collected == 0) {
       avg = NAN;
     } else {
@@ -252,6 +289,9 @@ bool pollThresholdDetect(float &outThreshold) {
 
     thresholdCtx.active = false;
 
+    // if the average is not a finite number, 
+    // we likely had an issue with the scale reading and should fall back to the minimum threshold floor
+    // otherwise, compute the threshold based on the average noise level
     if (!isfinite(avg)) {
       outThreshold = thresholdCtx.minimumThreshold;
     } else {
@@ -264,7 +304,7 @@ bool pollThresholdDetect(float &outThreshold) {
   return false;
 }
 
-void printScaleNotReadyDiagnostic(const char* operation) {
+void printDiagnostic(const char* operation) {
   Serial.print("HX711 not ready");
   if (operation != nullptr && operation[0] != '\0') {
     Serial.print(" during ");
@@ -293,6 +333,16 @@ void saveRuntimeTareOffset() {
                     HX711_OFFSET_EEPROM_VALUE_ADDR)) {
     Serial.println("Warning: failed to save runtime tare offset to EEPROM.");
   }
+}
+
+void startProbe(unsigned long timeoutMs, int targetSamples) {
+  probeCtx.active = true;
+  probeCtx.maxRaw = LONG_MIN;
+  probeCtx.minRaw = LONG_MAX;
+  probeCtx.samplesTaken = 0;
+  probeCtx.startMs = millis();
+  probeCtx.timeoutMs = timeoutMs;
+  probeCtx.targetSamples = targetSamples;
 }
 
 void startThresholdDetect(float minimumThresholdLbs) {

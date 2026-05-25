@@ -144,36 +144,45 @@ static void transitionFromWaitEmpty() {
 // Definitions for calibration workflow functions
 
 void automaticCalibration() {
+  /**
+   * Automatic Calibration Workflow State Progression:
+   * 1. IDLE -> WAIT_EMPTY: 
+   *  System prompts user to empty the scale, waits for confirmation of empty scale.
+   * 2. WAIT_EMPTY -> WAIT_LOAD: 
+   *  Empty scale is confirmed, system tares the scale, prompts user to place a known weight on the scale, waits for weight placement.
+   * 3. WAIT_LOAD -> SETTLING: 
+   *  System waits for the weight to mechanically settle to ensure stable readings.
+   * 4. SETTLING -> ADJUSTING: 
+   *  System takes measurements, adjusts calibration factor based on known weight and measured weight until displayed weight matches known weight.
+   * 5. ADJUSTING -> IDLE: 
+   *  System saves the new calibration factor to EEPROM and returns to idle state.
+   * 
+   * Note: 
+   * Any point during WAIT_EMPTY or WAIT_LOAD, user can cancel workflow by sending 'q', which will revert any changes and return to IDLE state.
+   * In REZERO mode, user can also force-confirm an empty reading by sending 'z' to transition from WAIT_EMPTY to WAIT_LOAD 
+   * Useful for scales that have a false non-empty reading due to noise or offsets.
+   */
+  
+  // cannot allow concurrency with the other manual & rezero workflows
+  // since they share the same state variable and user inputs
+  // also cannot allow concurrency with the level read workflow,
+  // due to shared contexts and potential for HX711 conflicts,
+  // also UX confusion with multiple concurrent workflows
   if (calCtx.state != CalState::IDLE) {
     Serial.println("Automatic calibration already in progress. Send 'q' to cancel first.");
     return;
   }
 
-  if (!ensureScaleReady("automatic calibration")) {
-    return;
-  }
-
-  // need calibration factor applied for load detection and calibration factor computation
-  scale.set_scale(calibrationFactor);
-
-  char calPrompt[224];
-  unsigned long userConfirmSeconds = CONFIRM_TIMEOUT_MS / 1000UL;
-  snprintf(calPrompt, sizeof(calPrompt),
-           "\nAutomatic calibration mode\n"
-           "\nRemove all weight from scale.\n"
-           "Auto-detect is active.\n"
-           "Empty threshold: +/- %.2f lbs.\n"
-           "Send 'q' to cancel.\n"
-           "Confirmation timeout: %lu seconds.\n",
-           MINIMUM_LOAD_WEIGHT,
-           userConfirmSeconds);
-  queueSerialOutput(calPrompt);
-
   calCtx.mode = CalMode::AUTO;
   calCtx.originalCalibrationFactor = calibrationFactor;
-  calCtx.state = CalState::WAIT_EMPTY;
-  calCtx.stateStartMs = millis();
   calCtx.measuredUnits = 0.0f;
+
+  // poll HX711 ready before starting manual calibration workflow, 
+  // to avoid long waits if it's not responding,
+  // and to fail fast if it's not working at all
+  startProbe(POLL_TIMEOUT_MS, LIVE_SAMPLES);
+  calCtx.probePending = true;
+  return;
 }
 
 void handleCalibrationInput(char serialchar) {
@@ -279,12 +288,13 @@ void handleCalibrationInput(char serialchar) {
 }
 
 void manualCalibration() {
+  // cannot allow concurrency with the other auto and rezero workflows
+  // since they share the same state variable and user inputs
+  // also cannot allow concurrency with the level read workflow,
+  // due to shared contexts and potential for HX711 conflicts,
+  // also UX confusion with multiple concurrent workflows
   if (calCtx.state != CalState::IDLE) {
     Serial.println("Manual calibration already in progress. Send 'q' to cancel first.");
-    return;
-  }
-
-  if (!ensureScaleReady("manual calibration")) {
     return;
   }
 
@@ -293,22 +303,6 @@ void manualCalibration() {
   if (step == 0.0f) step    = 10.0f;
   if (minStep == 0.0f) minStep = 0.001f;
 
-  // need calibration factor applied for load detection and calibration factor computation
-  scale.set_scale(calibrationFactor);
-
-  char calPrompt[224];
-  unsigned long userConfirmSeconds = CONFIRM_TIMEOUT_MS / 1000UL;
-  snprintf(calPrompt, sizeof(calPrompt),
-           "\nManual calibration mode\n"
-           "\nRemove all weight from scale.\n"
-           "Auto-detect is active.\n"
-           "Empty threshold: +/- %.2f lbs.\n"
-           "Send 'q' to cancel.\n"
-           "Confirmation timeout: %lu seconds.\n",
-           MINIMUM_LOAD_WEIGHT,
-           userConfirmSeconds);
-  queueSerialOutput(calPrompt);
-
   calCtx.adjustmentStep = step;
   calCtx.hasManualDisplay = false;
   calCtx.lastDirection = 0;
@@ -316,44 +310,127 @@ void manualCalibration() {
   calCtx.minStep = minStep;
   calCtx.mode = CalMode::MANUAL;
   calCtx.originalCalibrationFactor = calibrationFactor;
-  calCtx.state = CalState::WAIT_EMPTY;
-  calCtx.stateStartMs = millis();
+
+  // poll HX711 ready before starting manual calibration workflow,
+  // since it relies on live readings to guide the user adjustments
+  startProbe(POLL_TIMEOUT_MS, LIVE_SAMPLES);
+  calCtx.probePending = true;
+
+  return;
 }
 
 void reZero() {
+  // cannot allow concurrency with the other auto and manual workflows
+  // since they share the same state variable and user inputs
+  // also cannot allow concurrency with the level read workflow,
+  // due to shared contexts and potential for HX711 conflicts,
+  // also UX confusion with multiple concurrent workflows
   if (calCtx.state != CalState::IDLE) {
     Serial.println("Runtime re-zero already in progress. Send 'q' to cancel first.");
     return;
   }
 
-  if (!ensureScaleReady("re-zero")) {
-    return;
-  }
-
-  // need calibration factor applied for load detection
-  scale.set_scale(calibrationFactor);
-
-  char calPrompt[288];
-  unsigned long userConfirmSeconds = CONFIRM_TIMEOUT_MS / 1000UL;
-  snprintf(calPrompt, sizeof(calPrompt),
-           "\nRuntime re-zero requested.\n"
-           "\nRemove all weight from scale.\n"
-           "Auto-detect is active.\n"
-           "Empty threshold: +/- %.2f lbs.\n"
-           "Send 'q' to cancel.\n"
-           "If reading is offset-biased, send 'z' to force re-zero after verifying empty scale.\n"
-           "Confirmation timeout: %lu seconds.\n",
-           MINIMUM_LOAD_WEIGHT,
-           userConfirmSeconds);
-  queueSerialOutput(calPrompt);
-
   calCtx.mode = CalMode::REZERO;
-  calCtx.state = CalState::WAIT_EMPTY;
-  calCtx.stateStartMs = millis();
   calCtx.measuredUnits = 0.0f;
+
+  // poll HX711 ready before starting re-zero workflow, 
+  // since it relies on live readings to confirm the empty condition
+  startProbe(POLL_TIMEOUT_MS, LIVE_SAMPLES);
+  calCtx.probePending = true;
+  return;
 }
 
 void tickCalibration() {
+  // handle pending HX711 probe responsiveness first because if the HX711 isn't responsive,
+  // no point in doing any of the rest of the workflow logic which relies on it,
+  // and we can fail fast with a clear diagnostic message to the user about what went wrong
+  if (calCtx.probePending) {
+
+    // keep probe active until it has a result or hits its timeout
+    bool responsive = false;
+    if (!pollProbe(responsive, READY_TIMEOUT_MS, LIVE_SAMPLES)) {
+      return;
+    }
+
+    // timeout or unresponsive, warn user to prevent long waits and provide diagnostic info
+    calCtx.probePending = false;
+    if (!responsive) {
+      const char* op = "calibration";
+      if (calCtx.mode == CalMode::AUTO) op = "automatic calibration";
+      else if (calCtx.mode == CalMode::MANUAL) op = "manual calibration";
+      else if (calCtx.mode == CalMode::REZERO) op = "re-zero";
+      printDiagnostic(op);
+      calCtx.mode = CalMode::NONE;
+      calCtx.state = CalState::IDLE;
+      return;
+    }
+
+    // both AUTO and MANUAL workflows rely on live readings to guide the user,
+    // need to ensure readings in live prompts are accurate
+    scale.set_scale(calibrationFactor);
+
+    // finish initialization depending on requested mode
+    if (calCtx.mode == CalMode::AUTO) {
+      char calPrompt[224];
+      unsigned long userConfirmSeconds = CONFIRM_TIMEOUT_MS / 1000UL;
+      snprintf(calPrompt, sizeof(calPrompt),
+               "\nAutomatic calibration mode\n"
+               "\nRemove all weight from scale.\n"
+               "Auto-detect is active.\n"
+               "Empty threshold: +/- %.2f lbs.\n"
+               "Send 'q' to cancel.\n"
+               "Confirmation timeout: %lu seconds.\n",
+               MINIMUM_LOAD_WEIGHT,
+               userConfirmSeconds);
+      queueSerialOutput(calPrompt);
+
+      calCtx.state = CalState::WAIT_EMPTY;
+      calCtx.stateStartMs = millis();
+      calCtx.measuredUnits = 0.0f;
+      return;
+    }
+
+    if (calCtx.mode == CalMode::MANUAL) {
+      char calPrompt[224];
+      unsigned long userConfirmSeconds = CONFIRM_TIMEOUT_MS / 1000UL;
+      snprintf(calPrompt, sizeof(calPrompt),
+               "\nManual calibration mode\n"
+               "\nRemove all weight from scale.\n"
+               "Auto-detect is active.\n"
+               "Empty threshold: +/- %.2f lbs.\n"
+               "Send 'q' to cancel.\n"
+               "Confirmation timeout: %lu seconds.\n",
+               MINIMUM_LOAD_WEIGHT,
+               userConfirmSeconds);
+      queueSerialOutput(calPrompt);
+
+      calCtx.state = CalState::WAIT_EMPTY;
+      calCtx.stateStartMs = millis();
+      return;
+    }
+
+    if (calCtx.mode == CalMode::REZERO) {
+      char calPrompt[288];
+      unsigned long userConfirmSeconds = CONFIRM_TIMEOUT_MS / 1000UL;
+      snprintf(calPrompt, sizeof(calPrompt),
+               "\nRuntime re-zero requested.\n"
+               "\nRemove all weight from scale.\n"
+               "Auto-detect is active.\n"
+               "Empty threshold: +/- %.2f lbs.\n"
+               "Send 'q' to cancel.\n"
+               "If reading is offset-biased, send 'z' to force re-zero after verifying empty scale.\n"
+               "Confirmation timeout: %lu seconds.\n",
+               MINIMUM_LOAD_WEIGHT,
+               userConfirmSeconds);
+      queueSerialOutput(calPrompt);
+
+      calCtx.state = CalState::WAIT_EMPTY;
+      calCtx.stateStartMs = millis();
+      calCtx.measuredUnits = 0.0f;
+      return;
+    }
+  }
+
   // no active workflow — skip all scale reads and checks
   if (calCtx.state == CalState::IDLE) {
     return; 
@@ -395,7 +472,7 @@ void tickCalibration() {
     if ((millis() - calCtx.stateStartMs) >= CONFIRM_TIMEOUT_MS) {
 
       float tmpAvg = 0.0f;
-      if (!averageUnits(1, POLL_SAMPLES, tmpAvg)) {
+      if (!averageUnits(1, AVG_SAMPLES, tmpAvg)) {
         calCtx.avgPhase = AvgPhase::EMPTY_CONFIRM;
         return;
       }
@@ -455,7 +532,7 @@ void tickCalibration() {
     }
 
     float tmpAvg = 0.0f;
-    if (!averageUnits(1, POLL_SAMPLES, tmpAvg)) {
+    if (!averageUnits(1, AVG_SAMPLES, tmpAvg)) {
       calCtx.avgPhase = AvgPhase::LOAD_DETECT; // in-progress
       return;
     }

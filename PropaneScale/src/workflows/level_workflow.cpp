@@ -56,42 +56,66 @@ bool handleLevelReadInput(char incoming) {
 }
 
 void liquidLevel() {
+  // guard against starting workflow when one is already active,
+  // also cannot allow concurrency with calibration workflows,
+  // due to shared contexts and potential for HX711 conflicts,
+  // also UX confusion with multiple concurrent workflows
   if (levelCtx.state != LevelState::IDLE) {
     Serial.println("Level read already in progress. Send 'q' to cancel first.");
     return;
   }
 
-  if (!ensureScaleReady("level read")) {
-    return;
-  }
-
-  // we always ensure the scale is ready before starting the workflow
-  scale.set_scale(calibrationFactor);
-
-  startThresholdDetect(MINIMUM_LOAD_WEIGHT);
-  levelCtx.thresholdPending = true;
-  levelCtx.thresholdStartMs = millis();
-  levelCtx.stateStartMs        = millis();
-  levelCtx.state               = LevelState::WAIT_LOAD;
-
-  char levelPrompt[128];
-  unsigned long loadDetectSeconds = CONFIRM_TIMEOUT_MS / 1000UL;
-  snprintf(levelPrompt, sizeof(levelPrompt),
-           "\nPlace propane tank on scale.\n"
-           "Waiting for tank placement...\n"
-           "Load placement timeout: %lu seconds.\n"
-           "Send 'q' to cancel.\n",
-           loadDetectSeconds);
-  queueSerialOutput(levelPrompt);
+  // poll HX711 responsiveness before starting workflow,
+  // to avoid long waits if it's not responding,
+  // and to fail fast if it's not working at all
+  startProbe(POLL_TIMEOUT_MS, LIVE_SAMPLES);
+  levelCtx.probePending = true;
+  return;
 }
 
 void tickLevelRead() {
-  if (levelCtx.state == LevelState::IDLE) {
-    return;
+  // handle pending HX711 probe responsiveness check for workflow start
+  // returns false, means still pending and we should try again on the next tick,
+  // if true, means probe completed and we can check the result
+  if (levelCtx.probePending) {
+    
+    // keep probe active until it has a result or hits its timeout
+    bool responsive = false;
+    if (!pollProbe(responsive, READY_TIMEOUT_MS, LIVE_SAMPLES)) {
+      return;
+    }
+
+    // timeout or unresponsive, warn user to prevent long waits and provide diagnostic info
+    levelCtx.probePending = false;
+    if (!responsive) {
+      printDiagnostic("level read");
+      Serial.println("Level read cancelled.");
+      levelCtx.state = LevelState::IDLE;
+      return;
+    }
+
+    // workflow state will be advanced when threshold detect completes or times out
+    scale.set_scale(calibrationFactor);
+    startThresholdDetect(MINIMUM_LOAD_WEIGHT);
+    levelCtx.thresholdPending = true;
+    levelCtx.thresholdStartMs = millis();
+    levelCtx.stateStartMs = millis();
+    levelCtx.state = LevelState::WAIT_LOAD;
+
+    char levelPrompt[128];
+    unsigned long loadDetectSeconds = CONFIRM_TIMEOUT_MS / 1000UL;
+    snprintf(levelPrompt, sizeof(levelPrompt),
+             "\nPlace propane tank on scale.\n"
+             "Waiting for tank placement...\n"
+             "Load placement timeout: %lu seconds.\n"
+             "Send 'q' to cancel.\n",
+             loadDetectSeconds);
+    queueSerialOutput(levelPrompt);
   }
 
   // workflow - waiting for load placement
   if (levelCtx.state == LevelState::WAIT_LOAD) {
+
     // always check for timeout first to avoid long waits if tank is never placed;
     // if it's just a slow read, we'll check again on the next tick
     if ((millis() - levelCtx.stateStartMs) >= CONFIRM_TIMEOUT_MS) {
@@ -103,26 +127,25 @@ void tickLevelRead() {
       return;
     }
 
-    // If threshold computation is still pending, poll it first.
+    // If threshold computation is still pending, must try again next tick
     if (levelCtx.thresholdPending) {
       float thr = 0.0f;
       if (!pollThresholdDetect(thr)) {
-        // threshold still being computed; try again next tick
         return;
       }
       levelCtx.loadDetectThreshold = thr;
       levelCtx.thresholdPending = false;
     }
 
-    // if averaging in progress try again on next tick
+    // if averaging in progress must try again on next tick
     float measuredUnits;
-    if (!averageUnits(1, POLL_SAMPLES, measuredUnits)) {
+    if (!averageUnits(1, AVG_SAMPLES, measuredUnits)) {
       return;
     }
 
     // bad scale check to avoid long blocking if HX711 is not responding
     if (!isfinite(measuredUnits)) {
-      printScaleNotReadyDiagnostic("tank placement detection");
+      printDiagnostic("tank placement detection");
       Serial.println("Level read cancelled.");
       levelCtx.avgPending = false;
       cancelThresholdDetect();
@@ -176,7 +199,7 @@ void tickLevelRead() {
 
     // bad scale check to avoid long blocking if HX711 is not responding
     if (!isfinite(rawWeight)) {
-      printScaleNotReadyDiagnostic("final tank reading");
+      printDiagnostic("final tank reading");
       Serial.println("Level read cancelled.");
       levelCtx.state = LevelState::IDLE;
       return;

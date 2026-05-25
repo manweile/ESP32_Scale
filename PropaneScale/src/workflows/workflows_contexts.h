@@ -16,7 +16,7 @@
 // Standard library headers
 #include <cstdint>
 
-// Averaging Enums and Structs
+// Non-blocking Enums and Structs
 
 /**
  * @enum AvgPhase
@@ -48,6 +48,24 @@ struct AvgContext {
   int    requestedReadings = 0;                             /**< Number of readings requested (outer loop) */
   int    samplesPerReading = 0;                             /**< Samples per averaged reading */
   float  total             = 0.0f;                          /**< Accumulated total of readings */
+};
+
+/**
+ * @struct ProbeContext
+ * 
+ * @brief Context for probing the HX711 signal during scale ready checks.
+ * 
+ * @details Contains variables to manage the state of a non-blocking response check of the HX711.
+ */
+struct ProbeContext {
+  bool           active         = false;                    /**< Whether a probe operation is active */
+  int            index          = 0;                        /**< Current probe reading index */
+  long           maxRaw         = 0;                        /**< Maximum raw value observed during probe */
+  long           minRaw         = 0;                        /**< Minimum raw value observed during probe */
+  int            samplesTaken   = 0;                        /**< Number of probe samples taken */
+  unsigned long  startMs        = 0;                        /**< millis() when probe was started */
+  int            targetSamples  = 0;                        /**< configured number of samples to collect for the probe */
+  unsigned long  timeoutMs      = 0;                        /**< configured timeout for the probe */
 };
 
 // Calibration Enums and Structs
@@ -106,6 +124,7 @@ struct CalContext {
   unsigned long stateStartMs              = 0;              /**< millis() when current state was entered */
   bool          thresholdPending          = false;          /**< whether an async threshold computation is pending */
   unsigned long thresholdStartMs          = 0;              /**< millis() when async threshold computation was started */
+  bool          probePending              = false;          /**< whether a non-blocking HX711 probe is pending for workflow start */
 };
 
 // Level Enums and Structs
@@ -140,6 +159,7 @@ struct LevelContext {
   unsigned long stateStartMs        = 0;                    /**< millis() when WAIT_LOAD state was entered */
   bool          thresholdPending    = false;                /**< whether an async threshold computation is pending */
   unsigned long thresholdStartMs    = 0;                    /**< millis() when async threshold computation was started */
+  bool          probePending        = false;                /**< whether a non-blocking HX711 probe is pending for workflow start */
 };
 
 // Tare Enums and Structs
