@@ -77,7 +77,7 @@ void resetInputContext() {
  */
 void tickTare() {
   // Treat startup not-empty as configured full-tank weight plus margin.
-  const float startupNotEmptyThreshold = computeStartupNotEmptyThreshold(tankTare, maxPropane);
+  const float startupNotEmptyThreshold = computeThreshold(tankTare, maxPropane);
 
   // fast idle detect to save cycles when we are not in a tare workflow
   if (tareCtx.state == TareState::IDLE) return;

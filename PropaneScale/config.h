@@ -128,6 +128,6 @@ constexpr float MIN_PLAUSIBLE_WEIGHT = 0.1f;                /**< Minimum plausib
  * 
  * @throws {none} This function does not throw exceptions.
  */
-constexpr float computeStartupNotEmptyThreshold(float tankTareLbs, float maxPropaneLbs) {
+constexpr float computeThreshold(float tankTareLbs, float maxPropaneLbs) {
 	return tankTareLbs + maxPropaneLbs + STARTUP_NOT_EMPTY_MARGIN_LBS;
 }

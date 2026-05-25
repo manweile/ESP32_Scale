@@ -38,7 +38,7 @@ extern void helpMenu();                                     // Function to displ
 // Definitions for startup tare workflow functions
 
 void beginTare() {
-  const float startupNotEmptyThreshold = computeStartupNotEmptyThreshold(tankTare, maxPropane);
+  const float startupThreshold = computeThreshold(tankTare, maxPropane);
 
   if (!ensureScaleReady("startup tare")) {
     tareCtx.state = TareState::SKIP;
@@ -70,7 +70,7 @@ void beginTare() {
                                         "Stability tolerance: +/- %.2f lbs once below not-empty threshold.\n"
                                         "Timeout expiry with empty + stable readings auto-confirms taring workflow.\n"
                                         "Send 'q' to skip startup tare.\n\n",
-                                        autoTimeout, startupNotEmptyThreshold, SETUP_EMPTY_WEIGHT);
+                                        autoTimeout, startupThreshold, SETUP_EMPTY_WEIGHT);
 
   if (startupPromptLen > 0 && startupPromptLen < static_cast<int>(sizeof(startupPrompt))) {
     queueSerialOutput(startupPrompt);

@@ -26,7 +26,7 @@
 #include "src/eeprom_store.h"                               // EEPROM storage functions
 #include "src/parsing_utils.h"                              // Utility functions for validating and parsing input values
 #include "src/runtime_report.h"                             // For printStartupSummary
-#include "src/workflows/startup_tare_workflow.h"            // For computeStartupNotEmptyThreshold
+#include "src/workflows/startup_tare_workflow.h"            // For computeThreshold
 
 // External Global State Variables and Functions
 extern float calibrationFactor;
