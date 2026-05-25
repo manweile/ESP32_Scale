@@ -55,7 +55,7 @@ TareContext tareCtx;                                        /**< Startup tare co
  *
  * @details Resets the mode & state, index, parsed value, and buffer to default values. 
  * Called at the end of each input workflow to prepare for the next one.
- * Needs to be accessible for workflow implementations without circular dependencies.
+ * Defined & declared here so accessible for input workflows without circular dependencies.
  *
  * @throws {none} This function does not throw exceptions.
  */
@@ -65,150 +65,6 @@ void resetInputContext() {
   inputCtx.index = 0;
   inputCtx.parsedValue = 0.0f;
   inputCtx.buffer[0] = '\0';
-}
-
-/**
- * @brief Advances the non-blocking startup tare workflow one iteration.
- *
- * @details Called each loop() iteration. Handles the WAIT_STABLE, TARE, and SKIP states. Returns immediately when IDLE.
- * Needs to be accessible so the main loop can manage serial input and advance state based on timing and readings.
- *
- * @throws {none} This function does not throw exceptions.
- */
-void tickTare() {
-  // Treat startup not-empty as configured full-tank weight plus margin.
-  const float startupNotEmptyThreshold = computeThreshold(tankTare, maxPropane);
-
-  // fast idle detect to save cycles when we are not in a tare workflow
-  if (tareCtx.state == TareState::IDLE) return;
-
-  if (tareCtx.state == TareState::TARE) {
-    Serial.println("Stable scale detected, proceeding with tare.");
-    scale.tare();
-    saveRuntimeTareOffset();
-    Serial.println("Scale is tared and ready.");
-    tareCtx.state = TareState::IDLE;
-    helpMenu();
-    return;
-  }
-
-  if (tareCtx.state == TareState::SKIP) {
-    Serial.println("Continuing without startup tare.");
-    Serial.println("Remove propane weight and send 'r' to re-zero when ready.");
-    tareCtx.state = TareState::IDLE;
-    helpMenu();
-    return;
-  }
-
-  // if we have gotten here, we are in WAIT_STABLE, 
-  // need to always check for user cancel before doing any other processing
-  if (Serial.available()) {
-    char c = Serial.read();
-    if (c == 'q' || c == 'Q') {
-      Serial.println("Startup tare skipped by user.");
-      tareCtx.baselinePending = false;
-      tareCtx.state = TareState::SKIP;
-      return;
-    }
-  }
-
-  // will only see this on application initialization
-  if (tareCtx.baselinePending) {
-    // scale not ready, try again next tick
-    float base;
-    if (!averageUnits(tareCtx.baselineReadings, tareCtx.baselineSamples, base)) {
-      return;
-    }
-
-    tareCtx.baselinePending = false;
-
-    // bad scale reading, warn user to check hardware and skip tare workflow
-    if (!isfinite(base)) {
-      printDiagnostic("startup tare");
-      tareCtx.state = TareState::SKIP;
-      return;
-    }
-
-    // good scale reading, continue into regular WAIT_STABLE processing
-    tareCtx.baseline = base;
-  }
-
-  // still in WAIT_STABLE, need to quick check scale is ready to avoid long blocking
-  if ((millis() - tareCtx.stateStartMs) >= CONFIRM_TIMEOUT_MS) {
-
-    // Use non-blocking averaged read driven by loop() ticks
-    float m;
-    if (!averageUnits(1, AVG_SAMPLES, m)) {
-      // averaging in progress; try again on next loop tick
-      return;
-    }
-    
-    // bad scale reading, warn user to check hardware
-    if (!isfinite(m)) {
-      printDiagnostic("startup tare");
-      tareCtx.state = TareState::SKIP;
-      return;
-    }
-
-    char diag[128];
-    snprintf(diag, sizeof(diag), "Startup tare timeout check: reading=%.2f lbs, baseline=%.2f lbs\n", m, tareCtx.baseline);
-    Serial.print(diag);
-
-    // a negative reading is typically a false non-empty
-    if (m < -1.0f) {
-      Serial.println("Negative weight detected at startup, auto re-zeroing (tare).");
-      tareCtx.state = TareState::TARE;
-      return;
-    }
-
-    // a true non-empty, but we require near-zero and sustained stability
-    if (fabsf(m) >= startupNotEmptyThreshold) {
-      Serial.println("Startup tare timeout: scale not empty, skipping tare.");
-      tareCtx.state = TareState::SKIP;
-      return;
-    }
-
-    bool nearZero = fabsf(m) <= MINIMUM_LOAD_WEIGHT;
-    bool stableFromBaseline = fabsf(m - tareCtx.baseline) <= SETUP_EMPTY_WEIGHT;
-    bool stableLongEnough = tareCtx.stableChecks >= UNLOAD_CHECK_COUNT;
-
-    if (nearZero && stableFromBaseline && stableLongEnough) {
-      Serial.println("Startup tare auto-confirmed empty at timeout.");
-      tareCtx.state = TareState::TARE;
-    } else {
-      Serial.println("Startup tare timeout: scale not-empty or unstable, skipping tare.");
-      tareCtx.state = TareState::SKIP;
-    }
-    return;
-  }
-
-  // probably at stable point where we can update state
-  // verify scale reading is valid before doing any processing
-  float m;
-  if (!averageUnits(1, AVG_SAMPLES, m)) {
-    // averaging in progress; continue on next loop tick
-    return;
-  }
-
-  if (!isfinite(m)) {
-    printDiagnostic("startup tare");
-    tareCtx.state = TareState::SKIP;
-    return;
-  }
-
-  // scale is not empty, we want to reset stability checks 
-  // requires new window of stable readings below the not-empty threshold before auto-confirming
-  if (fabsf(m) >= startupNotEmptyThreshold) {
-    tareCtx.stableChecks = 0;
-    return;
-  }
-
-  // stable relative to baseline, can increment stable check count for auto-confirm tare at timeout
-  if (fabsf(m - tareCtx.baseline) <= SETUP_EMPTY_WEIGHT) {
-    tareCtx.stableChecks++;
-  } else {
-    tareCtx.stableChecks = 0;
-  }
 }
 
 // Definitions & Declarations for Project lifecycle functions
@@ -224,7 +80,7 @@ void tickTare() {
 void setup() {
   Serial.begin(BAUD);
   initializeApp();
-  beginTare();
+  beginStartupTare();
 }
 
 /**

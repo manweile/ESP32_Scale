@@ -191,6 +191,7 @@ struct TareContext {
   bool          baselinePending  = false;                   /**< baseline averaging requested and in progress */
   int           baselineReadings = 0;                       /**< requested outer readings for baseline */
   int           baselineSamples  = 0;                       /**< samples per reading for baseline */
+  bool          probePending     = false;                   /**< whether a non-blocking HX711 probe is pending for workflow start */
   int           stableChecks     = 0;                       /**< Consecutive readings within tolerance of baseline */
   TareState     state            = TareState::IDLE;         /**< Current state within the workflow */
   unsigned long stateStartMs     = 0;                       /**< millis() when WAIT_STABLE state was entered */

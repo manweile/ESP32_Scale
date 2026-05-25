@@ -55,18 +55,6 @@ void cancelThresholdDetect();
 void drainQueuedSerialOutput();
 
 /**
- * @brief Ensures the HX711 is ready before attempting reads or tare.
- *
- * @details Checks the amplifier readiness and prints a field-diagnostic message when it is not ready so workflows can exit early instead of blocking.
- *
- * @param operation {const char*} Short workflow label used in the error message.
- * @return {bool} True when HX711 is ready; false otherwise.
- *
- * @throws {none} This function does not throw exceptions.
- */
-bool ensureScaleReady(const char* operation);
-
-/**
  * @brief Flushes any buffered serial input.
  *
  * @details Reads and discards any available serial input to ensure that subsequent serial reads start with fresh input from the user.

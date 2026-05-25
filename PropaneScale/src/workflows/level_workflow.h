@@ -19,12 +19,11 @@
 /**
  * @brief Handles serial input for the liquid level read workflow.
  *
- * @details Processes incoming characters while in liquid level workflow
+ * @details Processes incoming characters while in liquid level workflow.
  * Cancellation character is only acceptable input.
  * Newlines are ignored to prevent interference with command processing.
  * 
  * @param incoming {char} The incoming character from the serial interface.
- *
  * @return {bool} Returns true if the input was handled by the level read workflow, false otherwise.
  *
  * @throws {none} This function does not throw exceptions.

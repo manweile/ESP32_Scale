@@ -211,18 +211,6 @@ void drainQueuedSerialOutput() {
   }
 }
 
-bool ensureScaleReady(const char* operation) {
-  bool ready = false;
-  
-  ready = scale.wait_ready_timeout(READY_TIMEOUT_MS) && hasSignal();
-  if (ready) {
-    return true;
-  }
-
-  printDiagnostic(operation);
-  return ready;
-}
-
 void flushSerialInput() {
   while (Serial.available()) {
     Serial.read();
