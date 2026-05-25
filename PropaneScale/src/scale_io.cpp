@@ -1,14 +1,14 @@
 /**
  * @file scale_io.cpp
  * @author Gerald Manweiler
- * 
+ *
  * @brief Definition of input/output functions for user workflows and HX711 interactions.
- * 
+ *
  * @details Implements helper functions for user initiated workflows and HX711 interactions.
- * 
+ *
  * @version 0.1
  * @date 2026-05-07
- * 
+ *
  * @copyright Copyright (c) 2026 Gerald Manweiler
  */
 
@@ -44,15 +44,16 @@ static char serialQueue[SERIAL_CAPACITY];                    // Internal buffer 
 
 /**
  * @brief Probes the HX711 with multiple reads to determine if it is producing a responsive signal.
- * 
+ *
  * @details Secondary check to detect if HX711 is powered but not properly connected.
  * Intentionally private implementation detail, only used as part of the scale ready workflow.
- * 
+ *
  * @return {bool} True if the HX711 is producing a responsive signal with variability across multiple reads; false otherwise.
- * 
+ *
  * @throws {none} This function does not throw exceptions.
  */
-static bool hasSignal() {
+static bool hasSignal()
+{
   const int probeReads = LIVE_SAMPLES;                      // HX711 is set at 10 samples per second
   bool haveSample = false;
   long minRaw = 0;
@@ -77,6 +78,7 @@ static bool hasSignal() {
 
     // update on each iteration to track signal variability
     if (raw < minRaw) minRaw = raw;
+
     if (raw > maxRaw) maxRaw = raw;
   }
 
@@ -92,20 +94,21 @@ static bool hasSignal() {
 
 /**
  * @brief Queues a message for serial output, handling buffer management.
- * 
- * @details Appends the provided message to an internal output queue. 
+ *
+ * @details Appends the provided message to an internal output queue.
  * The queue is drained incrementally from loop() using drainQueuedSerialOutput().
  * If the message exceeds the queue capacity, it will not be queued.
  * If the message is null or empty, it is treated as successfully queued.
  * Intentionally private implementation detail, only used as part of the scale ready workflow and user prompts
- * 
+ *
  * @param message {const char*} The message to queue for serial output.
  * @param messageLength {size_t} The length of the message in bytes.
  * @return {bool} True if the message was successfully queued; false if there was insufficient space in the queue.
- * 
+ *
  * @throws {none} This function does not throw exceptions.
  */
-static bool queueSerialOutput(const char* message, size_t messageLength) {
+static bool queueSerialOutput(const char* message, size_t messageLength)
+{
   if (message == nullptr || messageLength == 0) {
     return true;
   }
@@ -115,7 +118,8 @@ static bool queueSerialOutput(const char* message, size_t messageLength) {
   }
 
   size_t queuedBytes = serialLength - serialOffset;
-  // compact the buffer when there is space at the front, 
+
+  // compact the buffer when there is space at the front,
   // else we risk fragmentation when we don't have contiguous space to queue the new message
   if (serialOffset > 0 && (queuedBytes + messageLength) <= SERIAL_CAPACITY) {
     memmove(serialQueue, serialQueue + serialOffset, queuedBytes);
@@ -137,8 +141,9 @@ static bool queueSerialOutput(const char* message, size_t messageLength) {
  * @section Public Definitions for input/output functions
  */
 
-bool averageUnits(int readings, int samplesPerReading, float &outAvg) {
-    if (!avgCtx.active || avgCtx.requestedReadings != readings || avgCtx.samplesPerReading != samplesPerReading) {
+bool averageUnits(int readings, int samplesPerReading, float& outAvg)
+{
+  if (!avgCtx.active || avgCtx.requestedReadings != readings || avgCtx.samplesPerReading != samplesPerReading) {
     avgCtx.requestedReadings = readings;
     avgCtx.samplesPerReading = samplesPerReading;
     avgCtx.index = 0;
@@ -165,6 +170,7 @@ bool averageUnits(int readings, int samplesPerReading, float &outAvg) {
     } else {
       outAvg = avgCtx.total / static_cast<float>(avgCtx.collected);
     }
+
     avgCtx.active = false;
     return true;
   }
@@ -173,14 +179,16 @@ bool averageUnits(int readings, int samplesPerReading, float &outAvg) {
   return false;
 }
 
-void cancelThresholdDetect() {
+void cancelThresholdDetect()
+{
   thresholdCtx.active = false;
   thresholdCtx.index = 0;
   thresholdCtx.collected = 0;
   thresholdCtx.total = 0.0f;
 }
 
-void drainQueuedSerialOutput() {
+void drainQueuedSerialOutput()
+{
   // if there is no queued output, nothing to do
   if (serialOffset >= serialLength) {
     serialOffset = 0;
@@ -190,6 +198,7 @@ void drainQueuedSerialOutput() {
 
   // we need space in the UART buffer before we can write
   int availableBytes = Serial.availableForWrite();
+
   if (availableBytes <= 0) {
     return;
   }
@@ -211,13 +220,15 @@ void drainQueuedSerialOutput() {
   }
 }
 
-void flushSerialInput() {
+void flushSerialInput()
+{
   while (Serial.available()) {
     Serial.read();
   }
 }
 
-bool pollProbe(bool &outResponsive, unsigned long timeoutMs, int targetSamples) {
+bool pollProbe(bool &outResponsive, unsigned long timeoutMs, int targetSamples)
+{
   // save cycles by returning early when probe isn't active, caller should call again later when it is
   if (!probeCtx.active) return false;
 
@@ -226,9 +237,9 @@ bool pollProbe(bool &outResponsive, unsigned long timeoutMs, int targetSamples) 
   int cfgTargetSamples = probeCtx.targetSamples ? probeCtx.targetSamples : targetSamples;
 
   // if we exceed the timeout, end the probe and report unresponsive
-  if ((millis() - probeCtx.startMs) > cfgTimeout) { 
-    probeCtx.active = false; 
-    outResponsive = false; 
+  if ((millis() - probeCtx.startMs) > cfgTimeout) {
+    probeCtx.active = false;
+    outResponsive = false;
     return true;
   }
 
@@ -246,10 +257,12 @@ bool pollProbe(bool &outResponsive, unsigned long timeoutMs, int targetSamples) 
     outResponsive = (probeCtx.maxRaw != probeCtx.minRaw);
     return true;
   }
+
   return false;
 }
 
-bool pollThresholdDetect(float &outThreshold) {
+bool pollThresholdDetect(float& outThreshold)
+{
   // save cycles by returning early when threshold detect isn't active, caller should call again later when it is
   if (!thresholdCtx.active) {
     return false;
@@ -268,6 +281,7 @@ bool pollThresholdDetect(float &outThreshold) {
   // once we've taken the requested number of readings, we can compute the threshold and end the detection
   if (thresholdCtx.index >= thresholdCtx.requestedReadings) {
     float avg;
+
     // if we didn't collect any readings, we can't compute an average, so set to NAN to trigger fallback to minimum threshold floor
     if (thresholdCtx.collected == 0) {
       avg = NAN;
@@ -277,7 +291,7 @@ bool pollThresholdDetect(float &outThreshold) {
 
     thresholdCtx.active = false;
 
-    // if the average is not a finite number, 
+    // if the average is not a finite number,
     // we likely had an issue with the scale reading and should fall back to the minimum threshold floor
     // otherwise, compute the threshold based on the average noise level
     if (!isfinite(avg)) {
@@ -286,25 +300,30 @@ bool pollThresholdDetect(float &outThreshold) {
       float noise = fabsf(avg);
       outThreshold = fmaxf(noise * 20.0f, thresholdCtx.minimumThreshold);
     }
+
     return true;
   }
 
   return false;
 }
 
-void printDiagnostic(const char* operation) {
+void printDiagnostic(const char* operation)
+{
   Serial.print("HX711 not ready");
+
   if (operation != nullptr && operation[0] != '\0') {
     Serial.print(" during ");
     Serial.print(operation);
   }
+
   Serial.println('.');
   Serial.println("Check HX711 wiring, power, and data pins (DOUT/CLK).");
   Serial.println();
 }
 
-bool queueSerialOutput(const char* message) {
-  // want to avoid calling strlen() on a null pointer, 
+bool queueSerialOutput(const char* message)
+{
+  // want to avoid calling strlen() on a null pointer,
   // so treat null as empty message that is successfully queued
   if (message == nullptr) {
     return true;
@@ -313,8 +332,10 @@ bool queueSerialOutput(const char* message) {
   return queueSerialOutput(message, strlen(message));
 }
 
-void saveRuntimeTareOffset() {
+void saveRuntimeTareOffset()
+{
   float offsetToSave = static_cast<float>(scale.get_offset());
+
   if (!saveToEeprom(offsetToSave,
                     HX711_OFFSET_EEPROM_MAGIC,
                     HX711_OFFSET_EEPROM_MAGIC_ADDR,
@@ -323,7 +344,8 @@ void saveRuntimeTareOffset() {
   }
 }
 
-void startProbe(unsigned long timeoutMs, int targetSamples) {
+void startProbe(unsigned long timeoutMs, int targetSamples)
+{
   probeCtx.active = true;
   probeCtx.maxRaw = LONG_MIN;
   probeCtx.minRaw = LONG_MAX;
@@ -333,7 +355,8 @@ void startProbe(unsigned long timeoutMs, int targetSamples) {
   probeCtx.targetSamples = targetSamples;
 }
 
-void startThresholdDetect(float minimumThresholdLbs) {
+void startThresholdDetect(float minimumThresholdLbs)
+{
   thresholdCtx.requestedReadings = UNLOAD_CHECK_COUNT;
   thresholdCtx.samplesPerReading = LIVE_SAMPLES;
   thresholdCtx.index = 0;

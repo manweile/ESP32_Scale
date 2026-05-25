@@ -1,14 +1,14 @@
 /**
  * @file startup_tare_workflow.cpp
  * @author Gerald Manweiler
- * 
+ *
  * @brief Definitions for the startup tare workflow.
- * 
+ *
  * @details Implements the functions for starting and advancing the startup tare workflow.
- * 
+ *
  * @version 0.1
  * @date 2026-05-09
- * 
+ *
  * @copyright Copyright (c) 2026 Gerald Manweiler
  */
 
@@ -37,7 +37,8 @@ extern void helpMenu();                                     // Function to displ
 
 // Definitions for startup tare workflow functions
 
-void beginStartupTare() {
+void beginStartupTare()
+{
   const float startupThreshold = computeThreshold(tankTare, maxPropane);
 
   // start a non-blocking probe to verify HX711 responsiveness before starting
@@ -79,26 +80,31 @@ void beginStartupTare() {
   }
 }
 
-bool handleStartupTareInput(char incoming) {
+bool handleStartupTareInput(char incoming)
+{
   // workflow - waiting for stable empty condition
   if (tareCtx.state == TareState::WAIT_STABLE) {
-    
+
     if (incoming == 'q' || incoming == 'Q') {
       Serial.println("Startup tare skipped by user.");
       tareCtx.baselinePending = false;
       tareCtx.state = TareState::SKIP;
-    } else if (incoming != '\r' && incoming != '\n') {
-      Serial.print("Invalid startup tare key: '");
-      Serial.print(incoming);
-      Serial.println("'. Send 'q' to skip startup tare.");
-    }
+    } else
+      if (incoming != '\r' && incoming != '\n') {
+        Serial.print("Invalid startup tare key: '");
+        Serial.print(incoming);
+        Serial.println("'. Send 'q' to skip startup tare.");
+      }
+
     // made it here, so input was handled, return true to indicate that
     return true;
   }
+
   return false;
 }
 
-void tickTare() {
+void tickTare()
+{
   // Threshold is default value for a not-empty propane tank
   const float startupNotEmptyThreshold = computeThreshold(tankTare, maxPropane);
 
@@ -107,12 +113,14 @@ void tickTare() {
   // if true, means probe completed and we can check the result
   if (tareCtx.probePending) {
     bool responsive = false;
+
     if (!pollProbe(responsive, READY_TIMEOUT_MS, LIVE_SAMPLES)) {
       return; // still probing; try again next tick
     }
 
     // timeout or unresponsive, warn user to prevent long waits and provide diagnostic info
     tareCtx.probePending = false;
+
     if (!responsive) {
       printDiagnostic("startup tare cancelled");
       tareCtx.state = TareState::SKIP;
@@ -173,6 +181,7 @@ void tickTare() {
   // delegate serial handling to the dedicated input handler
   if (Serial.available()) {
     char c = Serial.read();
+
     if (handleStartupTareInput(c)) {
       return;
     }
@@ -182,6 +191,7 @@ void tickTare() {
   if (tareCtx.baselinePending) {
     // scale not ready, try again next tick
     float base;
+
     if (!averageUnits(tareCtx.baselineReadings, tareCtx.baselineSamples, base)) {
       return;
     }
@@ -204,11 +214,12 @@ void tickTare() {
 
     // Use non-blocking averaged read driven by loop() ticks
     float m;
+
     if (!averageUnits(1, AVG_SAMPLES, m)) {
       // averaging in progress; try again on next loop tick
       return;
     }
-    
+
     // bad scale reading, warn user to check hardware
     if (!isfinite(m)) {
       printDiagnostic("startup tare");
@@ -245,13 +256,15 @@ void tickTare() {
       Serial.println("Startup tare timeout: scale not-empty or unstable, skipping tare.");
       tareCtx.state = TareState::SKIP;
     }
+
     return;
   }
 
   // probably at stable point where we can update state
-  
+
   // averaging in progress continue on next loop tick
   float m;
+
   if (!averageUnits(1, AVG_SAMPLES, m)) {
     return;
   }
@@ -263,7 +276,7 @@ void tickTare() {
     return;
   }
 
-  // scale is not empty, we want to reset stability checks 
+  // scale is not empty, we want to reset stability checks
   // requires new window of stable readings below the not-empty threshold before auto-confirming
   if (fabsf(m) >= startupNotEmptyThreshold) {
     tareCtx.stableChecks = 0;

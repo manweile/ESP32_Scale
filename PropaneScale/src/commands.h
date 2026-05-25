@@ -1,14 +1,14 @@
-/** 
+/**
  * @file commands.h
  * @author Gerald Manweiler
- * 
+ *
  * @brief Command processing for the propane scale project.
- * 
+ *
  * @details Declares functions for processing serial commands, managing startup tare workflow, and resetting EEPROM values to defaults.
- * 
+ *
  * @version 0.1
  * @date 2024-06-01
- * 
+ *
  * @copyright Copyright (c) 2024 Gerald Manweiler
  */
 

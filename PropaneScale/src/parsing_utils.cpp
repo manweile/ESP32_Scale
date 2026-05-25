@@ -1,14 +1,14 @@
 /**
  * @file parsing_utils.cpp
  * @author Gerald Manweiler
- * 
+ *
  * @brief Utility functions for parsing and validating input values.
- * 
+ *
  * @details Implements functions for validating & parsing float values.
- * 
+ *
  * @version 0.1
  * @date 2026-05-06
- * 
+ *
  * @copyright Copyright (c) 2026 Gerald Manweiler
  */
 
@@ -21,7 +21,8 @@
 
 // Definitions for parsing and validation utility functions
 
-bool isValidBoundedFloat(float value, float minimumValue, float maximumValue, bool useAbsoluteMagnitude) {
+bool isValidBoundedFloat(float value, float minimumValue, float maximumValue, bool useAbsoluteMagnitude)
+{
   float candidate = 0.0f;                                   // Temporarily holds the value used for comparison
 
   if (!isfinite(value)) {
@@ -32,19 +33,20 @@ bool isValidBoundedFloat(float value, float minimumValue, float maximumValue, bo
   return (candidate >= minimumValue) && (candidate <= maximumValue);
 }
 
-bool parseNonNegativeFloat(const char* text, float& outValue) {
+bool parseNonNegativeFloat(const char* text, float& outValue)
+{
   char* parseEnd = nullptr;                                 // Pointer used by strtof to indicate where parsing stopped
   float parsed;                                             // Parsed float value from the input text
 
   // strtof will set parseEnd to point to the first character after the parsed float.
-  parsed = strtof(text, &parseEnd);                   
+  parsed = strtof(text, &parseEnd);
 
   if (parseEnd == text) {
     return false;
   }
 
-  // loop is not a blocking concern since strtof has already parsed the float 
-  // and we are just validating that the rest of the string is whitespace 
+  // loop is not a blocking concern since strtof has already parsed the float
+  // and we are just validating that the rest of the string is whitespace
   // and that the value is non-negative, which are both very fast operations
   while (*parseEnd == ' ' || *parseEnd == '\t') {
     ++parseEnd;

@@ -1,12 +1,12 @@
 /**
  * @file PropaneScale.ino
  * @author Gerald Manweiler
- * 
+ *
  * @brief Main application file for ESP32-based propane level scale using HX711 amplifier.
- * 
- * @details Implements serial command interface for calibration and weight reporting, 
+ *
+ * @details Implements serial command interface for calibration and weight reporting,
  * manages HX711 interactions, and applies calibration factors to convert raw readings to weight in pounds.
- * 
+ *
  * @version 0.1
  * @date 2024-06-01
  * @copyright Copyright (c) 2024 Gerald Manweiler
@@ -53,13 +53,14 @@ TareContext tareCtx;                                        /**< Startup tare co
 /**
  * @brief Resets the input context to its initial state.
  *
- * @details Resets the mode & state, index, parsed value, and buffer to default values. 
+ * @details Resets the mode & state, index, parsed value, and buffer to default values.
  * Called at the end of each input workflow to prepare for the next one.
  * Defined & declared here so accessible for input workflows without circular dependencies.
  *
  * @throws {none} This function does not throw exceptions.
  */
-void resetInputContext() {
+void resetInputContext()
+{
   inputCtx.mode = InputMode::NONE;
   inputCtx.state = InputState::IDLE;
   inputCtx.index = 0;
@@ -72,12 +73,13 @@ void resetInputContext() {
 /**
  * @brief Initializes the application and starts the startup tare workflow.
  *
- * @details Initializes the serial interface, sets up the HX711 scale, applies calibration from EEPROM, 
+ * @details Initializes the serial interface, sets up the HX711 scale, applies calibration from EEPROM,
  * and begins the startup tare workflow.
  *
  * @throws {none} This function does not throw exceptions.
  */
-void setup() {
+void setup()
+{
   Serial.begin(BAUD);
   initializeApp();
   beginStartupTare();
@@ -85,19 +87,21 @@ void setup() {
 
 /**
  * @brief Main application loop that processes serial input and advances workflows.
- * 
+ *
  * @details Advances the calibration, level read, and tare workflows on each iteration.
- * Processes serial input for workflow interactions and command dispatch. 
- * 
- * @throws {none} This function does not throw exceptions. 
+ * Processes serial input for workflow interactions and command dispatch.
+ *
+ * @throws {none} This function does not throw exceptions.
  */
-void loop() {
+void loop()
+{
   // can't have any queued serial output before processing new input or advancing workflows
   drainQueuedSerialOutput();
 
   // tickTare has to preempt all other workflows and user input until complete,
   // to guarantee stable tare condition before allowing any other interactions or workflows to run
   tickTare();
+
   if (tareCtx.state != TareState::IDLE) {
     return;
   }
@@ -120,7 +124,7 @@ void loop() {
     return;
   }
 
-  // multi-character input workflows all require user hit enter after inputting new value, 
+  // multi-character input workflows all require user hit enter after inputting new value,
   // do not interact with the scale hardware at all, and have unique input handling requirements
   // tank tare & propane weight likely to be used in preparation for level workflow,
   // and may require a calibration workflow afterward
@@ -142,7 +146,7 @@ void loop() {
   }
 
   // Don't want accidentally triggered multiple commands in a row
-  // MUST come after all the input handlers because user hits enter somewhere in those workflows, 
+  // MUST come after all the input handlers because user hits enter somewhere in those workflows,
   // so newlines need to be processed by handlers but ignored for general command dispatch
   if (temp == '\r' || temp == '\n') {
     return;
@@ -162,56 +166,67 @@ void loop() {
   // this allows the user to send either upper or lower case commands
   // without needing to worry about case sensitivity
   switch (temp) {
-    case 'a':
-    case 'A':
-      automaticCalibration();
-      break;
-    case 'c':
-    case 'C':
-      currentRuntimeValues();
-      break;
-    case 'd':
-    case 'D':
-      defaultEeprom();
-      break;
-    case 'e':
-    case 'E':
-      eepromValues();
-      break;
-    case 'h':
-    case 'H':
-      helpMenu();
-      break;
-    case 'k':
-    case 'K':
-      knownWeightUpdate();
-      break;
-    case 'l':
-    case 'L':
-      liquidLevel();
-      break;
-    case 'm':
-    case 'M':
-      manualCalibration();
-      break;
-    case 'p':
-    case 'P':
-      propaneWeightUpdate();
-      break;
-    case 'r':
-    case 'R':
-      reZero();
-      break;
-    case 't':
-    case 'T':
-      tankTareUpdate();
-      break;
-    default:
-      handled = false;
-      Serial.print("Unknown command: '");
-      Serial.print(temp);
-      Serial.println("'. Send 'h' for help.");
-      break;
+  case 'a':
+  case 'A':
+    automaticCalibration();
+    break;
+
+  case 'c':
+  case 'C':
+    currentRuntimeValues();
+    break;
+
+  case 'd':
+  case 'D':
+    defaultEeprom();
+    break;
+
+  case 'e':
+  case 'E':
+    eepromValues();
+    break;
+
+  case 'h':
+  case 'H':
+    helpMenu();
+    break;
+
+  case 'k':
+  case 'K':
+    knownWeightUpdate();
+    break;
+
+  case 'l':
+  case 'L':
+    liquidLevel();
+    break;
+
+  case 'm':
+  case 'M':
+    manualCalibration();
+    break;
+
+  case 'p':
+  case 'P':
+    propaneWeightUpdate();
+    break;
+
+  case 'r':
+  case 'R':
+    reZero();
+    break;
+
+  case 't':
+  case 'T':
+    tankTareUpdate();
+    break;
+
+  default:
+    handled = false;
+    Serial.print("Unknown command: '");
+    Serial.print(temp);
+    Serial.println("'. Send 'h' for help.");
+    break;
   }
 
   // flush any extra input after handling a command to prevent accidental multiple command triggers from a single line of input

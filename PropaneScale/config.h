@@ -1,16 +1,16 @@
 /**
  * @file config.h
  * @author Gerald Manweiler
- * 
+ *
  * @brief Configuration constants for the ESP32-based propane level scale.
- * 
+ *
  * @details Defines constants used throughout the PropaneScale application.
- * 
+ *
  * @version 0.1
  * @date 2026-05-06
- * 
+ *
  * @copyright Copyright (c) 2026 Gerald Manweiler
- * 
+ *
  */
 
 #pragma once
@@ -119,16 +119,17 @@ constexpr float MIN_PLAUSIBLE_WEIGHT = 0.1f;                /**< Minimum plausib
 
 /**
  * @brief Computes the startup not-empty threshold.
- * 
+ *
  * @details Calculates threshold in pounds above which the scale is considered to have a load on it during startup tare.
  * Implemented here to provide a single source of truth logic tied to constants in this file and avoids linker errors.
- * 
+ *
  * @param tankTareLbs {float} Tare weight of the empty tank in pounds.
  * @param maxPropaneLbs {float} Maximum legal propane weight in pounds.
  * @return constexpr float Startup not-empty threshold in pounds.
- * 
+ *
  * @throws {none} This function does not throw exceptions.
  */
-constexpr float computeThreshold(float tankTareLbs, float maxPropaneLbs) {
-	return tankTareLbs + maxPropaneLbs + STARTUP_NOT_EMPTY_MARGIN_LBS;
+constexpr float computeThreshold(float tankTareLbs, float maxPropaneLbs)
+{
+  return tankTareLbs + maxPropaneLbs + STARTUP_NOT_EMPTY_MARGIN_LBS;
 }

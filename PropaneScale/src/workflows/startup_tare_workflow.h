@@ -1,14 +1,14 @@
 /**
  * @file startup_tare_workflow.h
  * @author Gerald Manweiler
- * 
+ *
  * @brief Declarations for the startup tare workflow.
- * 
+ *
  * @details Declares the startup tare workflow function and its associated tick function for advancing the workflow state machine.
- * 
+ *
  * @version 0.1
  * @date 2026-05-09
- * 
+ *
  * @copyright Copyright (c) 2026 Gerald Manweiler
  */
 
@@ -36,7 +36,7 @@ void beginStartupTare();
  *
  * @param incoming {char} The incoming character from the serial interface.
  * @return {bool} True if the input was handled by the startup tare workflow.
- * 
+ *
  * @throws {none} This function does not throw exceptions.
  */
 bool handleStartupTareInput(char incoming);
@@ -44,7 +44,7 @@ bool handleStartupTareInput(char incoming);
 /**
  * @brief Advances the non-blocking startup tare workflow one iteration.
  *
- * @details Called each loop iteration. Handles the WAIT_STABLE, TARE, and SKIP states. 
+ * @details Called each loop iteration. Handles the WAIT_STABLE, TARE, and SKIP states.
  * Returns immediately when IDLE.
  *
  * @throws {none} This function does not throw exceptions.

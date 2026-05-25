@@ -1,14 +1,14 @@
 /**
  * @file level_workflow.h
  * @author Gerald Manweiler
- * 
+ *
  * @brief Declarations for the liquid level read workflow.
- * 
+ *
  * @details Declares the liquid level read workflow function and its associated tick function for advancing the workflow state machine.
- *  
+ *
  * @version 0.1
  * @date 2026-05-08
- * 
+ *
  * @copyright Copyright (c) 2026 Gerald Manweiler
  */
 
@@ -22,7 +22,7 @@
  * @details Processes incoming characters while in liquid level workflow.
  * Cancellation character is only acceptable input.
  * Newlines are ignored to prevent interference with command processing.
- * 
+ *
  * @param incoming {char} The incoming character from the serial interface.
  * @return {bool} Returns true if the input was handled by the level read workflow, false otherwise.
  *

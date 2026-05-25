@@ -2,11 +2,11 @@
 /**
  * @file runtime_report.h
  * @author Gerald Manweiler
- * 
+ *
  * @brief Header file for runtime reporting functions in the ESP32-based propane level scale application.
- * 
+ *
  * @details Declares functions for reporting current EEPROM values, resetting EEPROM to defaults, and displaying the help menu.
- *  
+ *
  * @version 0.1
  * @date 2026-05-12
  * @copyright Copyright (c) 2026 Gerald Manweiler
@@ -42,7 +42,7 @@ void eepromValues();
  * @brief Prints the help menu with all available commands.
  *
  * @details Lists all the runtime commands that the user can send over serial to interact with the scale.
- * 
+ *
  * @throws {none} This function does not throw exceptions.
  */
 void helpMenu();

@@ -52,9 +52,9 @@ struct AvgContext {
 
 /**
  * @struct ProbeContext
- * 
+ *
  * @brief Context for probing the HX711 signal during scale ready checks.
- * 
+ *
  * @details Contains variables to manage the state of a non-blocking response check of the HX711.
  */
 struct ProbeContext {
@@ -153,7 +153,7 @@ enum class LevelState : uint8_t {
  * so each loop() tick can advance the workflow without blocking.
  */
 struct LevelContext {
-  bool          avgPending          = false;                /**< whether a non-blocking average is in progress for this workflow */  
+  bool          avgPending          = false;                /**< whether a non-blocking average is in progress for this workflow */
   float         loadDetectThreshold = 0.0f;                 /**< noise-derived threshold used to detect tank placement */
   LevelState    state               = LevelState::IDLE;     /**< current state within the level read workflow */
   unsigned long stateStartMs        = 0;                    /**< millis() when WAIT_LOAD state was entered */
@@ -202,4 +202,5 @@ extern AvgContext avgCtx;                                   /**< Averaging conte
 extern CalContext calCtx;                                   /**< Calibration context instance to hold state for workflows */
 extern LevelContext levelCtx;                               /**< Level read context instance to hold state for workflow */
 extern TareContext tareCtx;                                 /**< Startup tare context instance to hold state for workflow */
-extern AvgContext thresholdCtx;                             /**< Shared threshold averaging context instance (used by calibration and level workflows) */
+extern AvgContext
+thresholdCtx;                             /**< Shared threshold averaging context instance (used by calibration and level workflows) */

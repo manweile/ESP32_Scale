@@ -1,14 +1,14 @@
 /**
  * @file scale_io.h
  * @author Gerald Manweiler
- * 
+ *
  * @brief Input/output functions for user workflows and HX711 interactions.
- * 
+ *
  * @details Declares helper functions for user initiated workflows and HX711 interactions.
- *  
+ *
  * @version 0.1
  * @date 2026-05-07
- * 
+ *
  * @copyright Copyright (c) 2026 Gerald Manweiler
  */
 
@@ -21,7 +21,7 @@
  *
  * @details Starts or advances a non-blocking averaging operation that polls once per invocation.
  * This helper is intended for use by workflows that must remain responsive and must be polled regularly.
- * Not reentrant - maintains a single internal active operation. 
+ * Not reentrant - maintains a single internal active operation.
  * Use only from the automatic calibration workflow as currently implemented in this project.
  *
  * @param readings {int} Number of readings to average.
@@ -32,14 +32,14 @@
  *
  * @throws {none} This function does not throw exceptions.
  */
-bool averageUnits(int readings, int samplesPerReading, float &outAvg);
+bool averageUnits(int readings, int samplesPerReading, float& outAvg);
 
 /**
  * @brief Cancels any in-progress threshold computation used by level or calibration workflows.
  *
  * @details Resets the shared context so pending threshold computations are cancelled.
  * Used when the user cancels a workflow or when a workflow finishes and needs to clean up any pending threshold computation.
- * 
+ *
  * @throws {none} This function does not throw exceptions.
  */
 void cancelThresholdDetect();
@@ -58,7 +58,7 @@ void drainQueuedSerialOutput();
  * @brief Flushes any buffered serial input.
  *
  * @details Reads and discards any available serial input to ensure that subsequent serial reads start with fresh input from the user.
- * 
+ *
  * @throws {none} This function does not throw exceptions.
  */
 void flushSerialInput();
@@ -86,10 +86,10 @@ bool pollProbe(bool &outResponsive, unsigned long timeoutMs, int targetSamples);
  *
  * @param outThreshold {float&} Output parameter set to the computed threshold or failsafe value.
  * @return {bool} True when the threshold computation is complete.
- * 
+ *
  * @throws {none} This function does not throw exceptions.
  */
-bool pollThresholdDetect(float &outThreshold);
+bool pollThresholdDetect(float& outThreshold);
 
 /**
  * @brief Prints a standardized HX711 not-ready diagnostic.
@@ -144,7 +144,7 @@ void startProbe(unsigned long timeoutMs, int targetSamples);
  * @details Initializes the shared context to begin collecting readings from the HX711.
  *
  * @param minimumThresholdLbs {float} Floor value for the computed threshold in pounds.
- * 
+ *
  * @throws {none} This function does not throw exceptions.
  */
 void startThresholdDetect(float minimumThresholdLbs);
