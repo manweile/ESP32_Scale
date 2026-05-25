@@ -528,7 +528,7 @@
       "args": [
         "-NoProfile",
         "-Command",
-        "Get-ChildItem -Path '${workspaceFolder}/PropaneScale' -Recurse -Include *.c,*.cpp,*.h,*.hpp,*.ino | ForEach-Object { & astyle --options='${workspaceFolder}\\.astylerc' $_.FullName }"
+        "Get-ChildItem -Path '${workspaceFolder}/PropaneScale' -Recurse -Include *.c,*.cpp,*.h,*.hpp,*.ino | ForEach-Object { & 'C:\\AStyle\\astyle.exe' --options='${workspaceFolder}\\.astylerc' $_.FullName }"
       ],
       "presentation": {
         "echo": true,
