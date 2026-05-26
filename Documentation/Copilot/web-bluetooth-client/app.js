@@ -39,9 +39,10 @@
   function parseWeightNotification(buffer){
     const dv = buffer instanceof DataView ? buffer : new DataView(buffer);
     const version = dv.getUint8(0);
-    const weight_mg = dv.getInt32(1, true);
+    // Firmware sends IEEE-754 float32 (little-endian) representing pounds
+    const weight_lbs = dv.getFloat32(1, true);
     const seq = dv.getUint16(5, true);
-    return {version, weight_mg, seq};
+    return {version, weight_lbs, seq};
   }
 
   // UI enable/disable helpers
@@ -93,10 +94,10 @@
   }
 
   // Handler when a parsed weight arrives
-  function onWeight({version, weight_mg, seq}){
-    const g = (weight_mg/1000).toFixed(2);
-    weightDisplay.textContent = `${g} g`;
-    log(`weight v${version} seq=${seq} ${g}g`);
+  function onWeight({version, weight_lbs, seq}){
+    const lbs = weight_lbs.toFixed(2);
+    weightDisplay.textContent = `${lbs} lb`;
+    log(`weight v${version} seq=${seq} ${lbs} lb`);
   }
 
   // Wire UI
