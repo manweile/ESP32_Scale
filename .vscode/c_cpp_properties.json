@@ -16,19 +16,12 @@
         "C:/Users/gmanw/AppData/Local/Arduino15/packages/esp32/hardware/esp32/3.3.4/libraries/WebServer/src",
         "C:/Users/gmanw/AppData/Local/Arduino15/packages/esp32/hardware/esp32/3.3.4/libraries/WiFi/src",
         "D:/MyArduino/Projects/Libraries/HX711_Arduino_Library/src",
+        "D:/MyArduino/Projects/Libraries/NimBLE-Arduino/src",
         "C:/Users/gmanw/AppData/Local/Arduino15/packages/esp32/tools/esp32-arduino-libs/idf-release_v5.5-8410210c-v2/esp32/dio_qspi/include",
         "C:/Users/gmanw/AppData/Local/Arduino15/packages/esp32/tools/esp32-arduino-libs/idf-release_v5.5-8410210c-v2/esp32/include/**",
         "C:/Users/gmanw/AppData/Local/Arduino15/packages/esp32/tools/esp32-arduino-libs/idf-release_v5.5-8410210c-v2/esp32/qio_qspi/include",
-        "C:/Users/gmanw/AppData/Local/Arduino15/packages/esp32/tools/esp-x32/2507/xtensa-esp-elf/include",
-        "D:/MyArduino/Projects/Libraries/NimBLE-Arduino/src"
+        "C:/Users/gmanw/AppData/Local/Arduino15/packages/esp32/tools/esp-x32/2507/xtensa-esp-elf/include"
       ],
-      "browse": {
-        "path": [
-          "${workspaceFolder}",
-          "D:/MyArduino/Projects/Libraries/NimBLE-Arduino/src"
-        ],
-        "limitSymbolsToIncludedHeaders": true
-      },
       "defines": [
         "ARDUINO=10819",
         "ESP32",
