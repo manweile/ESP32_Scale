@@ -25,6 +25,7 @@
       "defines": [
         "ARDUINO=10819",
         "ESP32",
+        "ESP_PLATFORM",
         "ARDUINO_ARCH_ESP32",
         "ARDUINO_ESP32_THING"
       ],
