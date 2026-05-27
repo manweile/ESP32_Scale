@@ -1,15 +1,15 @@
 /**
  * @file input_propane_weight.cpp
  * @author Gerald Manweiler (gerald@domain.com)
- * 
+ *
  * @brief Implementation of the user input workflow to update the maximum legal propane weight.
- * 
+ *
  * @details Defines the function to initiate the propane weight update workflow, which prompts the user for input, validates it, and saves it to EEPROM if confirmed. Also includes the function to handle serial input for
  * this workflow, which processes user input character by character in a non-blocking manner.
- * 
+ *
  * @version 0.1
  * @date 2026-05-08
- * 
+ *
  * @copyright Copyright (c) 2026 Gerald Manweiler
  */
 
@@ -31,7 +31,8 @@ extern void resetInputContext();                            // Resets the input 
 
 // Definitions for propane weight input functions
 
-void handlePropaneWeightInput(char incoming) {
+void handlePropaneWeightInput(char incoming)
+{
   // Ignore carriage return characters to prevent interference with parsing logic
   if (incoming == '\r') {
     return;
@@ -51,9 +52,9 @@ void handlePropaneWeightInput(char incoming) {
     }
 
     if (incoming == 's' || incoming == 'S') {
-      
+
       float deltaMaxPropane = fabsf(inputCtx.parsedValue - maxPropane);
-      
+
       if (deltaMaxPropane >= maxPropane * CHANGE_WARN_PCT) {
         char warnBuf[192];
         snprintf(warnBuf, sizeof(warnBuf),
@@ -64,7 +65,7 @@ void handlePropaneWeightInput(char incoming) {
 
       maxPropane = inputCtx.parsedValue;
       bool eepromSuccess = saveToEeprom(maxPropane, MAX_PROPANE_EEPROM_MAGIC, MAX_PROPANE_EEPROM_MAGIC_ADDR, MAX_PROPANE_EEPROM_VALUE_ADDR);
-      
+
       if (!eepromSuccess) {
         queueSerialOutput("Failed to save max propane weight to EEPROM.\n");
       } else {
@@ -72,6 +73,7 @@ void handlePropaneWeightInput(char incoming) {
         snprintf(buf, sizeof(buf), "Max propane weight updated: %.2f lbs\n", maxPropane);
         queueSerialOutput(buf);
       }
+
       resetInputContext();
       return;
     }
@@ -80,8 +82,8 @@ void handlePropaneWeightInput(char incoming) {
     return;
   }
 
-  // workflow - collecting numeric value text 
-  // waiting cancel, newline, or save command, 
+  // workflow - collecting numeric value text
+  // waiting cancel, newline, or save command,
   // ignore other characters except for buffering valid numeric input
   if (inputCtx.state == InputState::ENTER_VALUE) {
 
@@ -114,7 +116,8 @@ void handlePropaneWeightInput(char incoming) {
 
       if (parseSuccess && validValue) {
         char buf[96];
-        snprintf(buf, sizeof(buf), "New max propane weight entered: %.2f lbs\nSend 's' to save this value to EEPROM, or 'q' to cancel.\n", inputCtx.parsedValue);
+        snprintf(buf, sizeof(buf), "New max propane weight entered: %.2f lbs\nSend 's' to save this value to EEPROM, or 'q' to cancel.\n",
+                 inputCtx.parsedValue);
         Serial.print(buf);
         inputCtx.state = InputState::WAIT_SAVE_CONFIRM;
         inputCtx.index = 0;
@@ -123,7 +126,8 @@ void handlePropaneWeightInput(char incoming) {
       }
 
       char buf[96];
-      snprintf(buf, sizeof(buf), "Invalid max propane weight. Enter a number from %.2f to %.2f lbs, or 'q' to cancel.\n", MIN_PLAUSIBLE_WEIGHT, MAX_PROJECT_WEIGHT);
+      snprintf(buf, sizeof(buf), "Invalid max propane weight. Enter a number from %.2f to %.2f lbs, or 'q' to cancel.\n", MIN_PLAUSIBLE_WEIGHT,
+               MAX_PROJECT_WEIGHT);
       Serial.print(buf);
       inputCtx.index = 0;
       inputCtx.buffer[0] = '\0';
@@ -147,7 +151,8 @@ void handlePropaneWeightInput(char incoming) {
 
       if (!parseSuccess || !validValue) {
         char buf[96];
-        snprintf(buf, sizeof(buf), "Invalid max propane weight. Enter a number from %.2f to %.2f lbs, or 'q' to cancel.\n", MIN_PLAUSIBLE_WEIGHT, MAX_PROJECT_WEIGHT);
+        snprintf(buf, sizeof(buf), "Invalid max propane weight. Enter a number from %.2f to %.2f lbs, or 'q' to cancel.\n", MIN_PLAUSIBLE_WEIGHT,
+                 MAX_PROJECT_WEIGHT);
         Serial.print(buf);
         inputCtx.index = 0;
         inputCtx.buffer[0] = '\0';
@@ -174,6 +179,7 @@ void handlePropaneWeightInput(char incoming) {
         snprintf(buf, sizeof(buf), "Max propane weight updated: %.2f lbs\n", maxPropane);
         queueSerialOutput(buf);
       }
+
       resetInputContext();
       return;
     }
@@ -187,6 +193,7 @@ void handlePropaneWeightInput(char incoming) {
       inputCtx.index = 0;
       inputCtx.buffer[0] = '\0';
     }
+
     return;
   }
 
@@ -194,7 +201,8 @@ void handlePropaneWeightInput(char incoming) {
   resetInputContext();
 }
 
-void propaneWeightUpdate() {
+void propaneWeightUpdate()
+{
   if (inputCtx.mode != InputMode::NONE) {
     Serial.println("Propane weight input workflow already in progress. Send 'q' to cancel first.");
     return;

@@ -1,14 +1,14 @@
 /**
  * @file scale_io.h
  * @author Gerald Manweiler
- * 
+ *
  * @brief Input/output functions for user workflows and HX711 interactions.
- * 
+ *
  * @details Declares helper functions for user initiated workflows and HX711 interactions.
- *  
+ *
  * @version 0.1
  * @date 2026-05-07
- * 
+ *
  * @copyright Copyright (c) 2026 Gerald Manweiler
  */
 
@@ -17,18 +17,32 @@
 // Declarations for input/output functions for user workflows and HX711 interactions
 
 /**
- * @brief Computes the load-detection threshold from measured noise.
+ * @brief Non-blocking averaged units reader driven by loop() ticks.
  *
- * @details Reads the current unloaded noise from the scale, multiplies it by 20
- * as a signal-to-noise margin, then clamps to minimumThresholdLbs so a very
- * quiet scale still responds to a real load.
+ * @details Starts or advances a non-blocking averaging operation that polls once per invocation.
+ * This helper is intended for use by workflows that must remain responsive and must be polled regularly.
+ * Not reentrant - maintains a single internal active operation.
+ * Use only from the automatic calibration workflow as currently implemented in this project.
  *
- * @param minimumThresholdLbs {float} Floor value for the returned threshold in pounds.
- * @return {float} Computed threshold in pounds: max(noise * 20, minimumThresholdLbs).
+ * @param readings {int} Number of readings to average.
+ * @param samplesPerReading {int} Number of samples passed per reading.
+ * @param outAvg {float&} Output parameter set to the computed average in pounds when the function returns `true`.
+ * @return {bool} `true` when the averaged reading is complete and `outAvg` is valid;
+ *   `false` when the operation is still in progress and must be called again.
  *
  * @throws {none} This function does not throw exceptions.
  */
-float computeLoadDetectThreshold(float minimumThresholdLbs);
+bool averageUnits(int readings, int samplesPerReading, float& outAvg);
+
+/**
+ * @brief Cancels any in-progress threshold computation used by level or calibration workflows.
+ *
+ * @details Resets the shared context so pending threshold computations are cancelled.
+ * Used when the user cancels a workflow or when a workflow finishes and needs to clean up any pending threshold computation.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+void cancelThresholdDetect();
 
 /**
  * @brief Drains queued serial output without blocking.
@@ -41,25 +55,41 @@ float computeLoadDetectThreshold(float minimumThresholdLbs);
 void drainQueuedSerialOutput();
 
 /**
- * @brief Ensures the HX711 is ready before attempting reads or tare.
- *
- * @details Checks the amplifier readiness and prints a field-diagnostic message when it is not ready so workflows can exit early instead of blocking.
- *
- * @param operation {const char*} Short workflow label used in the error message.
- * @return {bool} True when HX711 is ready; false otherwise.
- *
- * @throws {none} This function does not throw exceptions.
- */
-bool ensureScaleReady(const char* operation);
-
-/**
  * @brief Flushes any buffered serial input.
  *
  * @details Reads and discards any available serial input to ensure that subsequent serial reads start with fresh input from the user.
- * 
+ *
  * @throws {none} This function does not throw exceptions.
  */
 void flushSerialInput();
+
+/**
+ * @brief Polls the HX711 probe operation for completion.
+ *
+ * @details Checks if the probe operation has completed within the specified timeout and collects the required number of samples.
+ *
+ * @param outResponsive {bool&} Output parameter set to true if the HX711 is responsive; false otherwise.
+ * @param timeoutMs {unsigned long} Maximum duration for the probe operation in milliseconds.
+ * @param targetSamples {int} Number of samples to collect before completing the probe.
+ * @return {bool} True when the probe operation is complete; false if it is still in progress.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+bool pollProbe(bool &outResponsive, unsigned long timeoutMs, int targetSamples);
+
+/**
+ * @brief Polls the calibration load-detection threshold computation for completion.
+ *
+ * @details Verifies if the HX711 is ready for a new reading.
+ * Computes the threshold once the requested number of readings have been collected,
+ * and updates the output parameter with the computed threshold value.
+ *
+ * @param outThreshold {float&} Output parameter set to the computed threshold or failsafe value.
+ * @return {bool} True when the threshold computation is complete.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+bool pollThresholdDetect(float& outThreshold);
 
 /**
  * @brief Prints a standardized HX711 not-ready diagnostic.
@@ -70,7 +100,7 @@ void flushSerialInput();
  *
  * @throws {none} This function does not throw exceptions.
  */
-void printScaleNotReadyDiagnostic(const char* operation);
+void printDiagnostic(const char* operation);
 
 /**
  * @brief Queues a serial message for non-blocking transmission.
@@ -86,27 +116,6 @@ void printScaleNotReadyDiagnostic(const char* operation);
  */
 bool queueSerialOutput(const char* message);
 
-
-// @todo readAveragedUnits() uses wait_ready_timeout() per iteration so it no longer spins
-// indefinitely, but it still blocks loop() for up to HX711_READY_TIMEOUT_MS per reading
-// (e.g. up to ~120ms per call for single-reading polling paths, more for multi-reading
-// measurement calls). Acceptable for serial-only use. When adding a web interface, refactor
-// callers to drive one reading per loop() tick via is_ready() and accumulate across ticks.
-
-/**
- * @brief Reads the average weight from the scale over multiple readings.
- * 
- * @details Takes multiple readings from the scale, averages them, and returns the result in pounds.
- * Useful for smoothing out noise in the scale readings and getting a more stable weight measurement.
- * 
- * @param readings {int} Number of readings to average.
- * @param samplesPerReading {int} Number of samples per reading.
- * @return {float} avgWeight The average weight in pounds. 
- * 
- * @throws {none} This function does not throw exceptions.
- */
-float readAveragedUnits(int readings, int samplesPerReading);
-
 /**
  * @brief Saves the current runtime tare offset from the HX711 to EEPROM.
  *
@@ -116,3 +125,26 @@ float readAveragedUnits(int readings, int samplesPerReading);
  * @throws {none} This function does not throw exceptions.
  */
 void saveRuntimeTareOffset();
+
+/**
+ * @brief Starts a non-blocking probe operation to check HX711 responsiveness.
+ *
+ * @details Initializes the probe context and begins collecting readings from the HX711.
+ *
+ * @param timeoutMs {unsigned long} Maximum duration for the probe operation in milliseconds.
+ * @param targetSamples {int} Number of samples to collect before completing the probe.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+void startProbe(unsigned long timeoutMs, int targetSamples);
+
+/**
+ * @brief Starts an asynchronous threshold computation used by calibration or level workflows.
+ *
+ * @details Initializes the shared context to begin collecting readings from the HX711.
+ *
+ * @param minimumThresholdLbs {float} Floor value for the computed threshold in pounds.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+void startThresholdDetect(float minimumThresholdLbs);

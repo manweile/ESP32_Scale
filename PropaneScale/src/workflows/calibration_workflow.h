@@ -1,13 +1,13 @@
-/**   
+/**
  * @file calibration_workflow.h
  * @author Gerald Manweiler
- * 
+ *
  * @brief Declarations for the manual calibration workflow.
- * 
+ *
  * @details Declares the manual calibration workflow function and its associated tick function for advancing the workflow state machine.
- * 
+ *
  * @version 0.1
- * @date 2024-06-01 
+ * @date 2024-06-01
  * @copyright Copyright (c) 2024 Gerald Manweiler
  */
 
@@ -65,9 +65,9 @@ void reZero();
 /**
  * @brief Processes calibration workflow steps and scale interactions on each loop() iteration.
  *
- * @details Called every loop() iteration when a calibration workflow is active. 
+ * @details Called every loop() iteration when a calibration workflow is active.
  * Manages the state machine for automatic and manual calibration workflows:
- * - IDLE: no active workflow, waiting for user input to start one 
+ * - IDLE: no active workflow, waiting for user input to start one
  * - WAIT_EMPTY: checks for stable empty scale condition with a timeout for auto-confirmation
  * - WAIT_LOAD: checks for load placement with a noise-derived threshold and timeout, transitions to either:
  *    - AUTO: automatic calibration measurement

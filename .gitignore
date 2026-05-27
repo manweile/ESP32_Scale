@@ -6,3 +6,9 @@ PropaneScale/build/
 Documentation/doxygen/
 # (also ignore any copies under Documentation/Doxygen if present)
 Documentation/Doxygen/doxygen/
+
+# Ignore serial logs and terminal settings
+Scale.txt
+ESP32_COM4.CoolTerm.Settings
+ESP32_COM4.CoolTermSettings
+*.orig
