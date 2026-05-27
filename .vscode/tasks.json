@@ -311,6 +311,29 @@
       "problemMatcher": []
     },
 
+    // Serve Web Bluetooth client (Python simple HTTP server via script)
+    {
+      "label": "Serve Web Bluetooth",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}/scripts/serve-web-bluetooth.ps1",
+        "-WorkspaceFolder",
+        "${workspaceFolder}"
+      ],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+
     // ESPTool tasks
 
     // ESPTool ESP32 COMPort Merged Bin Upload
