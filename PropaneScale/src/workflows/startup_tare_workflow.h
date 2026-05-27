@@ -19,9 +19,8 @@
 /**
  * @brief Begins the non-blocking startup tare workflow.
  *
- * @details Validates scale readiness, establishes a baseline reading, prints startup
- * prompts, and enters WAIT_STABLE state. The workflow is then advanced each loop()
- * iteration by tickTare().
+ * @details Starts a non-blocking probe operation to check HX711 responsiveness.
+ * The workflow is then advanced each loop() iteration by tickTare().
  *
  * @throws {none} This function does not throw exceptions.
  */

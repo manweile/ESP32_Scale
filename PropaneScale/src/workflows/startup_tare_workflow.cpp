@@ -39,45 +39,15 @@ extern void helpMenu();                                     // Function to displ
 
 void beginStartupTare()
 {
-  const float startupThreshold = computeThreshold(tankTare, maxPropane);
+  // HX711 readiness = DOUT going low when an ADC conversion is complete. 
+  // That only happens after the first conversion finishes.
+  // Conversion period depends on RATE, which is 10 Hz.
+  // 10 Hz → ~100 ms per conversion * 10 live samples = 1000 ms.
+  // HX711 also needs time for analog front-end, reference rails, & internal capacitors to stabilize.
+  // That's ~ 500 ms, add that to conversion period for startup timeout of 1500 ms.
 
-  // start a non-blocking probe to verify HX711 responsiveness before starting
-  // the startup tare workflow. tickTare() will poll the probe and continue.
-  startProbe(POLL_TIMEOUT_MS, LIVE_SAMPLES);
+  startProbe(STARTUP_TIMEOUT_MS, LIVE_SAMPLES);
   tareCtx.probePending = true;
-  // probeOp removed; tickTare will use a fixed diagnostic message on failure
-  return;
-
-  scale.set_scale(calibrationFactor);
-
-  // request non-blocking baseline acquisition; tickTare() will complete it.
-  tareCtx.baselinePending = true;
-  tareCtx.baselineReadings = UNLOAD_CHECK_COUNT;
-  tareCtx.baselineSamples = LIVE_SAMPLES;
-
-  // prepare WAIT_STABLE state; baseline will be set by tickTare() when ready
-  tareCtx.stableChecks = 0;
-  tareCtx.stateStartMs = millis();
-  tareCtx.state = TareState::WAIT_STABLE;
-
-  printStartupSummary();
-
-  const unsigned long autoTimeout = CONFIRM_TIMEOUT_MS / 1000UL;
-  char startupPrompt[512];
-  const int startupPromptLen = snprintf(startupPrompt,
-                                        sizeof(startupPrompt),
-                                        "Startup tare: waiting for empty scale...\n"
-                                        "Auto-detect is active.\n"
-                                        "Auto-detect timeout: %lu seconds.\n\n"
-                                        "Not-empty threshold: >= %.2f lbs (tank tare + max propane + margin).\n"
-                                        "Stability tolerance: +/- %.2f lbs once below not-empty threshold.\n"
-                                        "Timeout expiry with empty + stable readings auto-confirms taring workflow.\n"
-                                        "Send 'q' to skip startup tare.\n\n",
-                                        autoTimeout, startupThreshold, SETUP_EMPTY_WEIGHT);
-
-  if (startupPromptLen > 0 && startupPromptLen < static_cast<int>(sizeof(startupPrompt))) {
-    queueSerialOutput(startupPrompt);
-  }
 }
 
 bool handleStartupTareInput(char incoming)
@@ -106,7 +76,7 @@ bool handleStartupTareInput(char incoming)
 void tickTare()
 {
   // Threshold is default value for a not-empty propane tank
-  const float startupNotEmptyThreshold = computeThreshold(tankTare, maxPropane);
+  const float startupNotEmptyThreshold = tankTare + maxPropane + STARTUP_NOT_EMPTY_MARGIN_LBS;
 
   // handle pending HX711 probe responsiveness check for workflow start
   // returns false, means still pending and we should try again on the next tick,

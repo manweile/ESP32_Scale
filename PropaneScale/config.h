@@ -16,19 +16,19 @@
 #pragma once
 
 // ESP32 Hardware Constants
-constexpr int CLK_PIN = 17;                                 /**< Clock pin can be changed to any other GPIO pin if needed */
+constexpr int CLK_PIN  = 17;                                /**< Clock pin can be changed to any other GPIO pin if needed */
 constexpr int DOUT_PIN = 16;                                /**< Data output pin can be changed to any other GPIO pin if needed */
 
 // Serial Communication Constants
-constexpr long BAUD = 115200;                                /**< Serial connection speed in bits per second */
+constexpr long BAUD = 115200;                               /**< Serial connection speed in bits per second */
 
 // Sampling Constants
-constexpr int AVG_SAMPLES = 1;                              /**< Single sample used in polling loops for detection only */
-constexpr int CAL_SAMPLES = 5;                              /**< Number of samples to average for calibration readings */
-constexpr int LIVE_SAMPLES = 10;                            /**< Number of samples to average for live weight readings (~1s at 10 SPS) */
+constexpr int AVG_SAMPLES        = 1;                       /**< Single sample used in polling loops for detection only */
+constexpr int CAL_SAMPLES        = 5;                       /**< Number of samples to average for calibration readings */
+constexpr int LIVE_SAMPLES       = 10;                      /**< Number of samples to average for live weight readings (~1s at 10 SPS) */
 constexpr int UNLOAD_CHECK_COUNT = 3;                       /**< Shared sample/check count for unloaded averaging and stable-empty confirmation */
 
-// Calibration & Startup Constants
+// Workflow Constants
 constexpr float CHANGE_WARN_PCT = 0.25f;                    /**< Threshold for significant change in tank tare or max propane weight warning */
 
 // wire spool @ 19.2 lbs: -11551.08f;
@@ -51,14 +51,15 @@ constexpr float DEF_TANK_TARE = 17.5f;                      /**< Default tare lb
 
 constexpr float MINIMUM_LOAD_WEIGHT = 1.0f;                 /**< Minimum load in lbs to detect tank placement during level read workflow */
 
-// Timing Constants for Non-blocking Workflows
+// Non-blocking Timing Constants
 constexpr unsigned long CAL_SETTLE_DELAY_MS = 5000UL;       /**< Time to wait for load to mechanically settle before taking calibration reading */
-constexpr unsigned long CONFIRM_TIMEOUT_MS = 15000UL;       /**< Wait time for user &auto confirmations during startup tare workflow/calibration */
-constexpr unsigned long POLL_TIMEOUT_MS = 1000UL;           /**< Maximum time to wait for the HX711 to become ready during polling */
-constexpr unsigned long READY_TIMEOUT_MS = 100UL;           /**< Maximum time to wait for the HX711 to become ready during blocking reads */
+constexpr unsigned long CONFIRM_TIMEOUT_MS  = 15000UL;      /**< Wait time for user &auto confirmations during startup tare workflow/calibration */
+constexpr unsigned long POLL_TIMEOUT_MS     = 1000UL;       /**< Maximum time to wait for the HX711 to become ready during polling */
+constexpr unsigned long READY_TIMEOUT_MS    = 100UL;        /**< Maximum time to wait for the HX711 to become ready during blocking reads */
+constexpr unsigned long STARTUP_TIMEOUT_MS  = 1500UL;       /**< Maximum time to wait for stable readings during startup tare workflow */
 
-// Startup Tare Constants & Functions
-constexpr float SETUP_EMPTY_WEIGHT = 1.5f;                  /**< Tolerance in lbs for detecting stable empty condition during startup calibration */
+// Startup Tare Constants
+constexpr float SETUP_EMPTY_WEIGHT           = 1.5f;        /**< Tolerance in lbs for detecting stable empty condition during startup calibration */
 constexpr float STARTUP_NOT_EMPTY_MARGIN_LBS = 2.0f;        /**< Margin above configured full-tank weight when deciding startup not-empty condition */
 
 // Scale Physical Components Constants
@@ -82,27 +83,27 @@ constexpr char CMD_TANK_TARE_MSG[] = "Send 't' to set propane tank tare";
 
 // EEPROM constants
 
-// EEPROM addresses and magic number for calibration persistence.
+// Calibration persistence
 constexpr uint32_t CAL_EEPROM_MAGIC = 0x43414C31;           /**< "CAL1" magic number is to indicate valid calibration factor stored in EEPROM */
 constexpr int CAL_EEPROM_MAGIC_ADDR = 0;                    /**< Calibration factor CAL1 is stored as 4 byte float */
 constexpr int CAL_EEPROM_VALUE_ADDR = 4;                    /**< value address starts at byte 4, immediately after the magic number */
 
-// EEPROM addresses and magic number for known weight persistence
+// Known weight persistence
 constexpr uint32_t KNOWN_WEIGHT_EEPROM_MAGIC = 0x4B4E5731;  /**< "KNW1" magic number is to indicate valid known weight stored in EEPROM */
 constexpr int KNOWN_WEIGHT_EEPROM_MAGIC_ADDR = 8;           /**< Known weight KNW1 is stored as 4 byte float */
 constexpr int KNOWN_WEIGHT_EEPROM_VALUE_ADDR = 12;          /**< value address starts at byte 12, immediately after the magic number */
 
-// EEPROM addresses and magic number for maximum legal propane weight persistence.
+// Maximum legal propane weight persistence
 constexpr uint32_t MAX_PROPANE_EEPROM_MAGIC = 0x4D415850;   /**< "MAXP" magic number is to indicate valid max propane weight stored in EEPROM */
 constexpr int MAX_PROPANE_EEPROM_MAGIC_ADDR = 16;           /**< Max propane weight MAXP is stored as a 4 byte float */
 constexpr int MAX_PROPANE_EEPROM_VALUE_ADDR = 20;           /**< value address starts at byte 20, immediately after the magic number */
 
-// EEPROM addresses and magic number for propane tank tare persistence.
+// Propane tank tare persistence
 constexpr uint32_t TARE_EEPROM_MAGIC = 0x54415245;          /**< "TARE" magic number is to indicate valid tank tare weight stored in EEPROM */
 constexpr int TARE_EEPROM_MAGIC_ADDR = 24;                  /**< Tank tare TARE is stored as a 4 byte float */
 constexpr int TARE_EEPROM_VALUE_ADDR = 28;                  /**< value address starts at byte 28, immediately after the magic number */
 
-// EEPROM addresses and magic number for persisted HX711 runtime tare offset.
+// HX711 runtime tare offset persistence
 constexpr uint32_t HX711_OFFSET_EEPROM_MAGIC = 0x4F464653;  /**< "OFFS" magic number indicates saved runtime tare offset */
 constexpr int HX711_OFFSET_EEPROM_MAGIC_ADDR = 32;          /**< Runtime offset magic stored as 4-byte uint32 */
 constexpr int HX711_OFFSET_EEPROM_VALUE_ADDR = 36;          /**< Runtime offset value stored as 4-byte float (integer-compatible range) */
@@ -110,26 +111,7 @@ constexpr int HX711_OFFSET_EEPROM_VALUE_ADDR = 36;          /**< Runtime offset 
 constexpr int EEPROM_SIZE_BYTES = 64;                       /**< EEPROM storage; must be >= highest value address + 4 bytes for the value */
 
 // EEPROM Sanity Limit Constants
-constexpr float CAL_FACTOR_ABS_MAX = 500000.0f;             /**< Maximum absolute value for valid calibration factor */
-constexpr float CAL_FACTOR_ABS_MIN = 100.0f;                /**< Minimum absolute value for valid calibration factor */
-constexpr float MAX_PROJECT_WEIGHT = 60.0f;                 /**< Project will never measure a propane tank above nominal 60 lbs */
+constexpr float CAL_FACTOR_ABS_MAX   = 500000.0f;           /**< Maximum absolute value for valid calibration factor */
+constexpr float CAL_FACTOR_ABS_MIN   = 100.0f;              /**< Minimum absolute value for valid calibration factor */
+constexpr float MAX_PROJECT_WEIGHT   = 60.0f;               /**< Project will never measure a propane tank above nominal 60 lbs */
 constexpr float MIN_PLAUSIBLE_WEIGHT = 0.1f;                /**< Minimum plausible non-zero weight for user-entered values */
-
-// Declaration & Definition of Global Functions
-
-/**
- * @brief Computes the startup not-empty threshold.
- *
- * @details Calculates threshold in pounds above which the scale is considered to have a load on it during startup tare.
- * Implemented here to provide a single source of truth logic tied to constants in this file and avoids linker errors.
- *
- * @param tankTareLbs {float} Tare weight of the empty tank in pounds.
- * @param maxPropaneLbs {float} Maximum legal propane weight in pounds.
- * @return constexpr float Startup not-empty threshold in pounds.
- *
- * @throws {none} This function does not throw exceptions.
- */
-constexpr float computeThreshold(float tankTareLbs, float maxPropaneLbs)
-{
-  return tankTareLbs + maxPropaneLbs + STARTUP_NOT_EMPTY_MARGIN_LBS;
-}
