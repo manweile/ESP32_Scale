@@ -39,7 +39,7 @@ extern void helpMenu();                                     // Function to displ
 
 void beginStartupTare()
 {
-  // HX711 readiness = DOUT going low when an ADC conversion is complete. 
+  // HX711 readiness = DOUT going low when an ADC conversion is complete.
   // That only happens after the first conversion finishes.
   // Conversion period depends on RATE, which is 10 Hz.
   // 10 Hz → ~100 ms per conversion * 10 live samples = 1000 ms.
