@@ -1,3 +1,7 @@
 1) Determine what doxygen formatting I want
   a) Should #include statements have /**< ipsum lorem */ ?
 2) Review all files per formatting
+
+3) remove all:
+ *
+ * @throws {none} This function does not throw exceptions.
