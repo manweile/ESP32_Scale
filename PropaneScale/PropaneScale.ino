@@ -23,6 +23,7 @@
 #include "src/parsing_utils.h"                              // Utility functions for validating and parsing input values
 #include "src/runtime_report.h"                             // Declarations for runtime reporting functions
 #include "src/scale_io.h"                                   // Input/output functions for user workflows and HX711 interactions
+#include "src/web_ble.h"                                    // BLE interface
 #include "src/workflows/input_context.h"                    // Input context definitions for non-blocking user input workflows
 #include "src/workflows/input_known_weight.h"               // Handlers for the known weight update workflow
 #include "src/workflows/input_propane_weight.h"             // Handlers for the max propane weight update workflow
@@ -83,6 +84,7 @@ void setup()
   Serial.begin(BAUD);
   initializeApp();
   beginStartupTare();
+  webBleInit();
 }
 
 /**
@@ -107,6 +109,7 @@ void loop()
   }
 
   // Advance other active state machines each iteration
+  webBleTick();                                             // currently minimal for sanity testing
   tickLevelRead();
   tickCalibration();
 
