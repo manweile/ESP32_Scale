@@ -1,0 +1,24 @@
+review files in Documentation/Copilot/web_ble_planning directory.
+review files in Documentation/Copilot/web-bluetooth-client directory.
+review files in D:\MyArduino\Projects\ESP32_Scale\firmware directory.
+Project works in imperial (pounds), never SI units (grams, kilograms etc).
+NimBLEDevice library is installed (at D:\MyArduino\Projects\Libraries\NimBLE-Arduino).
+NimBLEDevice library is in c_cpp_properties.json includepath.
+propose minimal web_ble.h and web_ble.cpp files with necessary changes to PropaneScale.ino file.
+I want a minimum implementation that only completes start up tare workflow.
+
+Add a minimal web_ble.cpp stub
+
+clean rebuild compilation succeeded for minimal non-Nimble stub implementation.
+Delete the stub and do full implementation.
+
+On Windows:
+compile and flash esp32
+open Chrome
+
+const buf = new ArrayBuffer(7);
+const dv = new DataView(buf);
+dv.setUint8(0,1);
+dv.setFloat32(1,12.34,true);
+dv.setUint16(5,42,true);
+console.log(PropaneScaleClient.parseWeightNotification(buf));
