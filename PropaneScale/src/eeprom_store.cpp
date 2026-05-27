@@ -1,14 +1,14 @@
 /**
  * @file eeprom_store.cpp
  * @author Gerald Manweiler
- * 
+ *
  * @brief EEPROM storage functions for the propane scale project.
- * 
+ *
  * @details Implements eeprom functions to load, save & validate calibration factors, known weights, maximum propane weight, and tank tare.
- * 
+ *
  * @version 0.1
  * @date 2026-05-06
- * 
+ *
  * @copyright Copyright (c) 2026 Gerald Manweiler
  */
 
@@ -27,10 +27,12 @@ extern bool eepromReady;                                   // Flag to track if E
 
 // Definitions of EEPROM storage functions for the propane scale project
 
-bool loadFromEeprom(float& value, uint32_t magicAddr, uint32_t magicValue, uint32_t valueAddr) {
+bool loadFromEeprom(float& value, uint32_t magicAddr, uint32_t magicValue, uint32_t valueAddr)
+{
   uint32_t magic = 0;                                       // Magic number read from EEPROM for validation
 
   EEPROM.get(magicAddr, magic);
+
   if (magic != magicValue) {
     return false;
   }
@@ -39,7 +41,9 @@ bool loadFromEeprom(float& value, uint32_t magicAddr, uint32_t magicValue, uint3
   return true;
 }
 
-bool printEepromField(const char* label, uint32_t magicAddr, uint32_t magicValue, uint32_t valueAddr, float minValue, float maxValue, bool useAbsMag, const char* unitSuffix) {
+bool printEepromField(const char* label, uint32_t magicAddr, uint32_t magicValue, uint32_t valueAddr, float minValue, float maxValue, bool useAbsMag,
+                      const char* unitSuffix)
+{
   float value = 0.0f;
   char line[96];
 
@@ -57,7 +61,8 @@ bool printEepromField(const char* label, uint32_t magicAddr, uint32_t magicValue
   return false;
 }
 
-bool saveToEeprom(float value, uint32_t magic, int magicAddr, int valueAddr) {
+bool saveToEeprom(float value, uint32_t magic, int magicAddr, int valueAddr)
+{
   if (!eepromReady) {
     return false;
   }

@@ -7,7 +7,8 @@
   "settings": {
     "files.associations": {
       "*.ino": "cpp",
-      "cmath": "cpp"
+      "cmath": "cpp",
+      "type_traits": "cpp"
     }
   }
 }

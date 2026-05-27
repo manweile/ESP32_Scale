@@ -92,22 +92,23 @@
     // path to openOCD executable, 
     // default to "openocd" which should work if it's in PATH, 
     // otherwise user can provide full path to openocd.exe
-    // {
-    //   "id": "openocdPath",
-    //   "type": "promptString",
-    //   "description": "OpenOCD executable path",
-    //   "default": "openocd"
-    // },
-    // // path to openOCD scripts directory, 
-    // // which contains interface/ and target/ subdirectories, 
-    // // default to the typical installation path for OpenOCD for ESP32 on Windows, 
-    // // but user can provide a different path if needed
-    // {
-    //   "id": "openocdScriptsDir",
-    //   "type": "promptString",
-    //   "description": "OpenOCD scripts directory (contains interface/ and target/)",
-    //   "default": "C:/Espressif/tools/openocd-esp32/share/openocd/scripts"
-    // }
+    {
+      "id": "openocdPath",
+      "type": "promptString",
+      "description": "OpenOCD executable path",
+      "default": "openocd"
+    },
+
+    // path to openOCD scripts directory, 
+    // which contains interface/ and target/ subdirectories, 
+    // default to the typical installation path for OpenOCD for ESP32 on Windows, 
+    // but user can provide a different path if needed
+    {
+      "id": "openocdScriptsDir",
+      "type": "promptString",
+      "description": "OpenOCD scripts directory (contains interface/ and target/)",
+      "default": "C:/Espressif/tools/openocd-esp32/share/openocd/scripts"
+    }
 
   ],
 
@@ -165,28 +166,6 @@
     //     "focus": false,
     //     "panel": "shared"
     //   },
-    //   "problemMatcher": []
-    // },
-
-    // FQBN Debug File Compile
-    // arduino-cli compile task with verbose output and clean build,
-    // uses the FQBN input to specify the board configuration, 
-    // and sets the build.extra_flags property to include -Og for better debugging and -g3 for maximum debug info in the binary
-    // command line: arduino-cli compile -v --clean --fqbn esp32:esp32:esp32thing --build-property "build.extra_flags=-Og -g3" D:/MyArduino/Projects/ESP32_Scale/PropaneScale
-    // {
-    //   "label": "FQBN Debug File Compile",
-    //   "type": "shell",
-    //   "command": "arduino-cli",
-    //   "args": [
-    //     "compile",
-    //     "-v",
-    //     "--clean",
-    //     "--fqbn",
-    //     "${input:FQBN}",
-    //     "--build-property",
-    //     "build.extra_flags=-Og -g3",
-    //     "${workspaceFolder}/PropaneScale"
-    //   ],
     //   "problemMatcher": []
     // },
 
@@ -287,6 +266,27 @@
       "problemMatcher": []
     },
     
+    // ESP32 Thing Debug File Compile
+    // arduino-cli compile task with verbose output and clean build,
+    // uses the esp32:esp32:esp32thing FQBN to specify the board configuration,
+    // and sets the build.extra_flags property to include -Og for better debugging and -g3 for maximum debug info in the binary
+    // command line: arduino-cli compile -v --clean --fqbn esp32:esp32:esp32thing --build-property "build.extra_flags=-Og -g3" D:/MyArduino/Projects/ESP32_Scale/PropaneScale
+    {
+      "label": "ESP32 Thing Debug File Compile",
+      "type": "shell",
+      "command": "arduino-cli",
+      "args": [
+        "compile",
+        "-v",
+        "--clean",
+        "--fqbn", "esp32:esp32:esp32thing",
+        "--build-property",
+        "build.extra_flags=-Og -g3",
+        "${workspaceFolder}/PropaneScale"
+      ],
+      "problemMatcher": []
+    },
+
     // Powershell tasks
     
     // ESP32 Thing Quick Flash
@@ -310,6 +310,8 @@
       ],
       "problemMatcher": []
     },
+
+
 
     // ESPTool tasks
 
@@ -518,6 +520,68 @@
       }
     },
 
+    // web server tasks
+
+    // Serve Web Bluetooth client (Python simple HTTP server via script)
+    {
+      "label": "Serve Web Bluetooth",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}/scripts/serve-web-bluetooth.ps1",
+        "-WorkspaceFolder",
+        "${workspaceFolder}"
+      ],
+      "isBackground": true,
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "dedicated",
+        "showReuseMessage": true,
+        "clear": false
+      },
+      "problemMatcher": []
+    },
+
+    // Open Chrome to local web bluetooth client
+    {
+      "label": "Open Chrome Localhost",
+      "type": "process",
+      "command": "Chrome",
+      "windows": {
+        "command": "C:/Program Files/Google/Chrome/Application/chrome.exe"
+      },
+      "args": [
+        "http://localhost:8000"
+      ],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared",
+        "showReuseMessage": true,
+        "clear": false,
+        "close": true
+      },
+      "problemMatcher": []
+    },
+
+    // Compound task: start server (background) and open Chrome
+    {
+      "label": "Serve Web Bluetooth & Open Chrome",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "Serve Web Bluetooth",
+        "Open Chrome Localhost"
+      ],
+      "problemMatcher": []
+    },
+
     // AStyle tasks
 
     // AStyle Format Code
@@ -528,7 +592,7 @@
       "args": [
         "-NoProfile",
         "-Command",
-        "Get-ChildItem -Path '${workspaceFolder}/PropaneScale' -Recurse -Include *.c,*.cpp,*.h,*.hpp,*.ino | ForEach-Object { & astyle --options='${workspaceFolder}\\.astylerc' $_.FullName }"
+        "Get-ChildItem -Path '${workspaceFolder}/PropaneScale' -Recurse -Include *.c,*.cpp,*.h,*.hpp,*.ino | ForEach-Object { & 'C:\\AStyle\\astyle.exe' --options='${workspaceFolder}\\.astylerc' $_.FullName }"
       ],
       "presentation": {
         "echo": true,

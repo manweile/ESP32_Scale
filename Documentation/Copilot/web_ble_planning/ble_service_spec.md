@@ -26,15 +26,15 @@ Characteristic details
 
 1) Weight — `0000BE01-...`
 - Properties: Notify, Read
-- Purpose: current processed weight in grams (scaled integer) with sign support.
+- Purpose: current processed weight in pounds (float32) with sign support.
 - Payload (9 bytes):
   - byte 0: `uint8 version` (1)
-  - byte 1-4: `int32 weight_mg` — weight in milligrams (signed, little-endian)
+  - byte 1-4: `float32 weight_lbs` — weight in pounds (IEEE‑754 float32, little-endian)
   - byte 5-6: `uint16 seq` — packet sequence number (wraps)
   - byte 7-8: `int16 reserved` — reserved (set 0)
-- Example: weight = 1234.5 g → weight_mg = 1234500 = 0x12 CA 35 00 (LE) so payload:
-  - [0x01][0x64][0x1A][0x12][0x00][0x00][0x01][0x00][0x00]
-  (example seq=1)
+- Example: weight = 12.345 lbs → payload fields:
+  - `[version=0x01][float32 little-endian of 12.345][seq=0x0001][reserved=0x0000]`
+  (Replace the float32 bytes with the IEEE‑754 little-endian representation for the value.)
 
 2) Tare Command — `0000BE02-...`
 - Properties: Write Without Response (fast), firmware acts immediately.
@@ -42,16 +42,16 @@ Characteristic details
 - Payload (1 byte):
   - byte 0: `uint8 cmd` where 0x01 = TARE_NOW
 - Example: to tare, client writes `[0x01]`.
-- Security: firmware must validate source and rate-limit successive TARE requests (e.g., minimum 1s between tarries).
+- Security: firmware must validate source and rate-limit successive TARE requests (e.g., minimum 1 second cooldown).
 
 3) Calibrate Command — `0000BE03-...`
 - Properties: Write (request-response via Device Info or event)
 - Purpose: initiate calibration sequence. Two modes supported.
 - Payload (6 bytes):
   - byte 0: `uint8 cmd` (0x01 = CAL_START_SINGLE_WEIGHT)
-  - byte 1-4: `uint32 mass_g` (mass in grams for calibration reference; little-endian)
+  - byte 1-4: `float32 mass_lbs` (mass in pounds for calibration reference; little-endian, IEEE‑754)
   - byte 5: `uint8 options` (bitmask reserved)
-- Example: calibrate with a 500 g weight: `[0x01][0xF4][0x01][0x00][0x00][0x00]` (500 = 0x01F4)
+- Example: calibrate with a 2.20462 lb weight (~1 kg): `[0x01][<float32 LE bytes for 2.20462>][0x00]`
 - Response: firmware writes a one-time Device Info/Version update or a separate calibration status event (can reuse Weight or Device Info characteristic to signal success/failure).
 
 4) Raw ADC — `0000BE04-...`
@@ -94,7 +94,7 @@ Operations & behaviors
 Security recommendations (firmware-facing)
 - Optionally implement a simple application-layer token flow:
   - `auth` token stored in NVS; client must write a `0xA5` + token sequence to a secure characteristic before control char writes accepted. (Left as optional — implement only if needed.)
-- Validate and bound incoming values (sampling interval range, calibration mass limits).
+  - Validate and bound incoming values (sampling interval range, calibration mass limits).
 
 Versioning & extensibility
 - Always increment `version` byte on payload format changes. Clients must check `version` and refuse or attempt fallback if unsupported.

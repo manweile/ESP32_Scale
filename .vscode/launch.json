@@ -1,6 +1,7 @@
 {
   "version": "0.2.0",
   "inputs": [
+
     // Location of your xtensa-esp32-elf-gdb executable, which is part of the ESP32 toolchain. 
     // This is needed for the JTAG debug configuration.
     {
@@ -9,6 +10,7 @@
       "description": "xtensa-esp32-elf-gdb executable path",
       "default": "C:/Users/gmanw/AppData/Local/Arduino15/packages/esp32/tools/xtensa-esp-elf-gdb/11.2_20220823/bin/xtensa-esp32-elf-gdb.exe"
     },
+
     // Baudrate options for the serial monitor configuration. 
     // Make sure to select the baudrate that matches the one used in your Arduino sketch for Serial.begin()
     {
@@ -25,6 +27,7 @@
     }
   ],
   "configurations": [
+
     // This configuration is for JTAG debugging an ESP32 using an ESP-Prog and OpenOCD. 
     // It assumes that you have OpenOCD set up to interface with the ESP-Prog and that it's configured to connect to your ESP32 board. 
     // The preLaunchTask starts the OpenOCD server, and the postDebugTask stops it after debugging is finished. 
@@ -55,6 +58,7 @@
         }
       ]
     },
+
     // This configuration is for launching a serial monitor using a PowerShell script that wraps the arduino-cli monitor command. 
     // It allows you to view the serial output from your ESP32 board while debugging.
     {

@@ -1,11 +1,11 @@
-/** 
+/**
  * @file input_context.h
  * @author Gerald Manweiler
- * 
+ *
  * @brief Input context definitions for non-blocking user input workflows in the propane scale project.
- * 
+ *
  * @details Defines enums and structs for managing the state of non-blocking serial input workflows initiated by the user.
- * 
+ *
  * @version 0.1
  * @date 2026-05-07
  * @copyright Copyright (c) 2026 Gerald Manweiler
@@ -22,7 +22,7 @@
  * @enum InputMode
  *
  * @brief Active user input workflow mode.
- * 
+ *
  * @details Used to manage different non-blocking serial input workflows initiated by the user
  */
 enum class InputMode : uint8_t {
@@ -36,7 +36,7 @@ enum class InputMode : uint8_t {
  * @enum InputState
  *
  * @brief Internal parse state for non-blocking input workflows.
- * 
+ *
  * @details Used to manage the stepwise process of collecting and confirming user input during workflows that require multiple interactions
  */
 enum class InputState : uint8_t {
@@ -49,7 +49,7 @@ enum class InputState : uint8_t {
  * @struct InputContext
  *
  * @brief Persistent serial parse context for non-blocking user input workflows.
- * 
+ *
  * @details Contains variables for managing the state of user input collection and confirmation across multiple loop() iterations without blocking
  */
 struct InputContext {

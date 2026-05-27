@@ -1,12 +1,12 @@
 /**
  * @file input_known_weight.cpp
  * @author Gerald Manweiler
- * 
+ *
  * @brief Handles user input for the known calibration weight update workflow.
- * 
+ *
  * @details Processes one serial character per loop() iteration,
  * managing the stepwise collection of a new known calibration weight value and user confirmation to save or cancel.
- * 
+ *
  * @version 0.1
  * @date 2026-05-07
  * @copyright Copyright (c) 2026 Gerald Manweiler
@@ -30,7 +30,8 @@ extern void resetInputContext();                            // Resets the input 
 
 // Definitions for calibration workflow functions
 
-void handleKnownWeightInput(char incoming) {
+void handleKnownWeightInput(char incoming)
+{
   // Ignore carriage return characters to prevent interference with parsing logic
   if (incoming == '\r') {
     return;
@@ -52,7 +53,7 @@ void handleKnownWeightInput(char incoming) {
     if (incoming == 's' || incoming == 'S') {
       knownWeight = inputCtx.parsedValue;
       bool eepromSuccess = saveToEeprom(knownWeight, KNOWN_WEIGHT_EEPROM_MAGIC, KNOWN_WEIGHT_EEPROM_MAGIC_ADDR, KNOWN_WEIGHT_EEPROM_VALUE_ADDR);
-      
+
       if (!eepromSuccess) {
         Serial.println("Failed to save known weight to EEPROM.");
       } else {
@@ -60,6 +61,7 @@ void handleKnownWeightInput(char incoming) {
         snprintf(buf, sizeof(buf), "Known weight updated: %.2f lbs\n", knownWeight);
         Serial.print(buf);
       }
+
       resetInputContext();
       return;
     }
@@ -68,8 +70,8 @@ void handleKnownWeightInput(char incoming) {
     return;
   }
 
-  // workflow - collecting numeric value text 
-  // waiting cancel, newline, or save command, 
+  // workflow - collecting numeric value text
+  // waiting cancel, newline, or save command,
   // ignore other characters except for buffering valid numeric input
   if (inputCtx.state == InputState::ENTER_VALUE) {
 
@@ -112,14 +114,15 @@ void handleKnownWeightInput(char incoming) {
       }
 
       char buf[96];
-      snprintf(buf, sizeof(buf), "Invalid known weight. Enter a number from %.2f to %.2f lbs, or 'q' to cancel.\n", MIN_PLAUSIBLE_WEIGHT, MAX_PROJECT_WEIGHT);
+      snprintf(buf, sizeof(buf), "Invalid known weight. Enter a number from %.2f to %.2f lbs, or 'q' to cancel.\n", MIN_PLAUSIBLE_WEIGHT,
+               MAX_PROJECT_WEIGHT);
       Serial.print(buf);
       inputCtx.index = 0;
       inputCtx.buffer[0] = '\0';
       return;
     }
 
-    // user trying to save 
+    // user trying to save
     if (incoming == 's' || incoming == 'S') {
       if (inputCtx.index == 0) {
         Serial.println("Enter a known weight first, then send 's' to save.");
@@ -136,7 +139,8 @@ void handleKnownWeightInput(char incoming) {
 
       if (!parseSuccess || !validValue) {
         char buf[96];
-        snprintf(buf, sizeof(buf), "Invalid known weight. Enter a number from %.2f to %.2f lbs, or 'q' to cancel.\n", MIN_PLAUSIBLE_WEIGHT, MAX_PROJECT_WEIGHT);
+        snprintf(buf, sizeof(buf), "Invalid known weight. Enter a number from %.2f to %.2f lbs, or 'q' to cancel.\n", MIN_PLAUSIBLE_WEIGHT,
+                 MAX_PROJECT_WEIGHT);
         Serial.print(buf);
         inputCtx.index = 0;
         inputCtx.buffer[0] = '\0';
@@ -153,10 +157,11 @@ void handleKnownWeightInput(char incoming) {
         snprintf(buf, sizeof(buf), "Known weight updated: %.2f lbs\n", knownWeight);
         Serial.print(buf);
       }
+
       resetInputContext();
       return;
     }
-    
+
     bool isValidChar = inputCtx.index < static_cast<int>(sizeof(inputCtx.buffer) - 1);
 
     if (isValidChar) {
@@ -166,6 +171,7 @@ void handleKnownWeightInput(char incoming) {
       inputCtx.index = 0;
       inputCtx.buffer[0] = '\0';
     }
+
     return;
   }
 
@@ -173,7 +179,8 @@ void handleKnownWeightInput(char incoming) {
   resetInputContext();
 }
 
-void knownWeightUpdate() {
+void knownWeightUpdate()
+{
   if (inputCtx.mode != InputMode::NONE) {
     Serial.println("Known weight input workflow already in progress. Send 'q' to cancel first.");
     return;
@@ -186,7 +193,7 @@ void knownWeightUpdate() {
   inputCtx.index = 0;
   inputCtx.parsedValue = 0.0f;
   inputCtx.buffer[0] = '\0';
-  
+
   char prompt[192];
   snprintf(prompt, sizeof(prompt),
            "\nCurrent known calibration weight: %.2f lbs\n"
