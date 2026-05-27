@@ -6,17 +6,27 @@ on:
 
 jobs:
   astyle-check:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install AStyle
+      - name: Install AStyle (Chocolatey)
+        shell: pwsh
         run: |
-          sudo apt-get update
-          sudo apt-get install -y astyle
+          choco install astyle -y
+          astyle --version
       - name: Run AStyle and fail on changes
+        shell: pwsh
         run: |
-          # Run AStyle recursively on the PropaneScale folder (formats supported source files)
-          astyle --options=.astylerc -r PropaneScale
-          # Print any changed files and fail if AStyle modified the tree
-          git --no-pager diff --name-only || true
-          git diff --exit-code || (echo "AStyle formatting violations detected. Run 'astyle --options=.astylerc -r PropaneScale' locally and commit the results." && exit 1)
+          # Use the same file discovery as the VS Code task to include .ino files
+          $ws = "$env:GITHUB_WORKSPACE"
+          Get-ChildItem -Path "$ws/PropaneScale" -Recurse -Include *.c,*.cpp,*.h,*.hpp,*.ino | ForEach-Object {
+            & astyle --options="$ws\.astylerc" $_.FullName
+          }
+          # Print any changed files
+          git --no-pager diff --name-only || Write-Host ""
+          # Fail if AStyle modified the working tree
+          git diff --quiet
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "AStyle formatting violations detected. Run the workspace task 'Format Code (AStyle)' or: astyle --options=.astylerc -r PropaneScale"
+            exit 1
+          }
