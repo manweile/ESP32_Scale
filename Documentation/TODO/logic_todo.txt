@@ -304,3 +304,11 @@ do not use a wrapper around non-blocking average units function.
 analyze existing usage of non-blocking average units function to ensure proposed reentrant will not cause any regression bugs.
 
 NOT SURE THIS NEEDED ANYMORE
+
+10)  Ask agent to:
+a) Review level workflow pattern, calibration workflow pattern and startup tare pattern.
+b) Review input known weight, ma propane, and tank workflow patterns
+c) review current runtime values, default eeprom, & help workflow patterns
+
+What I want to know is where respective patterns are "out of sync"
+and what ramifications are.
