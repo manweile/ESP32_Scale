@@ -23,7 +23,8 @@
 #include "src/parsing_utils.h"                              // Utility functions for validating and parsing input values
 #include "src/runtime_report.h"                             // Declarations for runtime reporting functions
 #include "src/scale_io.h"                                   // Input/output functions for user workflows and HX711 interactions
-#include "src/web_ble.h"                                    // BLE interface
+#include "src/wifi.h"                                       // WiFi module interface for handling HTTP requests and providing telemetry
+#include "src/wifi_bridge.h"                                 /**< Declaration of global `g_wifi_callbacks` instance for WiFi handlers */
 #include "src/workflows/input_context.h"                    // Input context definitions for non-blocking user input workflows
 #include "src/workflows/input_known_weight.h"               // Handlers for the known weight update workflow
 #include "src/workflows/input_propane_weight.h"             // Handlers for the max propane weight update workflow
@@ -72,10 +73,10 @@ void resetInputContext()
 // Definitions & Declarations for Project lifecycle functions
 
 /**
- * @brief Initializes the application and starts the startup tare workflow.
+ * @brief Initializes the application, starts the startup tare workflow and initializes WiFi.
  *
  * @details Initializes the serial interface, sets up the HX711 scale, applies calibration from EEPROM,
- * and begins the startup tare workflow.
+ * and begins the startup tare workflow, and initializes WiFi.
  *
  * @throws {none} This function does not throw exceptions.
  */
@@ -84,6 +85,8 @@ void setup()
   Serial.begin(BAUD);
   initializeApp();
   beginStartupTare();
+  registerCallbacks(&g_wifi_callbacks);
+  initWifi();
 }
 
 /**
@@ -110,6 +113,9 @@ void loop()
   // Advance other active state machines each iteration
   tickLevelRead();
   tickCalibration();
+
+  // Process network events, runs after other workflows to avoid preemption
+  tickWifi();
 
   // On no serial input, need return so state machines can continue running until next loop iteration
   if (!Serial.available()) {

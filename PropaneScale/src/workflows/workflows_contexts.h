@@ -129,7 +129,6 @@ struct CalContext {
 
 // Level Enums and Structs
 
-
 /**
  * @enum LevelState
  *
@@ -197,10 +196,25 @@ struct TareContext {
   unsigned long stateStartMs     = 0;                       /**< millis() when WAIT_STABLE state was entered */
 };
 
+// Wifi Typedef Struct
+
+/**
+ * @struct WifiCallbacks
+ *
+ * @brief Struct of function pointers for callbacks from WiFi handlers to workflows.
+ *
+ * @details Provides a way for the web server handlers to interact with the workflow logic without tight coupling, allowing for cleaner separation of concerns and easier testing.
+ */
+typedef struct WifiCallbacks {
+  void (*enqueue_calibrate)(float knownWeight);
+  void (*enqueue_tare)();
+  String (*get_telemetry_json)();
+  void (*save_calibration)();
+} WifiCallbacks;
+
 // External global State Variables
 extern AvgContext avgCtx;                                   /**< Averaging context instance to hold state for non-blocking computations */
 extern CalContext calCtx;                                   /**< Calibration context instance to hold state for workflows */
 extern LevelContext levelCtx;                               /**< Level read context instance to hold state for workflow */
 extern TareContext tareCtx;                                 /**< Startup tare context instance to hold state for workflow */
-extern AvgContext
-thresholdCtx;                             /**< Shared threshold averaging context instance (used by calibration and level workflows) */
+extern AvgContext thresholdCtx;                             /**< Shared threshold averaging context instance (used by calibration and level workflows) */
