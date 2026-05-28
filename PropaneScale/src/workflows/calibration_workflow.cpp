@@ -377,11 +377,13 @@ void tickCalibration()
     if (!responsive) {
       const char* op = "calibration";
 
-      if (calCtx.mode == CalMode::AUTO) op = "automatic calibration";
-      else
-        if (calCtx.mode == CalMode::MANUAL) op = "manual calibration";
-        else
-          if (calCtx.mode == CalMode::REZERO) op = "re-zero";
+      if (calCtx.mode == CalMode::AUTO) {
+        op = "automatic calibration";
+      } else if (calCtx.mode == CalMode::MANUAL) {
+        op = "manual calibration";
+      } else if (calCtx.mode == CalMode::REZERO) {
+        op = "re-zero";
+      }
 
       printDiagnostic(op);
       calCtx.mode = CalMode::NONE;
