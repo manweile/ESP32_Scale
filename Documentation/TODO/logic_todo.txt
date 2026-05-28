@@ -259,4 +259,4 @@ TODO
 I don't need to see this if reading & baseline are within established zero params.
 I only need to see startup tare timeout check on negative weight or true positive weight
 
-TODO
+LEAVE
