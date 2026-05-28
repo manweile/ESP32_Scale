@@ -29,45 +29,86 @@ void initWifi();
 /**
  * @brief Handles requests to the calibrate URL ("/api/calibrate").
  *
- * Enqueues a calibration operation with the provided known weight (HTTP param
- * `weight`).
+ * @details Expects a POST request with a "weight" parameter indicating the known weight for calibration. Enqueues a calibration operation using the provided weight by calling the appropriate callback function registered in the WifiCallbacks struct.
+ * Responds with a simple "ok" message on success, or an error message if the required parameter is missing.
+ * This allows the web interface to trigger a calibration without blocking the main loop or interfering with other workflows.
+ * 
+ * @throws {none} This function does not throw exceptions. It handles errors by responding with appropriate HTTP status codes and messages.
  */
 void handleCalibrate();
 
 /**
+ * @brief Cancels any in-progress liquid level read workflow (POST /api/level/cancel).
+ * 
+ * @details Stops any ongoing liquid level read operation and resets the workflow state to IDLE. Responds with a JSON object indicating the cancellation status.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+void handleLevelCancel();
+
+/**
+ * @brief Starts a liquid level read workflow (POST /api/level).
+ * 
+ * @details Triggers the liquid level read workflow by calling the liquidLevel() function, which will guard against concurrent runs. Responds immediately with a simple "ok" message, while the workflow continues asynchronously.
+ * This allows the web interface to trigger a level read without blocking the main loop or interfering with other workflows.
+ * 
+ * @throws {none} This function does not throw exceptions.
+ */
+void handleLevelStart();
+
+/**
+ * @brief Returns the current liquid level workflow status and last report (GET /api/level/status).
+ *
+ * @details Responds with a JSON object containing the current state of the liquid level workflow, whether an average calculation is pending, the last report, and the last prompt message.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+void handleLevelStatus();
+
+/**
  * @brief Handles requests to the root URL ("/").
- * @see wifi.cpp
+ * 
+ * @details Responds with the HTML content defined in ROOT_PAGE, which serves as the main web interface for the PropaneScale project.
+ * This page displays telemetry data and provides buttons to trigger tare and calibration actions via the WiFi API.
+ * 
+ * @throws {none} This function does not throw exceptions.
  */
 void handleRoot();
 
 /**
  * @brief Handles requests to the save URL ("/api/save").
  *
- * Enqueues a save operation to persist the current calibration factor.
+ * @details Enqueues a save operation to persist the current calibration factor.
+ *
+ * @throws {none} This function does not throw exceptions.
  */
 void handleSave();
 
 /**
  * @brief Handles requests to the tare URL ("/api/tare").
  *
- * Enqueues a tare operation to zero the scale. This operation is non-blocking and
+ * @details Enqueues a tare operation to zero the scale. This operation is non-blocking and
  * will be processed by the core workflow.
+ *
+ * @throws {none} This function does not throw exceptions.
  */
 void handleTare();
 
 /**
  * @brief Handles requests to the telemetry URL ("/api/telemetry").
  *
- * Responds with a JSON payload containing the current telemetry data from the scale
+ * @details Responds with a JSON payload containing the current telemetry data from the scale
  * and other relevant information. Uses the registered `WifiCallbacks` to obtain
  * telemetry.
+ *
+ * @throws {none} This function does not throw exceptions.
  */
 void handleTelemetry();
 
 /**
- * @details Registers callback functions for WiFi events.
- * 
  * @brief Registers callback functions for WiFi events.
+ * 
+ * @details Registers callback functions for WiFi events.
  * The provided callbacks allow the WiFi module to interact with core workflows by providing telemetry data and enqueuing workflow actions in response to HTTP requests.
  *
  * @param cb Pointer to a structure containing the callback functions.

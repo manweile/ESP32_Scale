@@ -83,6 +83,13 @@ void resetInputContext()
 void setup()
 {
   Serial.begin(BAUD);
+
+  // Print app title once at startup
+  Serial.println();
+  Serial.println(APP_TITLE);
+
+  // initialize app from eeprom and begin startup tare workflow before registering WiFi callbacks, 
+  // since WiFi handlers may interact with app state and workflows initialized in those functions
   initializeApp();
   beginStartupTare();
   registerCallbacks(&g_wifi_callbacks);
@@ -101,6 +108,8 @@ void loop()
 {
   // can't have any queued serial output before processing new input or advancing workflows
   drainQueuedSerialOutput();
+  // Service network events early to keep the HTTP server responsive
+  tickWifi();
 
   // tickTare has to preempt all other workflows and user input until complete,
   // to guarantee stable tare condition before allowing any other interactions or workflows to run
@@ -113,9 +122,6 @@ void loop()
   // Advance other active state machines each iteration
   tickLevelRead();
   tickCalibration();
-
-  // Process network events, runs after other workflows to avoid preemption
-  tickWifi();
 
   // On no serial input, need return so state machines can continue running until next loop iteration
   if (!Serial.available()) {

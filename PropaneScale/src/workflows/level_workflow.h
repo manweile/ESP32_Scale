@@ -14,6 +14,10 @@
 
 #pragma once
 
+// External Global State Variables
+extern String lastLevelPrompt;                              /**< Last short prompt/message associated with an active or recent level read. */
+extern String lastLevelReport;                              /**< Last human-readable report produced by the most recent level read attempt. */
+
 // Declarations for level read workflow functions
 
 /**

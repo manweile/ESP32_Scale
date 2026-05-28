@@ -12,6 +12,7 @@
  */
 
 // Standard library headers
+#include <Arduino.h>
 #include <WebServer.h>
 #include <WiFi.h>
 
@@ -19,6 +20,11 @@
 #include "web_root.h"
 #include "wifi.h"
 #include "workflows/workflows_contexts.h"
+#include "src/workflows/level_workflow.h"
+#include "src/scale_io.h"
+
+// forward declaration for cancel handler
+void handleLevelCancel();
 
 // Static Variables
 static const WifiCallbacks* g_callbacks = nullptr;          /**< Static pointer to the registered WifiCallbacks struct instance for bridging HTTP handlers to core workflows */
@@ -47,6 +53,9 @@ void initWifi()
   server.on("/api/tare", HTTP_POST, handleTare);
   server.on("/api/calibrate", HTTP_POST, handleCalibrate);
   server.on("/api/save", HTTP_POST, handleSave);
+  server.on("/api/level", HTTP_POST, handleLevelStart);
+  server.on("/api/level/status", HTTP_GET, handleLevelStatus);
+  server.on("/api/level/cancel", HTTP_POST, handleLevelCancel);
 
   server.begin();
   Serial.println("HTTP server started");
@@ -66,6 +75,60 @@ void handleCalibrate()
   }
 }
 
+void handleLevelCancel()
+{
+  // Cancel any in-progress level workflow
+  if (levelCtx.state != LevelState::IDLE) {
+    cancelThresholdDetect();
+    levelCtx.avgPending = false;
+    levelCtx.thresholdPending = false;
+    levelCtx.probePending = false;
+    levelCtx.state = LevelState::IDLE;
+    lastLevelPrompt = String("Level read cancelled.");
+  }
+
+  server.send(200, "application/json", "{\"success\":true,\"active\":false,\"message\":\"Level read cancelled\"}");
+}
+
+void handleLevelStart()
+{
+  // Start the level read workflow; liquidLevel() will guard against concurrent runs.
+  liquidLevel();
+  server.send(200, "text/plain", "ok");
+}
+
+void handleLevelStatus()
+{
+  // Return a small JSON object with the workflow state and last report.
+  const char* stateName = "IDLE";
+  switch (levelCtx.state) {
+    case LevelState::IDLE: stateName = "IDLE"; break;
+    case LevelState::WAIT_LOAD: stateName = "WAIT_LOAD"; break;
+    case LevelState::SETTLING: stateName = "SETTLING"; break;
+    case LevelState::READING: stateName = "READING"; break;
+  }
+
+  String payload = "{";
+  payload += "\"state\":\"" + String(stateName) + "\",";
+  payload += "\"avgPending\":" + String(levelCtx.avgPending ? "true" : "false") + ",";
+  payload += "\"report\":";
+  if (lastLevelReport.length() == 0) {
+    payload += "null";
+  } else {
+    payload += "\"" + lastLevelReport + "\"";
+  }
+  payload += ",";
+  payload += "\"prompt\":";
+  if (lastLevelPrompt.length() == 0) {
+    payload += "null";
+  } else {
+    payload += "\"" + lastLevelPrompt + "\"";
+  }
+  payload += "}";
+
+  server.send(200, "application/json", payload);
+}
+
 void handleRoot()
 {
   server.send(200, "text/html", ROOT_PAGE);
@@ -78,6 +141,7 @@ void handleSave()
   }
   server.send(200, "text/plain", "ok");
 }
+
 
 void handleTare()
 {

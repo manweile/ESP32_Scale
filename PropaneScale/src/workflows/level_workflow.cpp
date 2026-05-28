@@ -31,6 +31,10 @@ extern float maxPropane;                                    // Maximum legal pro
 extern float tankTare;                                      // Tare weight of the empty propane tank in pounds
 extern HX711 scale;                                         // HX711 instance owned by PropaneScale.ino
 
+// Global state variables for level read workflow
+String lastLevelReport = "";                                /**< Last human-readable report produced by the most recent level read attempt. */
+String lastLevelPrompt = "";                                /**< Last short prompt/message associated with an active or recent level read. */
+
 // Definitions for level read workflow functions
 
 bool handleLevelReadInput(char incoming)
@@ -118,6 +122,7 @@ void tickLevelRead()
              "Send 'q' to cancel.\n",
              loadDetectSeconds);
     queueSerialOutput(levelPrompt);
+    lastLevelPrompt = String("Place propane tank on scale. Waiting for tank placement...");
   }
 
   // workflow - waiting for load placement
@@ -173,6 +178,7 @@ void tickLevelRead()
       levelCtx.avgPending = false;
       levelCtx.stateStartMs = millis();
       levelCtx.state = LevelState::SETTLING;
+      lastLevelPrompt = String("Tank detected. Settling...");
     }
 
     return;
@@ -198,6 +204,7 @@ void tickLevelRead()
     if (!levelCtx.avgPending) {
       levelCtx.avgPending = true;
       Serial.println("Reading tank weight...");
+      lastLevelPrompt = String("Reading tank weight...");
     }
 
     // averaging still in progress continue next tick
@@ -217,7 +224,8 @@ void tickLevelRead()
       return;
     }
 
-    // negative weight against laws of physics but we'll settle for zero if it happens due to noise or scale issues
+    // negative weight against laws of physics,
+    // but we'll settle for zero if it happens due to noise or scale issues
     float propaneWeight = rawWeight - tankTare - PLATEN_TARE;
 
     if (propaneWeight < 0.0f) {
@@ -231,6 +239,22 @@ void tickLevelRead()
              "Scale load: %.1f lbs, Calculated propane: %.1f lbs, Propane level: %.1f%%\n",
              rawWeight, propaneWeight, propaneLevel);
     Serial.print(buf);
+
+    // Save human-readable report for web UI and external monitors & trim trailing newline for JSON safety
+    lastLevelReport = String(buf);
+    if (lastLevelReport.length() > 0 && lastLevelReport.charAt(lastLevelReport.length()-1) == '\n') {
+      lastLevelReport.remove(lastLevelReport.length()-1);
+    }
+
+    // external monitors can observe workflow result
+    {
+      String payload = "{";
+      payload += "\"state\":\"IDLE\",";
+      payload += "\"avgPending\":false,";
+      payload += "\"report\":\"" + lastLevelReport + "\"";
+      payload += "}";
+      Serial.println(payload);
+    }
 
     levelCtx.state = LevelState::IDLE;
     levelCtx.avgPending = false;

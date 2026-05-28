@@ -64,26 +64,16 @@ void enqueueTare()
 
 String getTelemetry()
 {
-  float weight = NAN;
-
-  if (scale.is_ready()) {
-    // Non-blocking single-sample read; may return stale/quick reading but is safe here
-    weight = scale.get_units();
-  }
-
+  // Provide telemetry about calibration and saved settings. Omit a live weight
+  // sample here to avoid any heap/latency issues; include runtime tare offset instead.
   String s = "{";
-  s += "\"weight\":";
-
-  if (!isfinite(weight)) {
-    s += "null";
-  } else {
-    s += String(weight, 2);
-  }
-
-  s += ",\"calibrationFactor\":" + String(calibrationFactor, 2);
+  s += "\"calibrationFactor\":" + String(calibrationFactor, 2);
   s += ",\"knownWeight\":" + String(knownWeight, 2);
   s += ",\"maxPropane\":" + String(maxPropane, 2);
   s += ",\"tankTare\":" + String(tankTare, 2);
+  // Include the HX711 runtime tare offset (raw counts) for diagnostics
+  long runtimeOffset = scale.get_offset();
+  s += ",\"Runtime tare offset\":" + String(runtimeOffset);
   s += "}";
 
   return s;
