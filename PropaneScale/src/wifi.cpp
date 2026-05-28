@@ -23,8 +23,9 @@
 #include "src/workflows/level_workflow.h"
 #include "src/scale_io.h"
 
-// forward declaration for cancel handler
-void handleLevelCancel();
+// // forward declaration for cancel handler
+// void handleLevelCancel();
+// void handleLevelAck();
 
 // Static Variables
 static const WifiCallbacks* g_callbacks = nullptr;          /**< Static pointer to the registered WifiCallbacks struct instance for bridging HTTP handlers to core workflows */
@@ -56,6 +57,7 @@ void initWifi()
   server.on("/api/level", HTTP_POST, handleLevelStart);
   server.on("/api/level/status", HTTP_GET, handleLevelStatus);
   server.on("/api/level/cancel", HTTP_POST, handleLevelCancel);
+  server.on("/api/level/ack", HTTP_POST, handleLevelAck);
 
   server.begin();
   Serial.println("HTTP server started");
@@ -73,6 +75,14 @@ void handleCalibrate()
   } else {
     server.send(400, "text/plain", "missing weight param");
   }
+}
+
+void handleLevelAck()
+{
+  // Clear server-side stored prompt/report so browser won't see stale values
+  lastLevelReport = String("");
+  lastLevelPrompt = String("");
+  server.send(200, "application/json", "{\"success\":true}");
 }
 
 void handleLevelCancel()

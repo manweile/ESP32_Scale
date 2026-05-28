@@ -38,6 +38,16 @@ void initWifi();
 void handleCalibrate();
 
 /**
+ * @brief Acknowledges the completion of a liquid level read workflow (POST /api/level/ack).
+ *
+ * @details Clears the server-side stored prompt and report so that the browser does not see stale values.
+ * Responds with a JSON object indicating the acknowledgment status.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+void handleLevelAck();
+
+/**
  * @brief Cancels any in-progress liquid level read workflow (POST /api/level/cancel).
  * 
  * @details Stops any ongoing liquid level read operation and resets the workflow state to IDLE. Responds with a JSON object indicating the cancellation status.

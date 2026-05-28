@@ -161,7 +161,13 @@ static const char ROOT_PAGE[] = R"rawliteral(
   </style>
   <div id="reportModal"><div class="box"><h3>Level Read Result</h3><pre id="reportText"></pre><div style="text-align:right"><button id="reportOk">OK</button></div></div></div>
   <script>
-    document.getElementById('reportOk').addEventListener('click', ()=>{
+    document.getElementById('reportOk').addEventListener('click', async ()=>{
+      // Acknowledge the report server-side so subsequent polls don't return stale data
+      const ok = await postAction('/api/level/ack');
+      if (!ok) {
+        alert('Failed to acknowledge report');
+        return;
+      }
       document.getElementById('reportModal').style.display = 'none';
       // clear persistent level prompt lines when user acknowledges
       levelLines = [];
