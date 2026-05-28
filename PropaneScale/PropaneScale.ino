@@ -81,6 +81,10 @@ void resetInputContext()
 void setup()
 {
   Serial.begin(BAUD);
+  
+  Serial.println();
+  Serial.println(APP_TITLE);
+
   initializeApp();
   beginStartupTare();
 }

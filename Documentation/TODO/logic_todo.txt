@@ -9,7 +9,7 @@ Auto-detect is active.
 Auto-detect timeout: 15 seconds
 Send 'q' to skip startup tare.
 
-TODO
+COMPLETED
 
 2) format & add runtime tare offset to output & remove "Propane Level Scale"
 NB not sure all states & modes are being output. Check and add if necessary.
@@ -39,7 +39,7 @@ Calibration factor: -10420.86
 Known calibration weight: 26.00 lbs
 Max propane weight: 16.00 lbs
 Tank tare: 17.50 lbs
-Runtime tare offset (HX711 counts): 228748
+Runtime tare offset: 228748
 
 Calibration mode: 0 (NONE)
 Calibration state: 0 (IDLE)
@@ -48,11 +48,11 @@ Tare state: 0 (IDLE)
 Input mode: 0 (NONE)
 Input state: 0 (IDLE)
 
-TODO
+COMPLETED
 
 3) all timeouts can be 15 seconds, so change settling to use CONFIRM_TIMEOUT_MS and remove CAL_SETTLE_DELAY_MS
 
-TODO 
+LEAVE FOR NOW
 
 4) verify InputContext inputCtx; is supposed to be in PropaneScale.ino
 

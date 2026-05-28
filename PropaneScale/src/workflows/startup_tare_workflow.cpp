@@ -109,17 +109,14 @@ void tickTare()
     printStartupSummary();
 
     const unsigned long autoTimeout = CONFIRM_TIMEOUT_MS / 1000UL;
-    char startupPrompt[512];
+    char startupPrompt[256];
     const int startupPromptLen = snprintf(startupPrompt,
-                                          sizeof(startupPrompt),
-                                          "Startup tare: waiting for empty scale...\n"
-                                          "Auto-detect is active.\n"
-                                          "Auto-detect timeout: %lu seconds.\n\n"
-                                          "Not-empty threshold: >= %.2f lbs (tank tare + max propane + margin).\n"
-                                          "Stability tolerance: +/- %.2f lbs once below not-empty threshold.\n"
-                                          "Timeout expiry with empty + stable readings auto-confirms taring workflow.\n"
-                                          "Send 'q' to skip startup tare.\n\n",
-                                          autoTimeout, startupNotEmptyThreshold, SETUP_EMPTY_WEIGHT);
+                        sizeof(startupPrompt),
+                        "Startup tare: waiting for empty scale...\n"
+                        "Auto-detect is active.\n"
+                        "Auto-detect timeout: %lu seconds.\n"
+                        "Send 'q' to skip startup tare.\n\n",
+                        autoTimeout);
 
     if (startupPromptLen > 0 && startupPromptLen < static_cast<int>(sizeof(startupPrompt))) {
       queueSerialOutput(startupPrompt);
