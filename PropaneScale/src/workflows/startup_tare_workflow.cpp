@@ -84,8 +84,9 @@ void tickTare()
   if (tareCtx.probePending) {
     bool responsive = false;
 
+    // keep probe active until it has a result or hits its timeout
     if (!pollProbe(responsive, READY_TIMEOUT_MS, LIVE_SAMPLES)) {
-      return; // still probing; try again next tick
+      return;
     }
 
     // timeout or unresponsive, warn user to prevent long waits and provide diagnostic info
@@ -144,15 +145,8 @@ void tickTare()
     return;
   }
 
-  // if we have gotten here, we are in WAIT_STABLE,
-  // delegate serial handling to the dedicated input handler
-  if (Serial.available()) {
-    char c = Serial.read();
-
-    if (handleStartupTareInput(c)) {
-      return;
-    }
-  }
+  // if we get here, are in WAIT_STABLE and need to check for stability or timeout conditions
+  // Serial input is handled via the central input dispatcher to avoid polling Serial
 
   // will only see this on application initialization
   if (tareCtx.baselinePending) {
