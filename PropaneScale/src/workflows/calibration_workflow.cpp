@@ -438,39 +438,9 @@ void tickCalibration()
 
   // workflow - waiting on user to remove all weight from platen
   if (calCtx.state == CalState::WAIT_EMPTY) {
-    if (Serial.available()) {
-      char c = Serial.read();
-
-      // four possible wait for empty calibration workflows inputs:
-      // REZERO (quit cancel), AUTO, MANUAL, REZERO (force cancel)
-
-      if (c == 'q' || c == 'Q') {
-
-        if (calCtx.mode == CalMode::REZERO) {
-          // just cancel workflow, no state changes needed since runtime offset wasn't applied yet
-          Serial.println("Runtime re-zero cancelled.");
-        } else
-          if (calCtx.mode == CalMode::AUTO || calCtx.mode == CalMode::MANUAL) {
-            // restore the original factor for both AUTO and MANUAL cancellations
-            Serial.println("Calibration cancelled. Changes were not saved.");
-            calibrationFactor = calCtx.originalCalibrationFactor;
-            scale.set_scale(calibrationFactor);
-          }
-
-        calCtx.state = CalState::IDLE;
-        calCtx.mode  = CalMode::NONE;
-        return;
-      } else
-        if (calCtx.mode == CalMode::REZERO && (c == 'z' || c == 'Z')) {
-          // force-confirm empty condition and proceed with re-zero
-          Serial.println("Runtime re-zero force-confirmed by user.");
-          Serial.println();
-          transitionFromWaitEmpty();
-          return;
-        }
-
-      // else: ignore other keys here
-    }
+    // Serial input handling is centralized in `handleCalibrationInput()` and
+    // forwarded from the main loop when calibration workflows are active.
+    // Do not poll Serial here to avoid duplicating input handling logic.
 
     // Only check for empty at timeout, not on every tick
     if ((millis() - calCtx.stateStartMs) >= CONFIRM_TIMEOUT_MS) {
