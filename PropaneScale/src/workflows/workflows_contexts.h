@@ -16,6 +16,58 @@
 // Standard library headers
 #include <cstdint>
 
+// Non-blocking Enums and Structs
+
+/**
+ * @enum AvgPhase
+ *
+ * @brief Named phases for the non-blocking averaging helper used during calibration.
+ *
+ * @details Used to manage the multi-step averaging process during calibration without blocking.
+ */
+enum class AvgPhase : uint8_t {
+  NONE          = 0,                                        /**< No non-blocking average in progress */
+  EMPTY_CONFIRM = 1,                                        /**< Empty-scale confirmation averaging in progress */
+  LOAD_DETECT   = 2,                                        /**< Load placement detection averaging in progress */
+  FINAL_MEAS    = 3,                                        /**< Final calibration measurement averaging in progress */
+  VERIFICATION  = 4                                         /**< Verification averaging in progress */
+};
+
+/**
+ * @struct AvgContext
+ *
+ * @brief Context for the non-blocking averaging helper used across workflows.
+ *
+ * @details Contains variables to manage the state of a non-blocking averaging operation.
+ */
+struct AvgContext {
+  bool   active            = false;                         /**< Whether a non-blocking operation is active */
+  int    collected         = 0;                             /**< Number of readings collected so far */
+  int    index             = 0;                             /**< Current reading index */
+  float  minimumThreshold  = 0.0f;                          /**< Minimum threshold floor (kept for layout compatibility) */
+  int    requestedReadings = 0;                             /**< Number of readings requested (outer loop) */
+  int    samplesPerReading = 0;                             /**< Samples per averaged reading */
+  float  total             = 0.0f;                          /**< Accumulated total of readings */
+};
+
+/**
+ * @struct ProbeContext
+ *
+ * @brief Context for probing the HX711 signal during scale ready checks.
+ *
+ * @details Contains variables to manage the state of a non-blocking response check of the HX711.
+ */
+struct ProbeContext {
+  bool           active         = false;                    /**< Whether a probe operation is active */
+  int            index          = 0;                        /**< Current probe reading index */
+  long           maxRaw         = 0;                        /**< Maximum raw value observed during probe */
+  long           minRaw         = 0;                        /**< Minimum raw value observed during probe */
+  int            samplesTaken   = 0;                        /**< Number of probe samples taken */
+  unsigned long  startMs        = 0;                        /**< millis() when probe was started */
+  int            targetSamples  = 0;                        /**< configured number of samples to collect for the probe */
+  unsigned long  timeoutMs      = 0;                        /**< configured timeout for the probe */
+};
+
 // Calibration Enums and Structs
 
 /**
@@ -56,6 +108,7 @@ enum class CalState : uint8_t {
  */
 struct CalContext {
   float         adjustmentStep            = 0.0f;           /**< manual mode: current factor nudge size */
+  AvgPhase      avgPhase                  = AvgPhase::NONE; /**< internal: non-blocking averaging phase for AUTO calibration */
   bool          hasManualDisplay          = false;          /**< manual mode: whether we have a prior display snapshot to compare against */
   int           lastDirection             = 0;              /**< manual mode: +1 = last press +, -1 = last press - */
   int           lastFactorHundredth       = 0;              /**< manual mode: last displayed factor, scaled by 100 (2 decimal places) */
@@ -67,12 +120,15 @@ struct CalContext {
   float         minStep                   = 0.0f;           /**< manual mode: floor for adjustmentStep */
   CalMode       mode                      = CalMode::NONE;  /**< current calibration mode, or NONE when not in a calibration workflow */
   float         originalCalibrationFactor = 0.0f;           /**< manual mode: calibration factor captured at start for cancel/restore */
-  int           stableEmptyChecks         = 0;              /**< consecutive empty-scale readings in WAIT_EMPTY */
   CalState      state                     = CalState::IDLE; /**< current state within the calibration workflow */
   unsigned long stateStartMs              = 0;              /**< millis() when current state was entered */
+  bool          thresholdPending          = false;          /**< whether an async threshold computation is pending */
+  unsigned long thresholdStartMs          = 0;              /**< millis() when async threshold computation was started */
+  bool          probePending              = false;          /**< whether a non-blocking HX711 probe is pending for workflow start */
 };
 
 // Level Enums and Structs
+
 
 /**
  * @enum LevelState
@@ -97,9 +153,13 @@ enum class LevelState : uint8_t {
  * so each loop() tick can advance the workflow without blocking.
  */
 struct LevelContext {
+  bool          avgPending          = false;                /**< whether a non-blocking average is in progress for this workflow */
   float         loadDetectThreshold = 0.0f;                 /**< noise-derived threshold used to detect tank placement */
   LevelState    state               = LevelState::IDLE;     /**< current state within the level read workflow */
   unsigned long stateStartMs        = 0;                    /**< millis() when WAIT_LOAD state was entered */
+  bool          thresholdPending    = false;                /**< whether an async threshold computation is pending */
+  unsigned long thresholdStartMs    = 0;                    /**< millis() when async threshold computation was started */
+  bool          probePending        = false;                /**< whether a non-blocking HX711 probe is pending for workflow start */
 };
 
 // Tare Enums and Structs
@@ -127,13 +187,20 @@ enum class TareState : uint8_t {
  * state so each loop() tick can advance the workflow without blocking.
  */
 struct TareContext {
-  float         baseline     = 0.0f;                        /**< Initial scale reading used as the stability reference */
-  int           stableChecks = 0;                           /**< Consecutive readings within tolerance of baseline */
-  TareState     state        = TareState::IDLE;             /**< Current state within the startup tare workflow */
-  unsigned long stateStartMs = 0;                           /**< millis() when WAIT_STABLE state was entered */
+  float         baseline         = 0.0f;                    /**< Initial scale reading used as the stability reference */
+  bool          baselinePending  = false;                   /**< baseline averaging requested and in progress */
+  int           baselineReadings = 0;                       /**< requested outer readings for baseline */
+  int           baselineSamples  = 0;                       /**< samples per reading for baseline */
+  bool          probePending     = false;                   /**< whether a non-blocking HX711 probe is pending for workflow start */
+  int           stableChecks     = 0;                       /**< Consecutive readings within tolerance of baseline */
+  TareState     state            = TareState::IDLE;         /**< Current state within the workflow */
+  unsigned long stateStartMs     = 0;                       /**< millis() when WAIT_STABLE state was entered */
 };
 
 // External global State Variables
-extern CalContext calCtx;                                   /**< Calibration context instance to hold state for calibration workflows */
-extern LevelContext levelCtx;                               /**< Level read context instance to hold state for the level read workflow */
-extern TareContext tareCtx;                                 /**< Startup tare context instance */
+extern AvgContext avgCtx;                                   /**< Averaging context instance to hold state for non-blocking computations */
+extern CalContext calCtx;                                   /**< Calibration context instance to hold state for workflows */
+extern LevelContext levelCtx;                               /**< Level read context instance to hold state for workflow */
+extern TareContext tareCtx;                                 /**< Startup tare context instance to hold state for workflow */
+extern AvgContext
+thresholdCtx;                             /**< Shared threshold averaging context instance (used by calibration and level workflows) */

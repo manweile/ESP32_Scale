@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>PropaneScale — Web Bluetooth (scaffold)</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main id="app">
+    <header>
+      <h1>PropaneScale — Web Bluetooth (scaffold)</h1>
+      <div id="connection">
+        <span id="device-name">Not connected</span>
+        <button id="connect-btn">Connect</button>
+        <button id="disconnect-btn" disabled>Disconnect</button>
+      </div>
+    </header>
+
+    <section id="live">
+      <div class="card">
+        <h2>Live Weight</h2>
+        <div id="weight-display">—</div>
+      </div>
+
+      <div class="card controls">
+        <h3>Controls</h3>
+        <button id="tare-btn" disabled>Tare</button>
+        <button id="calibrate-btn" disabled>Calibrate</button>
+        <div class="row">
+          <label for="sampling-input">Sampling ms</label>
+          <input id="sampling-input" type="number" min="20" max="2000" step="10" value="100">
+          <button id="set-sampling-btn" disabled>Set</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h3>Logs</h3>
+      <pre id="log" class="log"></pre>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

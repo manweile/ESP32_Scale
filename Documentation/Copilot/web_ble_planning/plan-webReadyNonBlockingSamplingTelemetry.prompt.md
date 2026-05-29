@@ -2,9 +2,13 @@
 
 TL;DR - Replace blocking HX711 sampling with a non-blocking start/poll/get sampler, adapt workflows to poll from `loop()`/ticks, and introduce a telemetry wrapper that forwards structured one-line messages to both Serial (for debugging) and a web telemetry buffer/WebSocket. This preserves the serial monitor while enabling a web interface.
 
+Update: `HX711_READY_TIMEOUT_MS` has been reduced to `100UL` (100 ms). Adjust worst-case timing expectations accordingly (e.g. `LIVE_SAMPLES`=10 → up to 1000 ms per full probe; `CAL_SAMPLES`=5 → up to 500 ms per averaged measurement when using blocking reads). Prefer non-blocking polling to avoid these worst-case stalls in the main loop.
+
 **Steps**
 1. Implement non-blocking sampler in `src/scale_io.h` / `src/scale_io.cpp`: add `startSampleBatch(n)`, `pollSample()`, `isSampleDone()`, `getSampleResult()`; use `is_ready()` and read one sample per `pollSample()` call. (*depends on step 2*)
+COMPLETED
 2. Refactor workflows to use the new sampler: change callers in `src/workflows/*` (calibration_workflow.cpp, level_workflow.cpp, startup_tare_workflow.cpp) to `startSampleBatch()` and poll from their `tick*()` functions instead of calling `readAveragedUnits()` directly.
+COMPLETED
 3. Add `telemetry_write()` helper and small ring buffer in `src/scale_io.cpp` (or new `telemetry.cpp`) that enqueues one-line JSON/CSV lines and conditionally forwards human-readable messages to Serial when a debug flag is enabled; use `Serial.availableForWrite()` checks before immediate writes.
 4. Add lightweight web telemetry endpoints: a JSON HTTP endpoint for last N samples and an `AsyncWebSocket` push path (reuse code from the example).
 5. Throttle and coalesce telemetry emissions (e.g., publish rate ~1 Hz) and expose runtime config.
@@ -55,6 +59,7 @@ Update 2: Priority (High → Low)
 
 High
 - Item 1 — Split blocking measurement from async acquisition: Recommended / High priority. Implement a non-blocking HX711 sampler (`startSampleBatch`, `pollSample`, `isSampleDone`, `getSampleResult`) and update workflows to poll once-per-loop tick.
+COMPLETED
 
 High‑Medium
 - Item 12 — Consolidate per-loop status into a single structured line: Deferred / Recommended for web phase. Standardize on one-line JSON for both Serial and WebSocket.

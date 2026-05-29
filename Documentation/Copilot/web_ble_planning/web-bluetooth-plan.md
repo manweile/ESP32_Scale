@@ -10,6 +10,9 @@ Propose a phased plan for adding a Web Bluetooth client to interact with the ESP
 - The ESP32 will act as a BLE peripheral exposing a custom GATT service.
 - Follow guidance from the Random Nerd Tutorials article above for connection and characteristic examples.
 
+### Browser compatibility note
+- Random Nerd Tutorials notes that Web Bluetooth has been implemented in Chrome, Edge, Opera, and Firefox and is supported on Android and Windows. In practice, Chrome on Android provides the most consistent experience; Firefox on Android may work on some devices/versions but is less consistent and sometimes requires specific browser builds or flags. Test both browsers on your device and prefer Chrome for primary support.
+
 ## High-Level Milestones
 - Draft API (GATT) and message formats
 - Design web UI/UX and connection flows
@@ -60,10 +63,25 @@ Design notes:
 - Tare/Command payloads: single byte command or small struct [cmd][arg...].
 - Include timestamp or sequence counter occasionally for loss detection.
 
-## Testing Matrix
-- Browsers: Chrome/Edge (desktop), Chrome on Android; test fallback behavior on Firefox and Safari (report unsupported features).
+- ## Testing Matrix
+- Browsers: Chrome/Edge (desktop), Chrome on Android; test fallback behavior on Firefox and Safari (report unsupported features). Note: per Random Nerd Tutorials, Firefox on Android has implemented Web Bluetooth and may work — verify on your tablet.
 - Devices: Windows 10/11 laptops with BLE, Android phones, MacBooks with BLE.
 - Test scenarios: connect/disconnect, rapid updates, write commands during streaming, OTA of calibration, power/battery low notifications.
+
+### Asus Tab A (Android) — explicit test steps
+1. Use Chrome on the tablet as primary test browser; have Firefox available for comparison.
+2. Verify Web Bluetooth API availability in the browser console:
+
+```javascript
+// open DevTools or remote debugger and run
+console.log('navigator.bluetooth' in window, navigator.bluetooth !== undefined);
+```
+
+3. If `navigator.bluetooth` is false/undefined in Firefox, try Chrome. Some Firefox builds may expose Web Bluetooth only behind experimental flags; in that case prefer Chrome.
+4. Host the test app over HTTPS (GitHub Pages or local HTTPS server). For quick local testing you can run a simple HTTP server on a desktop and access via Chrome on Android if served over HTTPS or via `localhost` on the device.
+5. Use `nRF Connect` (Android) to inspect advertised service UUIDs and characteristic presence before connecting from the browser.
+6. Test these scenarios on the tablet: connect, enable notifications, receive ~100 ms updates, send `Tare` write, send `Calibrate` write, disconnect/reconnect.
+7. Record browser version, Android version, and any required flags if Firefox needed special configuration.
 
 ## Performance & Latency
 - Aim for notify intervals <= 100 ms for a responsive UI.

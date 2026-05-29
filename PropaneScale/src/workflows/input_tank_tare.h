@@ -1,12 +1,12 @@
-/** 
+/**
  * @file input_tank_tare.h
  * @author Gerald Manweiler
- * 
+ *
  * @brief Handles user input for the tank tare update workflow.
- * 
+ *
  * @details Processes one serial character per loop() iteration,
  * managing the stepwise collection of a new tank tare value and user confirmation to save or cancel.
- * 
+ *
  * @version 0.1
  * @date 2026-05-07
  * @copyright Copyright (c) 2026 Gerald Manweiler
@@ -19,9 +19,9 @@
 /**
  * @brief Handles user input for the tank tare update workflow.
  *
- * @details Processes one serial character per loop() iteration, 
- * managing the stepwise collection of a new tank tare value and user confirmation to save or cancel. 
- * 
+ * @details Processes one serial character per loop() iteration,
+ * managing the stepwise collection of a new tank tare value and user confirmation to save or cancel.
+ *
  * @param incoming {char} The incoming character from the serial input.
  *
  * @throws {none} This function does not throw exceptions.

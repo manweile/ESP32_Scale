@@ -1,0 +1,262 @@
+1) remove this from D:\MyArduino\Projects\ESP32_Scale\PropaneScale\src\workflows\startup_tare_workflow.cpp.63:
+Not-empty threshold: >= 35.50 lbs (tank tare + max propane + margin).
+Stability tolerance: +/- 1.50 lbs once below not-empty threshold.
+Timeout expiry with empty + stable readings auto-confirms taring workflow.
+
+I WANT THIS:
+Startup tare: waiting for empty scale...
+Auto-detect is active.
+Auto-detect timeout: 15 seconds
+Send 'q' to skip startup tare.
+
+COMPLETED
+
+2) format & add runtime tare offset to output & remove "Propane Level Scale"
+NB not sure all states & modes are being output. Check and add if necessary.
+
+from this:
+
+Propane Level Scale
+
+Current Runtime Values
+EEPROM ready: yes
+Calibration factor: -10420.86
+Known calibration weight: 26.00 lbs
+Max propane weight: 16.00 lbs
+Tank tare: 17.50 lbs
+Calibration mode: 0 (NONE)
+Calibration state: 0 (IDLE)
+Level state: 0 (IDLE)
+Tare state: 0 (IDLE)
+Input mode: 0 (NONE)
+Input state: 0 (IDLE)
+
+to this:
+
+Current Runtime Values
+EEPROM ready: yes
+Calibration factor: -10420.86
+Known calibration weight: 26.00 lbs
+Max propane weight: 16.00 lbs
+Tank tare: 17.50 lbs
+Runtime tare offset: 228748
+
+Calibration mode: 0 (NONE)
+Calibration state: 0 (IDLE)
+Level state: 0 (IDLE)
+Tare state: 0 (IDLE)
+Input mode: 0 (NONE)
+Input state: 0 (IDLE)
+
+COMPLETED
+
+3) all timeouts can be 15 seconds, so change settling to use CONFIRM_TIMEOUT_MS and remove CAL_SETTLE_DELAY_MS
+
+LEAVE FOR NOW
+
+4) verify InputContext inputCtx; is supposed to be in PropaneScale.ino
+
+YES IT DOES. NEEDED by resetINputContext, WHICH MUST REMAIN IN PropaneScale.ino.
+
+5) have all user input handled by 'handle*Input(char incoming) functions
+to modify:
+see note
+Remove Serial Input Handling from `tickCalibration
+calibration_workflow.cpp: handleCalibrationInput
+
+currently existing:
+input_known_weight.cpp: handleKnownWeightInput
+input_propane_weight.cpp: handlePropaneWeightInput
+input_tank_tare.cpp: handleTankTareInput
+level_workflow.cpp: handleLevelReadInput
+
+COMPLETED
+
+Note:
+refer to copilot session from May 21 on Github for moving Serial.available() out of tickCalibration.
+handleCalibrationInput should be doing that logic.
+
+data:
+- file: "PropaneScale/PropaneScale.ino"
+  line: 221
+  snippet: "if (!Serial.available()) {"
+- file: "PropaneScale/src/workflows/calibration_workflow.cpp"
+  line: 373
+  snippet: "if (Serial.available()) {"
+- file: "PropaneScale/src/scale_io.cpp"
+  line: 68
+  snippet: "while (Serial.available()) {"
+- file: "Examples/mine/mine.ino"
+  line: 126
+  snippet: "if (Serial.available()) {"
+- file: "Examples/mine/mine.ino"
+  line: 206
+  snippet: "while (Serial.available()) {"
+- file: "Examples/mine/mine.ino"
+  line: 209
+  snippet: "if (Serial.available()) {"
+- file: "Examples/mine/copilot_scale.ino"
+  line: 290
+  snippet: "while (Serial.available()) {"
+- file: "Examples/mine/copilot_scale.ino"
+  line: 413
+  snippet: "if (Serial.available()) {"
+- file: "Examples/mine/copilot_scale.ino"
+  line: 989
+  snippet: "if (Serial.available()) {"
+- file: "Examples/mine/copilot_scale.ino"
+  line: 1072
+  snippet: "while (Serial.available()) {"
+  
+Here is a concrete refactoring example (diff) based on your actual project structure for moving all calibration user input handling to `handleCalibrationInput`. This refactor assumes your main Arduino loop is in **PropaneScale/PropaneScale.ino** and it already calls `tickCalibration()` (or will after this change):
+
+---
+
+### 1. **Remove Serial Input Handling from `tickCalibration`**
+
+**Before:** (in `PropaneScale/src/workflows/calibration_workflow.cpp`)
+```cpp
+if (calCtx.state == CalState::WAIT_EMPTY) {
+    if (Serial.available()) {
+        char c = Serial.read();
+        // User input handling for 'q', 'z'...
+    }
+    // ...timeout logic
+}
+```
+
+**After:**  
+```cpp
+if (calCtx.state == CalState::WAIT_EMPTY) {
+    // Only handle timeout logic here.
+    // User input is now handled in handleCalibrationInput() by the main loop.
+    // ...timeout logic
+}
+```
+
+> Remove the entire `Serial.available()` block and all user input checking from **tickCalibration**.
+
+---
+
+### 2. **Update Main loop() in PropaneScale.ino**
+
+#### Find your current main loop (example context from results):
+
+```cpp
+void loop() {
+    // ...other variable declarations...
+    // Main loop body...
+}
+```
+
+**Insert this code before calling tickCalibration():**
+```cpp
+    // If calibration is active and a serial character is available, route it to handleCalibrationInput
+    if (calCtx.state != CalState::IDLE && Serial.available()) {
+        char c = Serial.read();
+        handleCalibrationInput(c);
+    }
+
+    tickCalibration();
+```
+
+**Full Example Integration:**
+```cpp
+void loop() {
+    // ...other variables, logic...
+
+    // Calibration input refactor (add these lines):
+    if (calCtx.state != CalState::IDLE && Serial.available()) {
+        char c = Serial.read();
+        handleCalibrationInput(c);
+    }
+
+    tickCalibration();
+
+    // ...rest of your loop logic, if any
+}
+```
+> Be sure to include `#include "src/workflows/workflows_contexts.h"` or wherever `calCtx` and related states are defined.
+
+---
+
+### 3. **Review and Update Comments for Clarity**
+
+Update any relevant comments in both `tickCalibration()` and your `loop()` to explain that:
+- User input is now directed exclusively through `handleCalibrationInput()`.
+- `tickCalibration()` only advances state based on timing and sensor logic.
+
+---
+
+### 4. **Sanity Check handleCalibrationInput**
+
+No changes are necessary if `handleCalibrationInput(char)` already handles all relevant states/inputs (WAIT_EMPTY, ADJUSTING, etc.).  
+If not, move the user-input logic that was previously in `tickCalibration` into the corresponding `handleCalibrationInput` state branch.
+
+---
+
+## Summary of Improved Flow
+
+- **loop()**:
+    - Reads and routes input to `handleCalibrationInput()` if calibration is active.
+    - Always calls `tickCalibration()` to advance the non-blocking state machine.
+
+- **handleCalibrationInput()**:
+    - Handles ALL user calibration input logic per-state.
+
+- **tickCalibration()**:
+    - Handles timeouts, sensor readings, and ordinary state transitions only.
+
+---
+
+## Resulting Advantages
+
+- **Single responsibility**: All calibration input logic in one place.
+- **Non-blocking**: `loop()` stays responsive.
+- **Easy to maintain** and reason about calibration workflow logic.
+
+---
+
+If you'd like an actual patch/diff for your project files, just ask!
+
+6) Extract SKIP handling from `tickTare()` on PropaneScale.ino into a dedicated
+input handler `handleStartupTareInput()` in the startup tare workflow module.
+
+DONE
+
+7) check if any scale.wait_ready_timeout usage is acceptable in web ble and/or wifi
+
+NO. All have been removed.
+
+8) AvgContext and ThresholdAvgContext are nearly identical.
+Keep the minimumThreshold field present (unused) to avoid changing the struct layout and externs; leaving it zero-initialized is fine.
+Update the declaration/definition where AvgContext avgCtx exists to ThresholdAvgContext avgCtx.
+Verify all call sites and externs in workflows_contexts.h and scale_io.cpp so symbols match.
+rename ThresholdAvgContext → AvgContext (single canonical type) for clearer intent.
+
+DONE
+
+9) get agent to propose but not implement:
+a reentrant averaging logic level and calibration threshold averaging.
+the level and workflow and 3 calibration workflows are never concurrent.
+the averaging helper operates on a caller-supplied context so multiple independent samplers can share the same implementation without globals.
+do not use a wrapper around non-blocking average units function.
+analyze existing usage of non-blocking average units function to ensure proposed reentrant will not cause any regression bugs.
+
+LEAVE FOR NOW
+
+10)  Ask agent to:
+a) Review level workflow pattern, calibration workflow pattern and startup tare pattern.
+b) Review input known weight, max propane, and tank workflow patterns
+c) review current runtime values, default eeprom, & help workflow patterns
+
+What I want to know is where respective patterns are "out of sync"
+and what ramifications are.
+
+TODO
+
+11) Startup tare timeout check: reading=0.00 lbs, baseline=0.00 lbs
+I don't need to see this if reading & baseline are within established zero params.
+I only need to see startup tare timeout check on negative weight or true positive weight
+
+LEAVE

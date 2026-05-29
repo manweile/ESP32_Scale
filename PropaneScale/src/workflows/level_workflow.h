@@ -1,14 +1,14 @@
 /**
  * @file level_workflow.h
  * @author Gerald Manweiler
- * 
+ *
  * @brief Declarations for the liquid level read workflow.
- * 
+ *
  * @details Declares the liquid level read workflow function and its associated tick function for advancing the workflow state machine.
- *  
+ *
  * @version 0.1
  * @date 2026-05-08
- * 
+ *
  * @copyright Copyright (c) 2026 Gerald Manweiler
  */
 
@@ -17,14 +17,13 @@
 // Declarations for level read workflow functions
 
 /**
- * @brief Handles input for the liquid level read workflow.
+ * @brief Handles serial input for the liquid level read workflow.
  *
- * @details When the level read workflow is active, this function processes incoming characters from the serial interface. 
- * It routes 'q' to cancel the workflow when waiting for tank placement or settling, 
- * and ignores newlines to prevent interference with command processing.
- * 
+ * @details Processes incoming characters while in liquid level workflow.
+ * Cancellation character is only acceptable input.
+ * Newlines are ignored to prevent interference with command processing.
+ *
  * @param incoming {char} The incoming character from the serial interface.
- *
  * @return {bool} Returns true if the input was handled by the level read workflow, false otherwise.
  *
  * @throws {none} This function does not throw exceptions.

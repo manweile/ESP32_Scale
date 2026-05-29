@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install arduino-cli
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | sh
+          sudo mv bin/arduino-cli /usr/local/bin/arduino-cli
+          arduino-cli version
+
+      - name: Cache Arduino15
+        uses: actions/cache@v4
+        with:
+          path: ~/.arduino15
+          key: ${{ runner.os }}-arduino15-${{ hashFiles('**/platform.txt', '**/library.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-arduino15-
+
+      - name: Configure arduino-cli
+        run: |
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32@3.3.4
+
+      - name: Install NimBLE-Arduino library
+        run: |
+          arduino-cli lib update-index
+          arduino-cli lib install "NimBLE-Arduino"
+          # Also ensure HX711 library is available for builds/tests
+          arduino-cli lib install "HX711"
+
+      - name: Show arduino-cli info
+        run: |
+          arduino-cli version
+          arduino-cli core list
+
+      - name: Clean build (verify full rebuild)
+        run: |
+          arduino-cli compile -v --clean --fqbn esp32:esp32:esp32thing PropaneScale
+
+      - name: Quick build
+        run: arduino-cli compile --fqbn esp32:esp32:esp32thing PropaneScale
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PropaneScale-build
+          path: PropaneScale/build/esp32.esp32.esp32thing/**/*.bin
