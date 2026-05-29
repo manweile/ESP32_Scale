@@ -134,9 +134,9 @@ static void transitionFromWaitEmpty()
     return;
   }
 
-  char buf[96];
+  char buf[128];
   unsigned long loadDetectSeconds = CONFIRM_TIMEOUT_MS / 1000UL;
-  snprintf(buf, sizeof(buf), "Waiting for weight placement on scale...\nLoad placement timeout: %lu seconds.\n", loadDetectSeconds);
+  snprintf(buf, sizeof(buf), "Waiting for weight placement on scale...\nSend 'q' to cancel.\nLoad placement timeout: %lu seconds.\n", loadDetectSeconds);
   queueSerialOutput(buf);
 
   calCtx.stateStartMs = millis();
@@ -377,11 +377,13 @@ void tickCalibration()
     if (!responsive) {
       const char* op = "calibration";
 
-      if (calCtx.mode == CalMode::AUTO) op = "automatic calibration";
-      else
-        if (calCtx.mode == CalMode::MANUAL) op = "manual calibration";
-        else
-          if (calCtx.mode == CalMode::REZERO) op = "re-zero";
+      if (calCtx.mode == CalMode::AUTO) {
+        op = "automatic calibration";
+      } else if (calCtx.mode == CalMode::MANUAL) {
+        op = "manual calibration";
+      } else if (calCtx.mode == CalMode::REZERO) {
+        op = "re-zero";
+      }
 
       printDiagnostic(op);
       calCtx.mode = CalMode::NONE;
@@ -394,58 +396,32 @@ void tickCalibration()
     scale.set_scale(calibrationFactor);
 
     // finish initialization depending on requested mode
-    if (calCtx.mode == CalMode::AUTO) {
-      char calPrompt[224];
+    {
+      const char* header = "Calibration";
+      const char* extraLine = "";
       unsigned long userConfirmSeconds = CONFIRM_TIMEOUT_MS / 1000UL;
-      snprintf(calPrompt, sizeof(calPrompt),
-               "\nAutomatic calibration mode\n"
-               "\nRemove all weight from scale.\n"
-               "Auto-detect is active.\n"
-               "Empty threshold: +/- %.2f lbs.\n"
-               "Send 'q' to cancel.\n"
-               "Confirmation timeout: %lu seconds.\n",
-               MINIMUM_LOAD_WEIGHT,
-               userConfirmSeconds);
-      queueSerialOutput(calPrompt);
 
-      calCtx.state = CalState::WAIT_EMPTY;
-      calCtx.stateStartMs = millis();
-      calCtx.measuredUnits = 0.0f;
-      return;
-    }
+      if (calCtx.mode == CalMode::AUTO) {
+        header = "Automatic calibration mode";
+      } else if (calCtx.mode == CalMode::MANUAL) {
+        header = "Manual calibration mode";
+      } else if (calCtx.mode == CalMode::REZERO) {
+        header = "Runtime re-zero requested.";
+        extraLine = "If reading is offset-biased, send 'z' to force re-zero after verifying empty scale.\n";
+      }
 
-    if (calCtx.mode == CalMode::MANUAL) {
-      char calPrompt[224];
-      unsigned long userConfirmSeconds = CONFIRM_TIMEOUT_MS / 1000UL;
-      snprintf(calPrompt, sizeof(calPrompt),
-               "\nManual calibration mode\n"
-               "\nRemove all weight from scale.\n"
-               "Auto-detect is active.\n"
-               "Empty threshold: +/- %.2f lbs.\n"
-               "Send 'q' to cancel.\n"
-               "Confirmation timeout: %lu seconds.\n",
-               MINIMUM_LOAD_WEIGHT,
-               userConfirmSeconds);
-      queueSerialOutput(calPrompt);
-
-      calCtx.state = CalState::WAIT_EMPTY;
-      calCtx.stateStartMs = millis();
-      return;
-    }
-
-    if (calCtx.mode == CalMode::REZERO) {
       char calPrompt[288];
-      unsigned long userConfirmSeconds = CONFIRM_TIMEOUT_MS / 1000UL;
       snprintf(calPrompt, sizeof(calPrompt),
-               "\nRuntime re-zero requested.\n"
-               "\nRemove all weight from scale.\n"
-               "Auto-detect is active.\n"
-               "Empty threshold: +/- %.2f lbs.\n"
-               "Send 'q' to cancel.\n"
-               "If reading is offset-biased, send 'z' to force re-zero after verifying empty scale.\n"
-               "Confirmation timeout: %lu seconds.\n",
-               MINIMUM_LOAD_WEIGHT,
-               userConfirmSeconds);
+           "\n%s\n"
+           "\nRemove all weight from scale.\n"
+           "Auto-detect is active.\n"
+           "Send 'q' to cancel.\n"
+           "%s"
+           "Confirmation timeout: %lu seconds.\n",
+           header,
+           extraLine,
+           userConfirmSeconds);
+
       queueSerialOutput(calPrompt);
 
       calCtx.state = CalState::WAIT_EMPTY;
@@ -462,39 +438,9 @@ void tickCalibration()
 
   // workflow - waiting on user to remove all weight from platen
   if (calCtx.state == CalState::WAIT_EMPTY) {
-    if (Serial.available()) {
-      char c = Serial.read();
-
-      // four possible wait for empty calibration workflows inputs:
-      // REZERO (quit cancel), AUTO, MANUAL, REZERO (force cancel)
-
-      if (c == 'q' || c == 'Q') {
-
-        if (calCtx.mode == CalMode::REZERO) {
-          // just cancel workflow, no state changes needed since runtime offset wasn't applied yet
-          Serial.println("Runtime re-zero cancelled.");
-        } else
-          if (calCtx.mode == CalMode::AUTO || calCtx.mode == CalMode::MANUAL) {
-            // restore the original factor for both AUTO and MANUAL cancellations
-            Serial.println("Calibration cancelled. Changes were not saved.");
-            calibrationFactor = calCtx.originalCalibrationFactor;
-            scale.set_scale(calibrationFactor);
-          }
-
-        calCtx.state = CalState::IDLE;
-        calCtx.mode  = CalMode::NONE;
-        return;
-      } else
-        if (calCtx.mode == CalMode::REZERO && (c == 'z' || c == 'Z')) {
-          // force-confirm empty condition and proceed with re-zero
-          Serial.println("Runtime re-zero force-confirmed by user.");
-          Serial.println();
-          transitionFromWaitEmpty();
-          return;
-        }
-
-      // else: ignore other keys here
-    }
+    // Serial input handling is centralized in `handleCalibrationInput()` and
+    // forwarded from the main loop when calibration workflows are active.
+    // Do not poll Serial here to avoid duplicating input handling logic.
 
     // Only check for empty at timeout, not on every tick
     if ((millis() - calCtx.stateStartMs) >= CONFIRM_TIMEOUT_MS) {

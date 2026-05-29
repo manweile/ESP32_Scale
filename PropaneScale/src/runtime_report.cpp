@@ -257,7 +257,6 @@ void currentRuntimeValues()
 {
   char report[512];
   int usedLength = 0;
-
   appendReportf(report, sizeof(report), usedLength,
                 "\n\n"
                 "Current Runtime Values\n"
@@ -265,7 +264,7 @@ void currentRuntimeValues()
                 "Calibration factor: %.2f\n"
                 "Known calibration weight: %.2f lbs\n"
                 "Max propane weight: %.2f lbs\n"
-                "Tank tare: %.2f lbs\n"
+                "Tank tare: %.2f lbs\n\n"
                 "Calibration mode: %d (%s)\n"
                 "Calibration state: %d (%s)\n"
                 "Level state: %d (%s)\n"
@@ -300,7 +299,7 @@ void eepromValues()
     return;
   }
 
-  queueSerialOutput("\nEEPROM Saved Values\n");
+  queueSerialOutput("\nEEPROM Saved Values\n\n");
 
   printEepromField("Calibration factor",
                    CAL_EEPROM_MAGIC_ADDR, CAL_EEPROM_MAGIC, CAL_EEPROM_VALUE_ADDR,
