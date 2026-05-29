@@ -2,6 +2,8 @@
 
 Compact ESP32-based propane tank scale that measures tank weight, subtracts the tank tare, and reports the propane weight and fill percentage.
 
+This version is serial monitor based, and serves as starting point for wifi and web ble versions.
+
 ## Versions
 
 1. Serial monitor
