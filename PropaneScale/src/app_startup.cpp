@@ -25,7 +25,7 @@
 #include "config.h"                                         // Configuration constants for the ESP32-based propane level scale
 #include "src/eeprom_store.h"                               // EEPROM storage functions
 #include "src/parsing_utils.h"                              // Utility functions for validating and parsing input values
-#include "src/runtime_report.h"                             // For printStartupSummary
+#include "src/runtime_report.h"                             // Runtime reporting functions
 #include "src/workflows/startup_tare_workflow.h"            // For computeThreshold
 
 // External Global State Variables and Functions
