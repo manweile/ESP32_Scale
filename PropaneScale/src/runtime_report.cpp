@@ -353,22 +353,3 @@ void helpMenu()
     queueSerialOutput(helpText);
   }
 }
-
-void printStartupSummary()
-{
-  char startupSummary[256];
-  int startupSummaryLen = snprintf(startupSummary,
-                                   sizeof(startupSummary),
-                                   "\nLoaded calibration factor from EEPROM: %.2f\n"
-                                   "Loaded known calibration weight from EEPROM: %.2f lbs\n"
-                                   "Loaded max propane weight from EEPROM: %.2f lbs\n"
-                                   "Loaded tank tare from EEPROM: %.2f lbs\n\n",
-                                   calibrationFactor,
-                                   knownWeight,
-                                   maxPropane,
-                                   tankTare);
-
-  if (startupSummaryLen > 0) {
-    queueSerialOutput(startupSummary);
-  }
-}
