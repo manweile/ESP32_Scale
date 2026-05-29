@@ -32,11 +32,10 @@ jobs:
           arduino-cli core update-index
           arduino-cli core install esp32:esp32@3.3.4
 
-      - name: Install NimBLE-Arduino library
+      - name: Install HX711 library
         run: |
           arduino-cli lib update-index
-          arduino-cli lib install "NimBLE-Arduino"
-          # Also ensure HX711 library is available for builds/tests
+          # ensure HX711 library is available for builds/tests
           arduino-cli lib install "HX711"
 
       - name: Show arduino-cli info
