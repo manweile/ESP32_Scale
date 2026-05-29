@@ -134,9 +134,9 @@ static void transitionFromWaitEmpty()
     return;
   }
 
-  char buf[96];
+  char buf[128];
   unsigned long loadDetectSeconds = CONFIRM_TIMEOUT_MS / 1000UL;
-  snprintf(buf, sizeof(buf), "Waiting for weight placement on scale...\nLoad placement timeout: %lu seconds.\n", loadDetectSeconds);
+  snprintf(buf, sizeof(buf), "Waiting for weight placement on scale...\nSend 'q' to cancel.\nLoad placement timeout: %lu seconds.\n", loadDetectSeconds);
   queueSerialOutput(buf);
 
   calCtx.stateStartMs = millis();
