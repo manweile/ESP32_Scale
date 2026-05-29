@@ -70,7 +70,7 @@ input_propane_weight.cpp: handlePropaneWeightInput
 input_tank_tare.cpp: handleTankTareInput
 level_workflow.cpp: handleLevelReadInput
 
-TODO 
+COMPLETED
 
 Note:
 refer to copilot session from May 21 on Github for moving Serial.available() out of tickCalibration.
@@ -243,11 +243,11 @@ the averaging helper operates on a caller-supplied context so multiple independe
 do not use a wrapper around non-blocking average units function.
 analyze existing usage of non-blocking average units function to ensure proposed reentrant will not cause any regression bugs.
 
-NOT SURE THIS NEEDED ANYMORE
+LEAVE FOR NOW
 
 10)  Ask agent to:
 a) Review level workflow pattern, calibration workflow pattern and startup tare pattern.
-b) Review input known weight, ma propane, and tank workflow patterns
+b) Review input known weight, max propane, and tank workflow patterns
 c) review current runtime values, default eeprom, & help workflow patterns
 
 What I want to know is where respective patterns are "out of sync"
