@@ -260,3 +260,30 @@ I don't need to see this if reading & baseline are within established zero param
 I only need to see startup tare timeout check on negative weight or true positive weight
 
 LEAVE
+
+12) review all printing logic!
+
+what costs more in ram/cycles:
+this kind of print pattern:
+Serial.print("Attempting STA connect to: ");
+Serial.println(WIFI_SSID);
+
+or this kind:
+char buf[128];
+unsigned long loadDetectSeconds = CONFIRM_TIMEOUT_MS / 1000UL;
+snprintf(buf, sizeof(buf), "Waiting for weight placement on scale...\nSend 'q' to cancel.\nLoad placement timeout: %lu seconds.\n", loadDetectSeconds);
+queueSerialOutput(buf);
+
+Short answer: the snprintf path costs more — both RAM (stack) and CPU cycles — than the two-call Serial.print/println approach.
+
+Why:
+
+RAM: snprintf(buf,128,...) allocates the full buffer on the stack (here 128 bytes) plus snprintf's internal temporaries. Two Serial.print calls use essentially no extra stack (they read the strings from flash/data).
+CPU: snprintf does parsing/formatting and integer -> ASCII conversion (divides/mods), which is relatively expensive. Two Serial.print calls do far less work (just stream the literal and the string/number to the driver).
+Additional cost caveat: if queueSerialOutput() copies the string into a queue/heap, that adds heap/RAM; multiple small prints may avoid a large transient copy but do more driver calls.
+Recommendation:
+
+If you only concatenate a literal and a number, prefer multiple Serial.print calls (use F("...") for flash-stored literals) to minimize stack and cycles:
+Serial.print(F("Waiting for weight placement on scale...\nSend 'q' to cancel.\nLoad placement timeout: "));
+Serial.println(loadDetectSeconds);
+Use snprintf only when you need complex formatting or a single contiguous string (or when you must queue a single buffer).
