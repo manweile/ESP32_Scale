@@ -1,12 +1,12 @@
-// Embedded single-file web UI for PropaneScale
 /**
  * @file web_root.h
  * @author Gerald Manweiler
- * 
+ *
  * @brief Defines the HTML content for the root page served by the ESP32 web server.
- * 
- * @details This file contains a raw string literal with the HTML, CSS, and JavaScript for the web interface of the PropaneScale project. The page displays telemetry data and provides buttons to trigger tare and calibration actions via the WiFi API.
- * 
+ *
+ * @details This file contains a raw string literal with the HTML, CSS, and JavaScript for the web interface of the PropaneScale project. 
+ * The page displays telemetry data and provides buttons to trigger tare and calibration actions via the WiFi API.
+ *
  * @version 0.1
  * @date 2024-06-01
  * @copyright Copyright (c) 2024 Gerald Manweiler
@@ -34,9 +34,15 @@ static const char ROOT_PAGE[] = R"rawliteral(
   <div class="card">
     <div><strong>Connection:</strong> ESP32 AP - PropaneScale</div>
     <div id="status">Loading telemetry...</div>
+    <!-- Only show connection and status lines; diagnostic fields remain in JSON telemetry -->
+    <div id="initEeprom" style="display:none;margin-top:6px;color:#333"></div>
+    <div id="initCal" style="display:none;margin-top:6px;color:#333"></div>
     <div id="levelPrompt" style="margin-top:8px;color:#333;font-weight:600;"></div>
+    <div id="startupPrompt" style="margin-top:8px;color:#0066aa;font-weight:700;"></div>
+    <pre id="startupReport" style="background:#fff8e1;padding:8px;border:1px solid #ffd54f"></pre>
     <pre id="telemetry">{}</pre>
     <div>
+      <button id="btnStartupCancel" style="display:none;margin-right:6px">Cancel Startup Tare</button>
       <button id="btnTare">Tare</button>
       <button id="btnLevel">Level Read</button>
       <button id="btnLevelCancel" style="display:none;margin-left:6px">Cancel</button>
@@ -110,13 +116,15 @@ static const char ROOT_PAGE[] = R"rawliteral(
               }
             }
 
-            if(j.report) {
-              // show persistent modal with OK button instead of alert
-              clearInterval(poll);
-              document.getElementById('btnLevelCancel').style.display = 'none';
-              document.getElementById('reportText').textContent = j.report;
-              document.getElementById('reportModal').style.display = 'block';
-            } else if(j.state === 'IDLE') {
+                  if(j.report) {
+                    // show persistent modal with OK button instead of alert
+                    clearInterval(poll);
+                    document.getElementById('btnLevelCancel').style.display = 'none';
+                    document.getElementById('reportText').textContent = j.report;
+                    // mark current report type so OK posts to the correct ack endpoint
+                    window.__currentReportType = 'level';
+                    document.getElementById('reportModal').style.display = 'block';
+                  } else if(j.state === 'IDLE') {
               // no report yet but idle
               clearInterval(poll);
               document.getElementById('btnLevelCancel').style.display = 'none';
@@ -149,6 +157,64 @@ static const char ROOT_PAGE[] = R"rawliteral(
         }
       });
 
+      // Startup tare polling and cancel
+      async function pollStartupStatus(){
+        try{
+          const r = await fetch('/api/startup/status');
+          if(!r.ok) return;
+          const j = await r.json();
+          // update startup prompt and report
+          document.getElementById('startupPrompt').textContent = j.prompt ? j.prompt : '';
+          document.getElementById('startupReport').textContent = j.report ? j.report : '';
+            if (j.state && j.state !== 'IDLE') {
+              document.getElementById('btnStartupCancel').style.display = 'inline-block';
+            } else {
+              document.getElementById('btnStartupCancel').style.display = 'none';
+            }
+
+            // If a startup report exists, show the shared modal and set ack target
+            if (j.report) {
+              document.getElementById('reportText').textContent = j.report;
+              window.__currentReportType = 'startup';
+              document.getElementById('reportModal').style.display = 'block';
+            }
+        }catch(e){ /* ignore */ }
+      }
+
+      // Poll the application-level status endpoint for init diagnostics and fields
+      async function pollAppStatus(){
+        try{
+          const r = await fetch('/api/app/status');
+          if(!r.ok) return;
+          const j = await r.json();
+          // startupReport may be null
+          document.getElementById('startupReport').textContent = j.startupReport ? j.startupReport : '';
+          // Keep diagnostic fields only inside the JSON block; do not surface them as separate lines
+          // If the app-level startupReport contains content, show modal for ack
+          if (j.startupReport) {
+            document.getElementById('reportText').textContent = j.startupReport;
+            window.__currentReportType = 'startup';
+            document.getElementById('reportModal').style.display = 'block';
+          }
+        }catch(e){ /* ignore */ }
+      }
+
+      document.getElementById('btnStartupCancel').addEventListener('click', async ()=>{
+        try{
+          const r = await fetch('/api/startup/cancel', {method:'POST'});
+          if(r.ok){ document.getElementById('status').textContent = 'Startup tare cancelled'; }
+          else { alert('Cancel failed'); }
+        }catch(e){ alert('Cancel failed'); }
+      });
+
+      // poll startup status once a second
+      setInterval(pollStartupStatus, 1000);
+      pollStartupStatus();
+
+      // poll app status (init diagnostics) once a second
+      setInterval(pollAppStatus, 1000);
+      pollAppStatus();
+
     // poll every second
     fetchTelemetry();
     setInterval(fetchTelemetry, 1000);
@@ -163,7 +229,9 @@ static const char ROOT_PAGE[] = R"rawliteral(
   <script>
     document.getElementById('reportOk').addEventListener('click', async ()=>{
       // Acknowledge the report server-side so subsequent polls don't return stale data
-      const ok = await postAction('/api/level/ack');
+      const reportType = window.__currentReportType || 'level';
+      const path = reportType === 'startup' ? '/api/startup/ack' : '/api/level/ack';
+      const ok = await postAction(path);
       if (!ok) {
         alert('Failed to acknowledge report');
         return;
@@ -172,6 +240,9 @@ static const char ROOT_PAGE[] = R"rawliteral(
       // clear persistent level prompt lines when user acknowledges
       levelLines = [];
       document.getElementById('levelPrompt').textContent = '';
+      // clear startup prompt/report display
+      document.getElementById('startupPrompt').textContent = '';
+      document.getElementById('startupReport').textContent = '';
       fetchTelemetry();
     });
   </script>

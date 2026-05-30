@@ -22,18 +22,21 @@
 
 // Local library headers
 #include "config.h"                                         // Configuration constants for the ESP32-based propane level scale
-#include "src/runtime_report.h"                             // For printStartupSummary
+#include "src/runtime_report.h"                             // Runtime reporting functions
 #include "src/scale_io.h"                                   // Input/output functions for user workflows and HX711 interactions
 #include "src/workflows/workflows_contexts.h"               // Context definitions for non-blocking workflows
 
 // External Global State Variables and Functions
-
 extern float calibrationFactor;                             // Calibration factor for converting raw HX711 readings to weight in pounds
 extern float knownWeight;                                   // Known weight for calibration
 extern float maxPropane;                                    // Maximum legal propane weight in pounds
 extern float tankTare;                                      // Tare weight of the empty propane tank in pounds
 extern HX711 scale;                                         // HX711 instance owned by PropaneScale.ino
 extern void helpMenu();                                     // Function to display the help menu
+
+// Global UI Variables
+String LastStartupPrompt = String("");                      /**< Short prompt shown to web UI during startup tare */
+String LastStartupReport = String("");                      /**< Final human-readable result or diagnostic for web UI */
 
 // Definitions for startup tare workflow functions
 
@@ -48,29 +51,6 @@ void beginStartupTare()
 
   startProbe(STARTUP_TIMEOUT_MS, LIVE_SAMPLES);
   tareCtx.probePending = true;
-}
-
-bool handleStartupTareInput(char incoming)
-{
-  // workflow - waiting for stable empty condition
-  if (tareCtx.state == TareState::WAIT_STABLE) {
-
-    if (incoming == 'q' || incoming == 'Q') {
-      Serial.println("Startup tare skipped by user.");
-      tareCtx.baselinePending = false;
-      tareCtx.state = TareState::SKIP;
-    } else
-      if (incoming != '\r' && incoming != '\n') {
-        Serial.print("Invalid startup tare key: '");
-        Serial.print(incoming);
-        Serial.println("'. Send 'q' to skip startup tare.");
-      }
-
-    // made it here, so input was handled, return true to indicate that
-    return true;
-  }
-
-  return false;
 }
 
 void tickTare()
@@ -93,7 +73,7 @@ void tickTare()
     tareCtx.probePending = false;
 
     if (!responsive) {
-      printDiagnostic("startup tare cancelled");
+      LastStartupReport = String("HX711 not ready during startup tare. Check HX711 wiring, power, and data pins (DOUT/CLK). Use web UI to diagnose.");
       tareCtx.state = TareState::SKIP;
       return;
     }
@@ -107,41 +87,33 @@ void tickTare()
     tareCtx.stateStartMs = millis();
     tareCtx.state = TareState::WAIT_STABLE;
 
-    printStartupSummary();
-
     const unsigned long autoTimeout = CONFIRM_TIMEOUT_MS / 1000UL;
-    char startupPrompt[256];
-    const int startupPromptLen = snprintf(startupPrompt,
-                        sizeof(startupPrompt),
-                        "Startup tare: waiting for empty scale...\n"
-                        "Auto-detect is active.\n"
-                        "Auto-detect timeout: %lu seconds.\n"
-                        "Send 'q' to skip startup tare.\n\n",
-                        autoTimeout);
 
-    if (startupPromptLen > 0 && startupPromptLen < static_cast<int>(sizeof(startupPrompt))) {
-      queueSerialOutput(startupPrompt);
-    }
+    // Build prompt using Arduino String concatenation so we avoid snprintf.
+    LastStartupPrompt = String("Startup tare: waiting for empty scale...\n")
+                       + "Auto-detect is active.\n"
+                       + "Auto-detect timeout: "
+                       + String(autoTimeout)
+                       + " seconds.\n"
+                       + "Use web UI to skip startup tare.\n\n";
   }
 
   // fast idle detect to save cycles when we are not in a tare workflow
   if (tareCtx.state == TareState::IDLE) return;
 
   if (tareCtx.state == TareState::TARE) {
-    Serial.println("Stable scale detected, proceeding with tare.");
     scale.tare();
     saveRuntimeTareOffset();
-    Serial.println("Scale is tared and ready.");
+    LastStartupReport = String("Scale is tared and ready.");
     tareCtx.state = TareState::IDLE;
-    helpMenu();
+    // helpMenu();
     return;
   }
 
   if (tareCtx.state == TareState::SKIP) {
-    Serial.println("Continuing without startup tare.");
-    Serial.println("Remove propane weight and send 'r' to re-zero when ready.");
+    LastStartupReport = String("Continuing without startup tare. Remove weight and use web UI to re-zero when ready.");
     tareCtx.state = TareState::IDLE;
-    helpMenu();
+    // helpMenu();
     return;
   }
 
@@ -161,7 +133,7 @@ void tickTare()
 
     // bad scale reading, warn user to check hardware and skip tare workflow
     if (!isfinite(base)) {
-      printDiagnostic("startup tare");
+      LastStartupReport = String("HX711 not ready during startup tare (invalid baseline). Check wiring.");
       tareCtx.state = TareState::SKIP;
       return;
     }
@@ -183,25 +155,23 @@ void tickTare()
 
     // bad scale reading, warn user to check hardware
     if (!isfinite(m)) {
-      printDiagnostic("startup tare");
+      LastStartupReport = String("HX711 not ready during startup tare (invalid reading). Check wiring.");
       tareCtx.state = TareState::SKIP;
       return;
     }
 
     char diag[128];
     snprintf(diag, sizeof(diag), "Startup tare timeout check: reading=%.2f lbs, baseline=%.2f lbs\n", m, tareCtx.baseline);
-    Serial.print(diag);
+    LastStartupReport = String(diag);
 
     // a negative reading is typically a false non-empty
     if (m < -1.0f) {
-      Serial.println("Negative weight detected at startup, auto re-zeroing (tare).");
       tareCtx.state = TareState::TARE;
       return;
     }
 
     // a true non-empty, but we require near-zero and sustained stability
     if (fabsf(m) >= startupNotEmptyThreshold) {
-      Serial.println("Startup tare timeout: scale not empty, skipping tare.");
       tareCtx.state = TareState::SKIP;
       return;
     }
@@ -211,10 +181,8 @@ void tickTare()
     bool stableLongEnough = tareCtx.stableChecks >= UNLOAD_CHECK_COUNT;
 
     if (nearZero && stableFromBaseline && stableLongEnough) {
-      Serial.println("Startup tare auto-confirmed empty at timeout.");
       tareCtx.state = TareState::TARE;
     } else {
-      Serial.println("Startup tare timeout: scale not-empty or unstable, skipping tare.");
       tareCtx.state = TareState::SKIP;
     }
 
@@ -232,7 +200,7 @@ void tickTare()
 
   // bad scale check to avoid long blocking if HX711 is not responding
   if (!isfinite(m)) {
-    printDiagnostic("startup tare");
+    LastStartupReport = String("HX711 not ready during startup tare (invalid reading). Check wiring.");
     tareCtx.state = TareState::SKIP;
     return;
   }
@@ -250,4 +218,18 @@ void tickTare()
   } else {
     tareCtx.stableChecks = 0;
   }
+}
+
+void webForceStartupTare()
+{
+  // Force immediate tare; tickTare() will perform the hardware tare on next tick.
+  tareCtx.state = TareState::TARE;
+  LastStartupReport = String("Startup tare forced via web UI.");
+}
+
+void webSkipStartupTare()
+{
+  tareCtx.baselinePending = false;
+  tareCtx.state = TareState::SKIP;
+  LastStartupReport = String("Startup tare skipped via web UI.");
 }

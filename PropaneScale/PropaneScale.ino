@@ -24,25 +24,26 @@
 #include "src/runtime_report.h"                             // Declarations for runtime reporting functions
 #include "src/scale_io.h"                                   // Input/output functions for user workflows and HX711 interactions
 #include "src/wifi.h"                                       // WiFi module interface for handling HTTP requests and providing telemetry
-#include "src/wifi_bridge.h"                                 /**< Declaration of global `g_wifi_callbacks` instance for WiFi handlers */
+#include "src/wifi_bridge.h"                                // Wifi callbacks for WiFi handlers
 #include "src/workflows/input_context.h"                    // Input context definitions for non-blocking user input workflows
 #include "src/workflows/input_known_weight.h"               // Handlers for the known weight update workflow
 #include "src/workflows/input_propane_weight.h"             // Handlers for the max propane weight update workflow
 #include "src/workflows/input_tank_tare.h"                  // Handlers for the tank tare weight update workflow
 #include "src/workflows/level_workflow.h"                   // Functions for the liquid level read workflow
-#include "src/workflows/workflows_contexts.h"               // Context definitions for non-blocking workflows
-#include "src/workflows/startup_tare_workflow.h"            // Functions for the startup tare workflow
 #include "src/workflows/calibration_workflow.h"             // Functions for the calibration workflow
+#include "src/workflows/startup_tare_workflow.h"            // Functions for the startup tare workflow
+#include "src/workflows/workflows_contexts.h"               // Context definitions for non-blocking workflows
 
 // Global Class Instances
 HX711 scale;                                                /**< HX711 instance for interacting with the load cell amplifier */
 
 // Global State Variables
 float calibrationFactor = 0.0f;                             /**< Calibration factor for converting raw HX711 readings to weight in pounds */
-bool eepromReady = false;                                   /**< Flag to track if EEPROM was successfully initialized */
-float knownWeight = 0.0f;                                   /**< Known weight for calibration */
-float maxPropane = 0.0f;                                    /**< Maximum legal propane weight in pounds */
-float tankTare = 0.0f;                                      /**< Tare weight of the empty propane tank in pounds */
+bool  eepromReady       = false;                            /**< Flag to track if EEPROM was successfully initialized */
+float knownWeight       = 0.0f;                             /**< Known weight for calibration */
+float maxPropane        = 0.0f;                             /**< Maximum legal propane weight in pounds */
+float tankTare          = 0.0f;                             /**< Tare weight of the empty propane tank in pounds */
+bool  wifiStarted       = false;                            /**< Tracks whether WiFi has been initialized */
 
 // State Machine Variables
 CalContext calCtx;                                          /**< Calibration context instance to hold state for calibration workflows */
@@ -82,18 +83,21 @@ void resetInputContext()
  */
 void setup()
 {
-  Serial.begin(BAUD);
+  // Ensure WiFi is initialized and operational before initializing the scale
+  // and beginning the startup tare workflow. The browser UI depends on WiFi.
+  registerCallbacks(&g_wifi_callbacks);
 
-  // Print app title once at startup
-  Serial.println();
-  Serial.println(APP_TITLE);
+  // Block until WiFi (STA or AP) is successfully started.
+  while (!initWifi()) {
+    // initWifi updates `LastStartupReport` on failure. Wait and retry.
+    delay(2000);
+  }
 
-  // initialize app from eeprom and begin startup tare workflow before registering WiFi callbacks, 
-  // since WiFi handlers may interact with app state and workflows initialized in those functions
+  wifiStarted = true;
+
+  // Now initialize application (EEPROM, scale) and begin startup tare
   initializeApp();
   beginStartupTare();
-  registerCallbacks(&g_wifi_callbacks);
-  initWifi();
 }
 
 /**
@@ -108,20 +112,20 @@ void loop()
 {
   // can't have any queued serial output before processing new input or advancing workflows
   drainQueuedSerialOutput();
-  // Service network events early to keep the HTTP server responsive
-  tickWifi();
+
+  // tickWifi to keep the HTTP server responsive and handle incoming requests,
+  // which may trigger workflow actions via callbacks
+  if (wifiStarted) {
+    tickWifi();
+  }
 
   // tickTare has to preempt all other workflows and user input until complete,
   // to guarantee stable tare condition before allowing any other interactions or workflows to run
   tickTare();
 
   if (tareCtx.state != TareState::IDLE) {
-    // While startup tare is active, keep serial reads centralized here and
-    // forward to the startup tare input handler so user can send 'q' to skip.
-    if (Serial.available()) {
-      char temp = Serial.read();
-      handleStartupTareInput(temp);
-    }
+    // While startup tare is active, do not process serial input; web UI drives
+    // any interactions. Just return so the startup workflow can continue.
     return;
   }
 

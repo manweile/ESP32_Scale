@@ -26,7 +26,7 @@
 #include "src/eeprom_store.h"                               // EEPROM storage functions
 #include "src/parsing_utils.h"                              // Utility functions for validating and parsing input values
 #include "src/runtime_report.h"                             // Runtime reporting functions
-#include "src/workflows/startup_tare_workflow.h"            // For computeThreshold
+#include "src/workflows/startup_tare_workflow.h"            // Functions for the startup tare workflow
 
 // External Global State Variables and Functions
 extern float calibrationFactor;
@@ -47,7 +47,7 @@ void initializeApp()
   // but we can still operate the scale with the default calibration factor and tare values,
   // so we should not halt execution, just warn the user and continue
   if (!eepromReady) {
-    Serial.println("EEPROM init failed. Using defaults.");
+    LastStartupReport = String("EEPROM init failed. Using defaults.");
     calibrationFactor = DEF_CALIBRATION_FACTOR;
     knownWeight       = DEF_KNOWN_WEIGHT;
     maxPropane        = DEF_MAX_PROPANE;
@@ -59,66 +59,67 @@ void initializeApp()
     // user can still get a valid reading with defaults ,
     // and can fix the corrupted value by re-saving it
 
-    // @todo replace each 'loaded' with exact var for value getting from eeprom
-    // ie loadedCalibrationFactor, loadedKnownWeight, etc.
-    // to make it more clear in the code that these are the loaded values being validated
-    // before assignment to the global state vars
+    float eepromCal = 0.0f;
 
-    float loaded = 0.0f;
-
-    if (loadFromEeprom(loaded, CAL_EEPROM_MAGIC_ADDR, CAL_EEPROM_MAGIC, CAL_EEPROM_VALUE_ADDR)
-        && isValidBoundedFloat(loaded, CAL_FACTOR_ABS_MIN, CAL_FACTOR_ABS_MAX, true)) {
-      calibrationFactor = loaded;
+    if (loadFromEeprom(eepromCal, CAL_EEPROM_MAGIC_ADDR, CAL_EEPROM_MAGIC, CAL_EEPROM_VALUE_ADDR)
+        && isValidBoundedFloat(eepromCal, CAL_FACTOR_ABS_MIN, CAL_FACTOR_ABS_MAX, true)) {
+      calibrationFactor = eepromCal;
     } else {
       calibrationFactor = DEF_CALIBRATION_FACTOR;
-      Serial.println("Calibration factor not found or invalid; using default.");
+      LastStartupReport = String("Calibration factor not found or invalid; using default.");
 
       if (!saveToEeprom(calibrationFactor, CAL_EEPROM_MAGIC, CAL_EEPROM_MAGIC_ADDR, CAL_EEPROM_VALUE_ADDR)) {
-        Serial.println(CALIBRATION_SAVE_FAILURE_MSG);
+        LastStartupReport = String(CALIBRATION_SAVE_FAILURE_MSG);
       } else {
-        Serial.println(CALIBRATION_SAVE_SUCCESS_MSG);
+        LastStartupReport = String(CALIBRATION_SAVE_SUCCESS_MSG);
       }
     }
 
-    if (loadFromEeprom(loaded, KNOWN_WEIGHT_EEPROM_MAGIC_ADDR, KNOWN_WEIGHT_EEPROM_MAGIC, KNOWN_WEIGHT_EEPROM_VALUE_ADDR)
-        && isValidBoundedFloat(loaded, MIN_PLAUSIBLE_WEIGHT, MAX_PROJECT_WEIGHT)) {
-      knownWeight = loaded;
+    float eepromKnownWeight = 0.0f;
+
+    if (loadFromEeprom(eepromKnownWeight, KNOWN_WEIGHT_EEPROM_MAGIC_ADDR, KNOWN_WEIGHT_EEPROM_MAGIC, KNOWN_WEIGHT_EEPROM_VALUE_ADDR)
+        && isValidBoundedFloat(eepromKnownWeight, MIN_PLAUSIBLE_WEIGHT, MAX_PROJECT_WEIGHT)) {
+      knownWeight = eepromKnownWeight;
     } else {
       knownWeight = DEF_KNOWN_WEIGHT;
-      Serial.println("Known calibration weight not found or invalid; using default.");
+      LastStartupReport = String("Known calibration weight not found or invalid; using default.");
 
       if (!saveToEeprom(knownWeight, KNOWN_WEIGHT_EEPROM_MAGIC, KNOWN_WEIGHT_EEPROM_MAGIC_ADDR, KNOWN_WEIGHT_EEPROM_VALUE_ADDR)) {
-        Serial.println("Failure saving default known calibration weight to EEPROM.");
+        LastStartupReport = String("Failure saving default known calibration weight to EEPROM.");
       } else {
-        Serial.println("Success saving default known calibration weight to EEPROM.");
+        LastStartupReport = String("Success saving default known calibration weight to EEPROM.");
       }
     }
-
-    if (loadFromEeprom(loaded, MAX_PROPANE_EEPROM_MAGIC_ADDR, MAX_PROPANE_EEPROM_MAGIC, MAX_PROPANE_EEPROM_VALUE_ADDR)
-        && isValidBoundedFloat(loaded, MIN_PLAUSIBLE_WEIGHT, MAX_PROJECT_WEIGHT)) {
-      maxPropane = loaded;
+    
+    float eepromMaxPropane = 0.0f;
+    
+    if (loadFromEeprom(eepromMaxPropane, MAX_PROPANE_EEPROM_MAGIC_ADDR, MAX_PROPANE_EEPROM_MAGIC, MAX_PROPANE_EEPROM_VALUE_ADDR)
+        && isValidBoundedFloat(eepromMaxPropane, MIN_PLAUSIBLE_WEIGHT, MAX_PROJECT_WEIGHT)) {
+      maxPropane = eepromMaxPropane;
     } else {
       maxPropane = DEF_MAX_PROPANE;
-      Serial.println("Max propane weight not found or invalid; using default.");
+      LastStartupReport = String("Max propane weight not found or invalid; using default.");
 
       if (!saveToEeprom(maxPropane, MAX_PROPANE_EEPROM_MAGIC, MAX_PROPANE_EEPROM_MAGIC_ADDR, MAX_PROPANE_EEPROM_VALUE_ADDR)) {
-        Serial.println("Failure saving default max propane weight to EEPROM.");
+        LastStartupReport = String("Failure saving default max propane weight to EEPROM.");
       } else {
-        Serial.println("Success saving default max propane weight to EEPROM.");
+        LastStartupReport = String("Success saving default max propane weight to EEPROM.");
       }
     }
 
-    if (loadFromEeprom(loaded, TARE_EEPROM_MAGIC_ADDR, TARE_EEPROM_MAGIC, TARE_EEPROM_VALUE_ADDR)
-        && isValidBoundedFloat(loaded, MIN_PLAUSIBLE_WEIGHT, MAX_PROJECT_WEIGHT)) {
-      tankTare = loaded;
+    float eepromTankTare = 0.0f;
+
+    if (loadFromEeprom(eepromTankTare, TARE_EEPROM_MAGIC_ADDR, TARE_EEPROM_MAGIC, TARE_EEPROM_VALUE_ADDR)
+        && isValidBoundedFloat(eepromTankTare, MIN_PLAUSIBLE_WEIGHT, MAX_PROJECT_WEIGHT)) {
+      tankTare = eepromTankTare;
     } else {
       tankTare = DEF_TANK_TARE;
-      Serial.println("Tank tare not found or invalid; using default.");
+      LastStartupReport = String("Tank tare not found or invalid; using default.");
 
       if (!saveToEeprom(tankTare, TARE_EEPROM_MAGIC, TARE_EEPROM_MAGIC_ADDR, TARE_EEPROM_VALUE_ADDR)) {
-        Serial.println("Failure saving default tank tare to EEPROM.");
+        LastStartupReport = String("Failure saving default tank tare to EEPROM.");
       } else {
-        Serial.println("Success saving default tank tare to EEPROM.");
+        LastStartupReport = String("Success saving default tank tare to EEPROM.");
       }
     }
   }

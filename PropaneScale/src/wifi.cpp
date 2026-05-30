@@ -21,16 +21,59 @@
 #include "config.h"
 #include "web_root.h"
 #include "wifi.h"
-#include "workflows/workflows_contexts.h"
-#include "src/workflows/level_workflow.h"
+#include "src/eeprom_store.h"
 #include "src/scale_io.h"
+#include "src/workflows/level_workflow.h"
+#include "src/workflows/startup_tare_workflow.h"
+#include "src/workflows/workflows_contexts.h"
 
 // Global Static Constants & Variables
-static const WifiCallbacks* g_callbacks = nullptr;          /**< Registered WifiCallbacks for bridging HTTP handlers to core workflows */
+static bool IsApMode = false;                               /**< WiFi running in AP mode to avoid STA reconnect attempts */
 static WebServer server(WEB_SERVER_PORT);                   /**< WebServer running on configured port to handle incoming HTTP requests */
-static bool g_isApMode = false;                             /**< WiFi running in AP mode to avoid STA reconnect attempts */
+static const WifiCallbacks* CALLBACKS = nullptr;            /**< Registered WifiCallbacks for bridging HTTP handlers to core workflows */
+
+// Externally declared UI variables
+extern String LastStartupReport;                            /**< Last human-readable report produced by the most recent startup tare attempt. */
+extern String LastStartupPrompt;                            /**< Last human-readable prompt produced by the most recent startup tare attempt. */
 
 // Definitions for HTTP handlers
+
+void handleAppStatus()
+{
+  // Return structured JSON with EEPROM and calibration fields requested by UI
+  extern bool eepromReady;
+  extern float calibrationFactor;
+  extern float knownWeight;
+  extern float maxPropane;
+  extern float tankTare;
+
+  // Attempt to read persisted runtime tare offset from EEPROM
+  float savedRuntimeOffset = 0.0f;
+  bool hasRuntimeOffset = loadFromEeprom(savedRuntimeOffset,
+                                        HX711_OFFSET_EEPROM_MAGIC_ADDR,
+                                        HX711_OFFSET_EEPROM_MAGIC,
+                                        HX711_OFFSET_EEPROM_VALUE_ADDR);
+
+  String payload = "{";
+  payload += "\"EEPROM ready\":" + String(eepromReady ? "true" : "false") + ",";
+  payload += "\"calibrationFactor\":" + String(calibrationFactor, 6) + ",";
+  payload += "\"knownWeight\":" + String(knownWeight, 3) + ",";
+  payload += "\"maxPropane\":" + String(maxPropane, 3) + ",";
+  payload += "\"tankTare\":" + String(tankTare, 3) + ",";
+
+  payload += "\"runtime tare offset\":";
+  if (hasRuntimeOffset) {
+    // Provide runtime offset as a number (counts)
+    // Print without decimal fraction for readability
+    payload += String(static_cast<long>(savedRuntimeOffset));
+  } else {
+    payload += "null";
+  }
+
+  payload += "}";
+
+  server.send(200, "application/json", payload);
+}
 
 void handleCalibrate()
 {
@@ -39,8 +82,8 @@ void handleCalibrate()
   if (server.hasArg("weight")) {
     weight = server.arg("weight").toFloat();
 
-    if (g_callbacks && g_callbacks->enqueue_calibrate) {
-      g_callbacks->enqueue_calibrate(weight);
+    if (CALLBACKS && CALLBACKS->enqueue_calibrate) {
+      CALLBACKS->enqueue_calibrate(weight);
     }
 
     server.send(200, "text/plain", "ok");
@@ -52,8 +95,8 @@ void handleCalibrate()
 void handleLevelAck()
 {
   // Clear server-side stored prompt/report so browser won't see stale values
-  lastLevelReport = String("");
-  lastLevelPrompt = String("");
+  LastLevelReport = String("");
+  LastLevelPrompt = String("");
   server.send(200, "application/json", "{\"success\":true}");
 }
 
@@ -66,7 +109,8 @@ void handleLevelCancel()
     levelCtx.thresholdPending = false;
     levelCtx.probePending = false;
     levelCtx.state = LevelState::IDLE;
-    lastLevelPrompt = String("Level read cancelled.");
+    LastLevelPrompt = String("Level read cancelled.");
+    LastLevelReport = String("Level read cancelled.");
   }
 
   server.send(200, "application/json", "{\"success\":true,\"active\":false,\"message\":\"Level read cancelled\"}");
@@ -107,19 +151,19 @@ void handleLevelStatus()
   payload += "\"avgPending\":" + String(levelCtx.avgPending ? "true" : "false") + ",";
   payload += "\"report\":";
 
-  if (lastLevelReport.length() == 0) {
+  if (LastLevelReport.length() == 0) {
     payload += "null";
   } else {
-    payload += "\"" + lastLevelReport + "\"";
+    payload += "\"" + LastLevelReport + "\"";
   }
 
   payload += ",";
   payload += "\"prompt\":";
 
-  if (lastLevelPrompt.length() == 0) {
+  if (LastLevelPrompt.length() == 0) {
     payload += "null";
   } else {
-    payload += "\"" + lastLevelPrompt + "\"";
+    payload += "\"" + LastLevelPrompt + "\"";
   }
 
   payload += "}";
@@ -134,18 +178,99 @@ void handleRoot()
 
 void handleSave()
 {
-  if (g_callbacks && g_callbacks->save_calibration) {
-    g_callbacks->save_calibration();
+  if (CALLBACKS && CALLBACKS->save_calibration) {
+    CALLBACKS->save_calibration();
   }
 
   server.send(200, "text/plain", "ok");
 }
 
+void handleStartupAck()
+{
+  // Acknowledge startup report so UI doesn't show stale results on next poll
+  LastStartupReport = String("");
+  LastStartupPrompt = String("");
+  server.send(200, "application/json", "{\"success\":true}\n");
+}
+
+void handleStartupCancel()
+{
+  // Cancel any in-progress startup tare workflow
+  if (tareCtx.state != TareState::IDLE) {
+    tareCtx.baselinePending = false;
+    tareCtx.probePending = false;
+    tareCtx.state = TareState::SKIP;
+    LastStartupReport = String("Startup tare cancelled.");
+  }
+
+  server.send(200, "application/json", "{\"success\":true}\n");
+}
+
+void handleStartupStatus()
+{
+  // Provide the current startup tare state, last prompt and last report for the browser UI
+  const char* stateName = "IDLE";
+
+  switch (tareCtx.state) {
+  case TareState::IDLE:
+    stateName = "IDLE";
+    break;
+  case TareState::WAIT_STABLE:
+    stateName = "WAIT_STABLE";
+    break;
+  case TareState::TARE:
+    stateName = "TARE";
+    break;
+  case TareState::SKIP:
+    stateName = "SKIP";
+    break;
+  }
+
+  String payload = "{";
+  payload += "\"state\":\"" + String(stateName) + "\",";
+  payload += "\"prompt\":";
+
+  if (LastStartupPrompt.length() == 0) {
+    payload += "null";
+  } else {
+    payload += "\"" + LastStartupPrompt + "\"";
+  }
+
+  payload += ",\"report\":";
+
+  if (LastStartupReport.length() == 0) {
+    payload += "null";
+  } else {
+    payload += "\"" + LastStartupReport + "\"";
+  }
+
+  payload += "}";
+
+  server.send(200, "application/json", payload);
+}
+
+void handleStartupSkip()
+{
+  if (CALLBACKS && CALLBACKS->skip_startup_tare) {
+    CALLBACKS->skip_startup_tare();
+  }
+
+  server.send(200, "application/json", "{\"success\":true}\n");
+}
+
+void handleStartupForce()
+{
+  if (CALLBACKS && CALLBACKS->force_startup_tare) {
+    CALLBACKS->force_startup_tare();
+  }
+
+  server.send(200, "application/json", "{\"success\":true}\n");
+}
 
 void handleTare()
 {
-  if (g_callbacks && g_callbacks->enqueue_tare) {
-    g_callbacks->enqueue_tare();
+  if (CALLBACKS && CALLBACKS->enqueue_tare) {
+    CALLBACKS->enqueue_tare();
   }
 
   server.send(200, "text/plain", "ok");
@@ -153,18 +278,18 @@ void handleTare()
 
 void handleTelemetry()
 {
-  if (g_callbacks && g_callbacks->get_telemetry_json) {
-    String payload = g_callbacks->get_telemetry_json();
+  if (CALLBACKS && CALLBACKS->get_telemetry_json) {
+    String payload = CALLBACKS->get_telemetry_json();
     server.send(200, "application/json", payload);
   } else {
     server.send(204, "text/plain", "");
   }
 }
 
-
-void initWifi()
+bool initWifi()
 {
-  
+  // Initialize serial here so only WiFi module performs console diagnostics
+  Serial.begin(BAUD);
   Serial.println(F("\nInitializing WiFi..."));
 
   // ESP32 is prone to weird issues if the SSID is invalid (including empty) and it's easy to misconfigure at compile time
@@ -193,45 +318,49 @@ void initWifi()
     delay(200);
   }
 
+  bool started = false;
+
   if (WiFi.status() == WL_CONNECTED) {
-    g_isApMode = false;
+    IsApMode = false;
     Serial.print(F("STA connected, IP: "));
     Serial.println(WiFi.localIP());
 
-    // we want mDNS in both AP and STA modes because it's a nice-to-have for users in either mode, 
-    //and it allows the same hostname to be used for both modes which is simpler and more intuitive
     if (MDNS.begin(MDNS_HOSTNAME)) {
       Serial.print(F("mDNS responder started: "));
       Serial.println(MDNS_HOSTNAME);
     }
-  } else {
-    Serial.println(F("STA connect failed, falling back to AP"));
-    WiFi.mode(WIFI_AP);
-    
-    // Disable modem sleep to improve AP stability
-    WiFi.setSleep(false);
-    g_isApMode = true;
 
-    // AP mode requires a different SSID 
-    // AP_PASSWORD must be at least 8 chars for WPA2; if it's empty or too short, start an open AP instead.
+    started = true;
+  } else {
+    Serial.println(F("STA connect failed, attempting AP mode"));
+    WiFi.mode(WIFI_AP);
+    WiFi.setSleep(false);
+
+    // Attempt to start AP (secure if password provided)
+    bool apOk = false;
     if (AP_PASSWORD[0] == '\0') {
-      if (WiFi.softAP(AP_SSID)) {
-        Serial.print(F("AP started, IP: "));
-        Serial.println(WiFi.softAPIP());
-      } else {
-        Serial.println(F("Failed to start AP"));
-      }
+      apOk = WiFi.softAP(AP_SSID);
     } else {
-      if (WiFi.softAP(AP_SSID, AP_PASSWORD)) {
-        Serial.print(F("AP started (secure), IP: "));
-        Serial.println(WiFi.softAPIP());
-      } else {
-        Serial.println(F("Failed to start AP"));
-      }
+      apOk = WiFi.softAP(AP_SSID, AP_PASSWORD);
+    }
+
+    if (apOk) {
+      IsApMode = true;
+      Serial.print(F("AP started, IP: "));
+      Serial.println(WiFi.softAPIP());
+      started = true;
+    } else {
+      Serial.println(F("Failed to start AP"));
+      started = false;
     }
   }
 
-  // Register routes
+  if (!started) {
+    LastStartupReport = String("WiFi initialization failed (STA and AP both failed).");
+    return false;
+  }
+
+  // Register routes and start server only if network is up
   server.on("/", HTTP_GET, handleRoot);
   server.on("/api/telemetry", HTTP_GET, handleTelemetry);
   server.on("/api/tare", HTTP_POST, handleTare);
@@ -241,14 +370,22 @@ void initWifi()
   server.on("/api/level/status", HTTP_GET, handleLevelStatus);
   server.on("/api/level/cancel", HTTP_POST, handleLevelCancel);
   server.on("/api/level/ack", HTTP_POST, handleLevelAck);
+  server.on("/api/startup/status", HTTP_GET, handleStartupStatus);
+  server.on("/api/startup/cancel", HTTP_POST, handleStartupCancel);
+  server.on("/api/startup/ack", HTTP_POST, handleStartupAck);
+  server.on("/api/startup/skip", HTTP_POST, handleStartupSkip);
+  server.on("/api/startup/force", HTTP_POST, handleStartupForce);
+  server.on("/api/app/status", HTTP_GET, handleAppStatus);
 
   server.begin();
   Serial.println(F("HTTP server started"));
+
+  return true;
 }
 
 void registerCallbacks(const WifiCallbacks* cb)
 {
-  g_callbacks = cb;
+  CALLBACKS = cb;
 }
 
 void tickWifi()
@@ -256,12 +393,12 @@ void tickWifi()
   server.handleClient();
 
   // If configured for STA mode and not running as AP, attempt a throttled reconnect when disconnected
-  if (!g_isApMode) {
+  if (!IsApMode) {
     if (WiFi.status() != WL_CONNECTED) {
       static unsigned long lastReconnect = 0;
       unsigned long now = millis();
 
-      if (now - lastReconnect > 5000) {
+      if (now - lastReconnect > 15000) {
         Serial.println(F("WiFi disconnected — attempting reconnect"));
         WiFi.reconnect();
         lastReconnect = now;
@@ -270,14 +407,14 @@ void tickWifi()
   }
 
   // When running as AP, periodically print diagnostics (station count, IP, free heap)
-  if (g_isApMode) {
+  if (IsApMode) {
     static unsigned long lastApDiag = 0;
     unsigned long now = millis();
 
-    if (now - lastApDiag > 5000) {
+    if (now - lastApDiag > 60000) {
       int stations = WiFi.softAPgetStationNum();
       IPAddress ip = WiFi.softAPIP();
-      Serial.print(F("AP status — IP: "));
+      Serial.print(F("AP status IP: "));
       Serial.println(ip);
       Serial.print(F("AP stations connected: "));
       Serial.println(stations);

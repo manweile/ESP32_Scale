@@ -210,6 +210,13 @@ void drainQueuedSerialOutput()
     bytesToWrite = static_cast<size_t>(availableBytes);
   }
 
+  // Cap maximum written bytes per loop to avoid long blocking periods that can starve WiFi
+  const size_t MAX_WRITE_PER_TICK = 64;
+
+  if (bytesToWrite > MAX_WRITE_PER_TICK) {
+    bytesToWrite = MAX_WRITE_PER_TICK;
+  }
+
   // reinterpret the char buffer for Serial.write, which expects a byte buffer
   size_t writtenBytes = Serial.write(reinterpret_cast<const uint8_t*>(serialQueue + serialOffset), bytesToWrite);
   serialOffset += writtenBytes;

@@ -1,18 +1,18 @@
 /**
  * @file wifi_bridge.cpp
  * @author Gerald Manweiler
- * 
+ *
  * @brief Concrete WifiCallbacks implementation that bridges HTTP handlers to core workflows.
- * 
+ *
  * @details This file defines the functions that will be called by the WiFi module's HTTP handlers,
  * and implements the logic to bridge those calls to the core workflow functions defined in the main application.
- * 
+ *
  * @version 0.1
  * @date 2024-06-01
  * @copyright Copyright (c) 2024 Gerald Manweiler
  */
 
- // Standard library headers
+// Standard library headers
 #include <Arduino.h>
 
 // Third party library headers
@@ -35,17 +35,20 @@ extern float tankTare;
 
 /**
  * @brief Global instance of WifiCallbacks used by the core to register callback functions.
- * 
- * @details This struct instance contains function pointers to the implementations defined above, 
+ *
+ * @details This struct instance contains function pointers to the implementations defined above,
  * which bridge the WiFi HTTP handlers to the core workflow functions.
- * By defining this as a global instance, 
+ * By defining this as a global instance,
  * it can be easily registered with the WiFi module during setup without tight coupling between the modules.
  */
+// Global callbacks including startup tare control (skip/force)
 extern "C" const WifiCallbacks g_wifi_callbacks = {
   enqueueCalibrate,
   enqueueTare,
   getTelemetry,
-  saveCalibration
+  saveCalibration,
+  skipStartupTare,
+  forceStartupTare
 };
 
 // Definitions for WiFi callback implementations
@@ -83,4 +86,15 @@ void saveCalibration()
 {
   // Save using the same constants used elsewhere in the codebase
   saveToEeprom(calibrationFactor, CAL_EEPROM_MAGIC, CAL_EEPROM_MAGIC_ADDR, CAL_EEPROM_VALUE_ADDR);
+}
+
+void skipStartupTare()
+{
+  // Bridge the HTTP handler into the startup tare workflow
+  webSkipStartupTare();
+}
+
+void forceStartupTare()
+{
+  webForceStartupTare();
 }

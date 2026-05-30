@@ -18,7 +18,7 @@
 #include <stdio.h>
 
 // Third party library headers
-#include "HX711.h"                                       // HX711 library for scale type declaration
+#include "HX711.h"                                          // HX711 library for scale type declaration
 
 // Local library headers
 #include "config.h"                                         // Configuration constants for the ESP32-based propane level scale
@@ -32,8 +32,8 @@ extern float tankTare;                                      // Tare weight of th
 extern HX711 scale;                                         // HX711 instance owned by PropaneScale.ino
 
 // Global state variables for level read workflow
-String lastLevelReport = "";                                /**< Last human-readable report produced by the most recent level read attempt. */
-String lastLevelPrompt = "";                                /**< Last short prompt/message associated with an active or recent level read. */
+String LastLevelReport = "";                                /**< Last human-readable report produced by the most recent level read attempt. */
+String LastLevelPrompt = "";                                /**< Last short prompt/message associated with an active or recent level read. */
 
 // Definitions for level read workflow functions
 
@@ -44,6 +44,7 @@ bool handleLevelReadInput(char incoming)
 
     if (incoming == 'q' || incoming == 'Q') {
       Serial.println("Level read cancelled.");
+      LastLevelReport = String("Level read cancelled.");
       levelCtx.avgPending = false;
       cancelThresholdDetect();
       levelCtx.thresholdPending = false;
@@ -101,6 +102,7 @@ void tickLevelRead()
     if (!responsive) {
       printDiagnostic("level read");
       Serial.println("Level read cancelled.");
+      LastLevelReport = String("Level read cancelled.");
       levelCtx.state = LevelState::IDLE;
       return;
     }
@@ -122,7 +124,7 @@ void tickLevelRead()
              "Send 'q' to cancel.\n",
              loadDetectSeconds);
     queueSerialOutput(levelPrompt);
-    lastLevelPrompt = String("Place propane tank on scale. Waiting for tank placement...");
+    LastLevelPrompt = String("Place propane tank on scale. Waiting for tank placement...");
   }
 
   // workflow - waiting for load placement
@@ -132,6 +134,9 @@ void tickLevelRead()
     // if it's just a slow read, we'll check again on the next tick
     if ((millis() - levelCtx.stateStartMs) >= CONFIRM_TIMEOUT_MS) {
       Serial.println("Tank placement timed out; cancelled.");
+      // Record a user-visible report so web UI clients see the timeout
+      LastLevelReport = String("Tank placement timed out; cancelled.");
+      LastLevelPrompt = String("Tank placement timed out.");
       levelCtx.avgPending = false;
       cancelThresholdDetect();
       levelCtx.thresholdPending = false;
@@ -162,6 +167,7 @@ void tickLevelRead()
     if (!isfinite(measuredUnits)) {
       printDiagnostic("tank placement detection");
       Serial.println("Level read cancelled.");
+      LastLevelReport = String("Level read cancelled.");
       levelCtx.avgPending = false;
       cancelThresholdDetect();
       levelCtx.thresholdPending = false;
@@ -178,7 +184,7 @@ void tickLevelRead()
       levelCtx.avgPending = false;
       levelCtx.stateStartMs = millis();
       levelCtx.state = LevelState::SETTLING;
-      lastLevelPrompt = String("Tank detected. Settling...");
+      LastLevelPrompt = String("Tank detected. Settling...");
     }
 
     return;
@@ -204,7 +210,7 @@ void tickLevelRead()
     if (!levelCtx.avgPending) {
       levelCtx.avgPending = true;
       Serial.println("Reading tank weight...");
-      lastLevelPrompt = String("Reading tank weight...");
+      LastLevelPrompt = String("Reading tank weight...");
     }
 
     // averaging still in progress continue next tick
@@ -220,6 +226,7 @@ void tickLevelRead()
     if (!isfinite(rawWeight)) {
       printDiagnostic("final tank reading");
       Serial.println("Level read cancelled.");
+      LastLevelReport = String("Level read cancelled.");
       levelCtx.state = LevelState::IDLE;
       return;
     }
@@ -241,9 +248,10 @@ void tickLevelRead()
     Serial.print(buf);
 
     // Save human-readable report for web UI and external monitors & trim trailing newline for JSON safety
-    lastLevelReport = String(buf);
-    if (lastLevelReport.length() > 0 && lastLevelReport.charAt(lastLevelReport.length()-1) == '\n') {
-      lastLevelReport.remove(lastLevelReport.length()-1);
+    LastLevelReport = String(buf);
+
+    if (LastLevelReport.length() > 0 && LastLevelReport.charAt(LastLevelReport.length() - 1) == '\n') {
+      LastLevelReport.remove(LastLevelReport.length() - 1);
     }
 
     // external monitors can observe workflow result
@@ -251,7 +259,7 @@ void tickLevelRead()
       String payload = "{";
       payload += "\"state\":\"IDLE\",";
       payload += "\"avgPending\":false,";
-      payload += "\"report\":\"" + lastLevelReport + "\"";
+      payload += "\"report\":\"" + LastLevelReport + "\"";
       payload += "}";
       Serial.println(payload);
     }

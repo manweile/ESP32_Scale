@@ -210,6 +210,8 @@ typedef struct WifiCallbacks {
   void (*enqueue_tare)();
   String (*get_telemetry_json)();
   void (*save_calibration)();
+  void (*skip_startup_tare)();
+  void (*force_startup_tare)();
 } WifiCallbacks;
 
 // External global State Variables

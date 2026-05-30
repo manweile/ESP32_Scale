@@ -12,10 +12,19 @@
 
 #pragma once
 
-// Forward Declarations
+// Wifi Forward Typedef Declaration
 typedef struct WifiCallbacks WifiCallbacks;                 /**< Forward declaration of WifiCallbacks struct for use in function declarations */
 
 // Declarations for WiFi module functions
+
+/**
+ * @brief Return application startup status (GET /api/app/status).
+ *
+ * @details Returns a JSON object containing the `LastStartupReport` string so the
+ * web UI can display initialization diagnostics and status messages produced
+ * during app startup.
+ */
+void handleAppStatus();
 
 /**
  * @brief Handles requests to the calibrate URL ("/api/calibrate").
@@ -86,6 +95,43 @@ void handleRoot();
 void handleSave();
 
 /**
+ * @brief Acknowledge the startup tare report (POST /api/startup/ack).
+ *
+ * @details Clears any stored startup prompt and report on the server so the browser UI
+ * does not display stale results on subsequent polls. Responds with a JSON success object.
+ */
+void handleStartupAck();
+
+/**
+ * @brief Cancel any in-progress startup tare workflow (POST /api/startup/cancel).
+ *
+ * @details Requests cancellation of the startup tare workflow. The server will update
+ * the workflow state and stored report/prompt appropriately and respond with a JSON
+ * acknowledgement.
+ */
+void handleStartupCancel();
+
+/**
+ * @brief Skip the startup tare via HTTP (POST /api/startup/skip).
+ */
+void handleStartupSkip();
+
+/**
+ * @brief Force the startup tare via HTTP (POST /api/startup/force).
+ */
+void handleStartupForce();
+
+/**
+ * @brief Return startup tare workflow status, prompt, and report (GET /api/startup/status).
+ *
+ * @details Returns a small JSON object describing the current startup tare state and any
+ * last prompt or report written by the workflow. Intended for polling by the browser UI
+ * during headless startup interactions.
+ */
+void handleStartupStatus();
+
+
+/**
  * @brief Handles requests to the tare URL ("/api/tare").
  *
  * @details Enqueues a tare operation to zero the scale. This operation is non-blocking and
@@ -113,7 +159,17 @@ void handleTelemetry();
  *
  * @throws {none} This function does not throw exceptions.
  */
-void initWifi();
+/**
+ * @brief Initialize WiFi and start HTTP server.
+ *
+ * @details Attempts to connect to a WiFi network in station mode first. If that fails, it falls back to access point mode. Once the network is up, it registers HTTP routes and starts the server. Updates the `LastStartupReport` variable with any error messages encountered during initialization for display in the web UI.
+ * This function blocks until WiFi is successfully initialized (either STA or AP mode) to ensure the web interface is available as soon as setup() completes.
+ * 
+ * @return true if WiFi (STA or AP) was successfully started and HTTP server is running; false otherwise.
+ * 
+ * @throws {none} This function does not throw exceptions. It handles errors by updating the `LastStartupReport` variable and returning false on failure.
+ */
+bool initWifi();
 
 /**
  * @brief Registers callback functions for WiFi events.
