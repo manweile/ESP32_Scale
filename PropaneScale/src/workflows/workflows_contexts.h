@@ -203,7 +203,7 @@ struct TareContext {
  *
  * @brief Struct of function pointers for callbacks from WiFi handlers to workflows.
  *
- * @details Provides a way for the web server handlers to interact with the workflow logic without tight coupling, allowing for cleaner separation of concerns and easier testing.
+ * @details Provides a way for the web server handlers to interact with the workflow logic without tight coupling.
  */
 typedef struct WifiCallbacks {
   void (*enqueue_calibrate)(float knownWeight);

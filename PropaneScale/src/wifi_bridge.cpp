@@ -33,15 +33,7 @@ extern float maxPropane;
 extern HX711 scale;
 extern float tankTare;
 
-/**
- * @brief Global instance of WifiCallbacks used by the core to register callback functions.
- *
- * @details This struct instance contains function pointers to the implementations defined above,
- * which bridge the WiFi HTTP handlers to the core workflow functions.
- * By defining this as a global instance,
- * it can be easily registered with the WiFi module during setup without tight coupling between the modules.
- */
-// Global callbacks including startup tare control (skip/force)
+// Global Callbacks
 extern "C" const WifiCallbacks g_wifi_callbacks = {
   enqueueCalibrate,
   enqueueTare,
@@ -74,9 +66,9 @@ String getTelemetry()
   s += ",\"knownWeight\":" + String(knownWeight, 2);
   s += ",\"maxPropane\":" + String(maxPropane, 2);
   s += ",\"tankTare\":" + String(tankTare, 2);
-  // Include the HX711 runtime tare offset (raw counts) for diagnostics.
-  // Read the saved runtime offset from EEPROM to avoid calling into the HX711
-  // driver from an HTTP handler (which may block).
+
+  // Include the HX711 runtime tare offset (raw counts) for diagnostics
+  // Read from EEPROM to avoid blocking caused by calling into the HX711 driver from an HTTP handler
   float savedRuntimeOffset = 0.0f;
   bool hasRuntimeOffset = loadFromEeprom(savedRuntimeOffset,
                                          HX711_OFFSET_EEPROM_MAGIC_ADDR,
