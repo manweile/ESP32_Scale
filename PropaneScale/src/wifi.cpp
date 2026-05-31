@@ -91,23 +91,6 @@ void handleAppStatus(AsyncWebServerRequest* request)
   request->send(200, "application/json", payload);
 }
 
-void handleCalibrate(AsyncWebServerRequest* request)
-{
-  float weight = 0.0f;
-
-  if (request->hasArg("weight")) {
-    weight = request->arg("weight").toFloat();
-
-    if (CALLBACKS && CALLBACKS->enqueue_calibrate) {
-      CALLBACKS->enqueue_calibrate(weight);
-    }
-
-    request->send(200, "text/plain", "ok");
-  } else {
-    request->send(400, "text/plain", "missing weight param");
-  }
-}
-
 void handleLevelAck(AsyncWebServerRequest* request)
 {
   // Clear server-side stored prompt/report so browser won't see stale values
@@ -192,33 +175,11 @@ void handleRoot(AsyncWebServerRequest* request)
   request->send(200, "text/html", ROOT_PAGE);
 }
 
-void handleSave(AsyncWebServerRequest* request)
-{
-  if (CALLBACKS && CALLBACKS->save_calibration) {
-    CALLBACKS->save_calibration();
-  }
-
-  request->send(200, "text/plain", "ok");
-}
-
 void handleStartupAck(AsyncWebServerRequest* request)
 {
   // Acknowledge startup report so UI doesn't show stale results on next poll
   LastStartupReport = String("");
   LastStartupPrompt = String("");
-  request->send(200, "application/json", "{\"success\":true}\n");
-}
-
-void handleStartupCancel(AsyncWebServerRequest* request)
-{
-  // Cancel any in-progress startup tare workflow
-  if (tareCtx.state != TareState::IDLE) {
-    tareCtx.baselinePending = false;
-    tareCtx.probePending = false;
-    tareCtx.state = TareState::SKIP;
-    LastStartupReport = String("Startup tare cancelled.");
-  }
-
   request->send(200, "application/json", "{\"success\":true}\n");
 }
 
@@ -266,33 +227,6 @@ void handleStartupStatus(AsyncWebServerRequest* request)
   payload += "}";
 
   request->send(200, "application/json", payload);
-}
-
-void handleStartupSkip(AsyncWebServerRequest* request)
-{
-  if (CALLBACKS && CALLBACKS->skip_startup_tare) {
-    CALLBACKS->skip_startup_tare();
-  }
-
-  request->send(200, "application/json", "{\"success\":true}\n");
-}
-
-void handleStartupForce(AsyncWebServerRequest* request)
-{
-  if (CALLBACKS && CALLBACKS->force_startup_tare) {
-    CALLBACKS->force_startup_tare();
-  }
-
-  request->send(200, "application/json", "{\"success\":true}\n");
-}
-
-void handleTare(AsyncWebServerRequest* request)
-{
-  if (CALLBACKS && CALLBACKS->enqueue_tare) {
-    CALLBACKS->enqueue_tare();
-  }
-
-  request->send(200, "text/plain", "ok");
 }
 
 void handleTelemetry(AsyncWebServerRequest* request)
@@ -355,21 +289,13 @@ bool initWifi()
   // Register routes now; start HTTP server later in tickWifi() once network is up
   server.on("/", HTTP_GET, handleRoot);
   server.on("/api/telemetry", HTTP_GET, handleTelemetry);
-  server.on("/api/tare", HTTP_POST, handleTare);
-  server.on("/api/calibrate", HTTP_POST, handleCalibrate);
-  server.on("/api/save", HTTP_POST, handleSave);
   server.on("/api/level", HTTP_POST, handleLevelStart);
   server.on("/api/level/status", HTTP_GET, handleLevelStatus);
   server.on("/api/level/cancel", HTTP_POST, handleLevelCancel);
   server.on("/api/level/ack", HTTP_POST, handleLevelAck);
   server.on("/api/startup/status", HTTP_GET, handleStartupStatus);
-  server.on("/api/startup/cancel", HTTP_POST, handleStartupCancel);
   server.on("/api/startup/ack", HTTP_POST, handleStartupAck);
-  server.on("/api/startup/skip", HTTP_POST, handleStartupSkip);
-  server.on("/api/startup/force", HTTP_POST, handleStartupForce);
   server.on("/api/app/status", HTTP_GET, handleAppStatus);
-
-  // Do not call server.begin() here to avoid blocking in setup(); tickWifi() will start the server
 
   return true;
 }

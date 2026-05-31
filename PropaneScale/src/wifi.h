@@ -31,20 +31,6 @@ typedef struct WifiCallbacks WifiCallbacks;                 /**< WifiCallbacks s
 void handleAppStatus(AsyncWebServerRequest* request);
 
 /**
- * @brief Handles requests to the calibrate URL ("/api/calibrate").
- *
- * @details Expects a POST request with a "weight" parameter indicating the known weight for calibration. Enqueues a calibration operation using the provided weight by calling the appropriate callback function registered in the WifiCallbacks struct.
- * Responds with a simple "ok" message on success, or an error message if the required parameter is missing.
- * This allows the web interface to trigger a calibration without blocking the main loop or interfering with other workflows.
- * It handles errors by responding with appropriate HTTP status codes and messages.
- *
- * @param request [AsyncWebServerRequest*] Pointer to the AsyncWebServerRequest object representing the incoming HTTP request.
- *
- * @throws {none} This function does not throw exceptions.
- */
-void handleCalibrate(AsyncWebServerRequest* request);
-
-/**
  * @brief Acknowledges the completion of a liquid level read workflow (POST /api/level/ack).
  *
  * @details Clears the server-side stored prompt and report so that the browser does not see stale values.
@@ -103,17 +89,6 @@ void handleLevelStatus(AsyncWebServerRequest* request);
 void handleRoot(AsyncWebServerRequest* request);
 
 /**
- * @brief Handles requests to the save URL ("/api/save").
- *
- * @details Enqueues a save operation to persist the current calibration factor.
- *
- * @param request [AsyncWebServerRequest*] Pointer to the AsyncWebServerRequest object representing the incoming HTTP request.
- *
- * @throws {none} This function does not throw exceptions.
- */
-void handleSave(AsyncWebServerRequest* request);
-
-/**
  * @brief Acknowledge the startup tare report (POST /api/startup/ack).
  *
  * @details Clears any stored startup prompt and report on the server so the browser UI
@@ -124,43 +99,6 @@ void handleSave(AsyncWebServerRequest* request);
  * @throws {none} This function does not throw exceptions.
  */
 void handleStartupAck(AsyncWebServerRequest* request);
-
-/**
- * @brief Cancel any in-progress startup tare workflow (POST /api/startup/cancel).
- *
- * @details Requests cancellation of the startup tare workflow. The server will update
- * the workflow state and stored report/prompt appropriately and respond with a JSON
- * acknowledgement.
- *
- * @param request [AsyncWebServerRequest*] Pointer to the AsyncWebServerRequest object representing the incoming HTTP request.
- *
- * @throws {none} This function does not throw exceptions.
- */
-void handleStartupCancel(AsyncWebServerRequest* request);
-
-/**
- * @brief Skip the startup tare via HTTP (POST /api/startup/skip).
- *
- * @details Requests skipping of the startup tare workflow. The server will update the workflow
- * state appropriately and respond with a JSON acknowledgement.
- *
- * @param request [AsyncWebServerRequest*] Pointer to the AsyncWebServerRequest object representing the incoming HTTP request.
- *
- * @throws {none} This function does not throw exceptions.
- */
-void handleStartupSkip(AsyncWebServerRequest* request);
-
-/**
- * @brief Force the startup tare via HTTP (POST /api/startup/force).
- *
- * @details Requests forcing of the startup tare workflow. The server will update the workflow
- * state appropriately and respond with a JSON acknowledgement.
- *
- * @param request [AsyncWebServerRequest*] Pointer to the AsyncWebServerRequest object representing the incoming HTTP request.
- *
- * @throws {none} This function does not throw exceptions.
- */
-void handleStartupForce(AsyncWebServerRequest* request);
 
 /**
  * @brief Return startup tare workflow status, prompt, and report (GET /api/startup/status).
@@ -174,19 +112,6 @@ void handleStartupForce(AsyncWebServerRequest* request);
  * @throws {none} This function does not throw exceptions.
  */
 void handleStartupStatus(AsyncWebServerRequest* request);
-
-
-/**
- * @brief Handles requests to the tare URL ("/api/tare").
- *
- * @details Enqueues a tare operation to zero the scale. This operation is non-blocking and
- * will be processed by the core workflow.
- *
- * @param request [AsyncWebServerRequest*] Pointer to the AsyncWebServerRequest object representing the incoming HTTP request.
- *
- * @throws {none} This function does not throw exceptions.
- */
-void handleTare(AsyncWebServerRequest* request);
 
 /**
  * @brief Handles requests to the telemetry URL ("/api/telemetry").

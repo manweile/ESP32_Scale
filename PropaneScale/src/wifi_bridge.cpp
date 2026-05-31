@@ -35,27 +35,10 @@ extern float tankTare;
 
 // Global Callbacks
 extern "C" const WifiCallbacks g_wifi_callbacks = {
-  enqueueCalibrate,
-  enqueueTare,
-  getTelemetry,
-  saveCalibration,
-  skipStartupTare,
-  forceStartupTare
+  getTelemetry
 };
 
 // Definitions for WiFi callback implementations
-
-void enqueueCalibrate(float known)
-{
-  knownWeight = known;
-  automaticCalibration();
-}
-
-void enqueueTare()
-{
-  // reZero() is non-blocking and will progress via tickCalibration()
-  reZero();
-}
 
 String getTelemetry()
 {
@@ -86,21 +69,4 @@ String getTelemetry()
   s += "}";
 
   return s;
-}
-
-void saveCalibration()
-{
-  // Save using the same constants used elsewhere in the codebase
-  saveToEeprom(calibrationFactor, CAL_EEPROM_MAGIC, CAL_EEPROM_MAGIC_ADDR, CAL_EEPROM_VALUE_ADDR);
-}
-
-void skipStartupTare()
-{
-  // Bridge the HTTP handler into the startup tare workflow
-  webSkipStartupTare();
-}
-
-void forceStartupTare()
-{
-  webForceStartupTare();
 }

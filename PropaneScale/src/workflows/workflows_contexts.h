@@ -206,12 +206,7 @@ struct TareContext {
  * @details Provides a way for the web server handlers to interact with the workflow logic without tight coupling.
  */
 typedef struct WifiCallbacks {
-  void (*enqueue_calibrate)(float knownWeight);
-  void (*enqueue_tare)();
   String (*get_telemetry_json)();
-  void (*save_calibration)();
-  void (*skip_startup_tare)();
-  void (*force_startup_tare)();
 } WifiCallbacks;
 
 // External global State Variables

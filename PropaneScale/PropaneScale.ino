@@ -83,21 +83,20 @@ void resetInputContext()
  */
 void setup()
 {
-  // Ensure WiFi is initialized and operational before initializing the scale
-  // and beginning the startup tare workflow. The browser UI depends on WiFi.
+  // Wifi and web ui are integral to the user experience of this project,
+  // so initialize those first before doing anything else
   registerCallbacks(&g_wifi_callbacks);
 
   // Block until WiFi (STA or AP) is successfully started.
   while (!initWifi()) {
-    // initWifi updates `LastStartupReport` on failure. Wait and retry.
     delay(2000);
   }
 
   wifiStarted = true;
 
-  // Now initialize application (EEPROM, scale) and begin startup tare
+  // Now that WiFi is up, can initialize the scale and start the startup tare workflow,
+  // which may need to report status or errors to the web UI
   initializeApp();
-  beginStartupTare();
 }
 
 /**
@@ -111,7 +110,7 @@ void setup()
 void loop()
 {
   // can't have any queued serial output before processing new input or advancing workflows
-  drainQueuedSerialOutput();
+  // drainQueuedSerialOutput();
 
   // tickWifi to keep the HTTP server responsive and handle incoming requests,
   // which may trigger workflow actions via callbacks
@@ -124,27 +123,25 @@ void loop()
   tickTare();
 
   if (tareCtx.state != TareState::IDLE) {
-    // While startup tare is active, do not process serial input; web UI drives
-    // any interactions. Just return so the startup workflow can continue.
     return;
   }
 
   // Advance other active state machines each iteration
   tickLevelRead();
-  tickCalibration();
+  // tickCalibration();
 
-  // On no serial input, need return so state machines can continue running until next loop iteration
-  if (!Serial.available()) {
-    return;
-  }
+  // // On no serial input, need return so state machines can continue running until next loop iteration
+  // if (!Serial.available()) {
+  //   return;
+  // }
 
-  char temp = Serial.read();
+  // char temp = Serial.read();
 
-  // level read is raison d'etre of this project,
-  // it goes after taring is stable to ensure no interference from anything else
-  if (levelCtx.state != LevelState::IDLE) {
-    return;
-  }
+  // // level read is raison d'etre of this project,
+  // // it goes after taring is stable to ensure no interference from anything else
+  // if (levelCtx.state != LevelState::IDLE) {
+  //   return;
+  // }
 
   // multi-character input workflows all require user hit enter after inputting new value,
   // do not interact with the scale hardware at all, and have unique input handling requirements
@@ -152,107 +149,107 @@ void loop()
   // and may require a calibration workflow afterward
   // known weight likely to used in preparation for calibration workflow
 
-  if (inputCtx.mode == InputMode::TANK_TARE) {
-    handleTankTareInput(temp);
-    return;
-  }
+  // if (inputCtx.mode == InputMode::TANK_TARE) {
+  //   handleTankTareInput(temp);
+  //   return;
+  // }
 
-  if (inputCtx.mode == InputMode::PROPANE_WEIGHT) {
-    handlePropaneWeightInput(temp);
-    return;
-  }
+  // if (inputCtx.mode == InputMode::PROPANE_WEIGHT) {
+  //   handlePropaneWeightInput(temp);
+  //   return;
+  // }
 
-  if (inputCtx.mode == InputMode::KNOWN_WEIGHT) {
-    handleKnownWeightInput(temp);
-    return;
-  }
+  // if (inputCtx.mode == InputMode::KNOWN_WEIGHT) {
+  //   handleKnownWeightInput(temp);
+  //   return;
+  // }
 
-  // Don't want accidentally triggered multiple commands in a row
-  // MUST come after all the input handlers because user hits enter somewhere in those workflows,
-  // so newlines need to be processed by handlers but ignored for general command dispatch
-  if (temp == '\r' || temp == '\n') {
-    return;
-  }
+  // // Don't want accidentally triggered multiple commands in a row
+  // // MUST come after all the input handlers because user hits enter somewhere in those workflows,
+  // // so newlines need to be processed by handlers but ignored for general command dispatch
+  // if (temp == '\r' || temp == '\n') {
+  //   return;
+  // }
 
   // calibration workflows (especially manual) are special workflows that require single-character command to start,
   // do interact with the scale hardware, and have unique input handling and display logic separate from the other multi-character input workflows,
   // so they go after the input context workflow checks but before the single-character command dispatch
-  if (calCtx.state != CalState::IDLE) {
-    handleCalibrationInput(temp);
-    return;
-  }
+  // if (calCtx.state != CalState::IDLE) {
+  //   handleCalibrationInput(temp);
+  //   return;
+  // }
 
-  bool handled = true;
+  // bool handled = true;
 
-  // by having empty lower case input cases, do not need to call tolower() on the input
-  // this allows the user to send either upper or lower case commands
-  // without needing to worry about case sensitivity
-  switch (temp) {
-  case 'a':
-  case 'A':
-    automaticCalibration();
-    break;
+  // // by having empty lower case input cases, do not need to call tolower() on the input
+  // // this allows the user to send either upper or lower case commands
+  // // without needing to worry about case sensitivity
+  // switch (temp) {
+  // case 'a':
+  // case 'A':
+  //   automaticCalibration();
+  //   break;
 
-  case 'c':
-  case 'C':
-    currentRuntimeValues();
-    break;
+  // case 'c':
+  // case 'C':
+  //   currentRuntimeValues();
+  //   break;
 
-  case 'd':
-  case 'D':
-    defaultEeprom();
-    break;
+  // case 'd':
+  // case 'D':
+  //   defaultEeprom();
+  //   break;
 
-  case 'e':
-  case 'E':
-    eepromValues();
-    break;
+  // case 'e':
+  // case 'E':
+  //   eepromValues();
+  //   break;
 
-  case 'h':
-  case 'H':
-    helpMenu();
-    break;
+  // case 'h':
+  // case 'H':
+  //   helpMenu();
+  //   break;
 
-  case 'k':
-  case 'K':
-    knownWeightUpdate();
-    break;
+  // case 'k':
+  // case 'K':
+  //   knownWeightUpdate();
+  //   break;
 
-  case 'l':
-  case 'L':
-    liquidLevel();
-    break;
+  // case 'l':
+  // case 'L':
+  //   liquidLevel();
+  //   break;
 
-  case 'm':
-  case 'M':
-    manualCalibration();
-    break;
+  // case 'm':
+  // case 'M':
+  //   manualCalibration();
+  //   break;
 
-  case 'p':
-  case 'P':
-    propaneWeightUpdate();
-    break;
+  // case 'p':
+  // case 'P':
+  //   propaneWeightUpdate();
+  //   break;
 
-  case 'r':
-  case 'R':
-    reZero();
-    break;
+  // case 'r':
+  // case 'R':
+  //   reZero();
+  //   break;
 
-  case 't':
-  case 'T':
-    tankTareUpdate();
-    break;
+  // case 't':
+  // case 'T':
+  //   tankTareUpdate();
+  //   break;
 
-  default:
-    handled = false;
-    Serial.print("Unknown command: '");
-    Serial.print(temp);
-    Serial.println("'. Send 'h' for help.");
-    break;
-  }
+  // default:
+  //   handled = false;
+  //   Serial.print("Unknown command: '");
+  //   Serial.print(temp);
+  //   Serial.println("'. Send 'h' for help.");
+  //   break;
+  // }
 
   // flush any extra input after handling a command to prevent accidental multiple command triggers from a single line of input
-  if (handled && inputCtx.mode == InputMode::NONE) {
-    flushSerialInput();
-  }
+  // if (handled && inputCtx.mode == InputMode::NONE) {
+  //   flushSerialInput();
+  // }
 }

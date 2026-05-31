@@ -42,12 +42,8 @@ static const char ROOT_PAGE[] = R"rawliteral(
     <pre id="startupReport" style="background:#fff8e1;padding:8px;border:1px solid #ffd54f"></pre>
     <pre id="telemetry">{}</pre>
     <div>
-      <button id="btnStartupCancel" style="display:none;margin-right:6px">Cancel Startup Tare</button>
-      <button id="btnTare">Tare</button>
       <button id="btnLevel">Level Read</button>
       <button id="btnLevelCancel" style="display:none;margin-left:6px">Cancel</button>
-      <button id="btnCal">Calibrate (prompt)</button>
-      <button id="btnSave">Save Calibration</button>
     </div>
   </div>
 
@@ -72,11 +68,6 @@ static const char ROOT_PAGE[] = R"rawliteral(
         return r.ok;
       }catch(e){return false}
     }
-
-    document.getElementById('btnTare').addEventListener('click', async ()=>{
-      const ok = await postAction('/api/tare');
-      alert(ok ? 'Tare enqueued' : 'Request failed');
-    });
 
     document.getElementById('btnLevel').addEventListener('click', async ()=>{
       const ok = await postAction('/api/level');
@@ -134,19 +125,6 @@ static const char ROOT_PAGE[] = R"rawliteral(
       }, 1000);
     });
 
-    document.getElementById('btnCal').addEventListener('click', async ()=>{
-      const w = prompt('Known weight (lbs):', '26.0');
-      if(w !== null){
-        const ok = await postAction('/api/calibrate', 'weight=' + encodeURIComponent(w));
-        alert(ok ? 'Calibration enqueued' : 'Request failed');
-      }
-    });
-
-    document.getElementById('btnSave').addEventListener('click', async ()=>{
-      const ok = await postAction('/api/save');
-      alert(ok ? 'Save requested' : 'Request failed');
-    });
-
       document.getElementById('btnLevelCancel').addEventListener('click', async ()=>{
         const ok = await postAction('/api/level/cancel');
         if (ok) {
@@ -157,7 +135,7 @@ static const char ROOT_PAGE[] = R"rawliteral(
         }
       });
 
-      // Startup tare polling and cancel
+      // Startup tare polling
       async function pollStartupStatus(){
         try{
           const r = await fetch('/api/startup/status');
@@ -166,12 +144,6 @@ static const char ROOT_PAGE[] = R"rawliteral(
           // update startup prompt and report
           document.getElementById('startupPrompt').textContent = j.prompt ? j.prompt : '';
           document.getElementById('startupReport').textContent = j.report ? j.report : '';
-            if (j.state && j.state !== 'IDLE') {
-              document.getElementById('btnStartupCancel').style.display = 'inline-block';
-            } else {
-              document.getElementById('btnStartupCancel').style.display = 'none';
-            }
-
             // If a startup report exists, show the shared modal and set ack target
             if (j.report) {
               document.getElementById('reportText').textContent = j.report;
@@ -198,14 +170,6 @@ static const char ROOT_PAGE[] = R"rawliteral(
           }
         }catch(e){ /* ignore */ }
       }
-
-      document.getElementById('btnStartupCancel').addEventListener('click', async ()=>{
-        try{
-          const r = await fetch('/api/startup/cancel', {method:'POST'});
-          if(r.ok){ document.getElementById('status').textContent = 'Startup tare cancelled'; }
-          else { alert('Cancel failed'); }
-        }catch(e){ alert('Cancel failed'); }
-      });
 
       // poll startup status once a second
       setInterval(pollStartupStatus, 1000);

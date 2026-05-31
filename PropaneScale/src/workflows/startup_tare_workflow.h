@@ -39,23 +39,3 @@ void beginStartupTare();
  * @throws {none} This function does not throw exceptions.
  */
 void tickTare();
-
-/**
- * @brief Forces the startup tare workflow to begin immediately.
- *
- * @details This function is intended to be called from the web UI to start the startup tare workflow
- * regardless of the current state.
- *
- * @throws {none} This function does not throw exceptions.
- */
-void webForceStartupTare();
-
-/**
- * @brief Skips the startup tare workflow.
- *
- * @details This function is intended to be called from the web UI to skip the startup tare workflow
- * and proceed to the next step.
- *
- * @throws {none} This function does not throw exceptions.
- */
-void webSkipStartupTare();

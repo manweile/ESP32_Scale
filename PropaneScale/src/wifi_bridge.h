@@ -25,39 +25,7 @@
 // Forward declaration of global callbacks
 extern "C" const WifiCallbacks g_wifi_callbacks;
 
-// Declaration of the global WifiCallbacks instance defined in wifi_bridge.cpp
-
-/**
- * @brief Enqueue a calibration workflow with the provided known weight.
- *
- * @details Sets the known weight and calls the automaticCalibration() function, which implements a non-blocking calibration workflow.
- * This allows the web interface to trigger a calibration without blocking the main loop or interfering with other workflows.
- *
- * @param known The known weight to use for calibration.
- *
- * @throws {none} This function does not throw exceptions.
- */
-void enqueueCalibrate(float known);
-
-/**
- * @brief Enqueue a runtime tare operation.
- *
- * @details Calls the reZero() function which implements a non-blocking tare workflow.
- * This allows the web interface to trigger a tare without blocking the main loop or interfering with other workflows.
- *
- * @throws {none} This function does not throw exceptions.
- */
-void enqueueTare();
-
-/**
- * @brief Instruct the startup workflow to skip the startup tare.
- */
-void skipStartupTare();
-
-/**
- * @brief Instruct the startup workflow to force a startup tare immediately.
- */
-void forceStartupTare();
+// Declaration for WiFi callback implementations
 
 /**
  * @brief Get the Telemetry Json Impl object
@@ -71,19 +39,10 @@ void forceStartupTare();
  *   "calibrationFactor": <float>,
  *   "knownWeight": <float>,
  *   "maxPropane": <float>,
- *   "tankTare": <float>
+ *   "tankTare": <float>,
+ *   "uptime": <unsigned long>
  * }
  *
  * @throws {none} This function does not throw exceptions.
  */
 String getTelemetry();
-
-/**
- * @brief Save the current calibration factor to EEPROM.
- *
- * @details Calls the saveToEeprom() function with the current calibration factor and predefined constants for magic number and addresses.
- * This allows the web interface to trigger a save of the current calibration factor without blocking the main loop or interfering with other workflows.
- *
- * @throws {none} This function does not throw exceptions.
- */
-void saveCalibration();

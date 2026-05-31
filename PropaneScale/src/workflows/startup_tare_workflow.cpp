@@ -219,17 +219,3 @@ void tickTare()
     tareCtx.stableChecks = 0;
   }
 }
-
-void webForceStartupTare()
-{
-  // Force immediate tare; tickTare() will perform the hardware tare on next tick.
-  tareCtx.state = TareState::TARE;
-  LastStartupReport = String("Startup tare forced via web UI.");
-}
-
-void webSkipStartupTare()
-{
-  tareCtx.baselinePending = false;
-  tareCtx.state = TareState::SKIP;
-  LastStartupReport = String("Startup tare skipped via web UI.");
-}
