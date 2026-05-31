@@ -74,9 +74,21 @@ String getTelemetry()
   s += ",\"knownWeight\":" + String(knownWeight, 2);
   s += ",\"maxPropane\":" + String(maxPropane, 2);
   s += ",\"tankTare\":" + String(tankTare, 2);
-  // Include the HX711 runtime tare offset (raw counts) for diagnostics
-  long runtimeOffset = scale.get_offset();
-  s += ",\"Runtime tare offset\":" + String(runtimeOffset);
+  // Include the HX711 runtime tare offset (raw counts) for diagnostics.
+  // Read the saved runtime offset from EEPROM to avoid calling into the HX711
+  // driver from an HTTP handler (which may block).
+  float savedRuntimeOffset = 0.0f;
+  bool hasRuntimeOffset = loadFromEeprom(savedRuntimeOffset,
+                                         HX711_OFFSET_EEPROM_MAGIC_ADDR,
+                                         HX711_OFFSET_EEPROM_MAGIC,
+                                         HX711_OFFSET_EEPROM_VALUE_ADDR);
+  s += ",\"Runtime tare offset\":";
+  if (hasRuntimeOffset) {
+    long runtimeOffset = static_cast<long>(savedRuntimeOffset);
+    s += String(runtimeOffset);
+  } else {
+    s += "null";
+  }
   s += "}";
 
   return s;

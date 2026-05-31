@@ -124,3 +124,6 @@ constexpr int WEB_SERVER_PORT           = 80;               /**< HTTP server por
 constexpr char WIFI_PASSWORD[]          = "buddie22";       /**< WiFi station password */
 constexpr char WIFI_SSID[]              = "DIR-645";        /**< WiFi station SSID to attempt first */
 constexpr unsigned long WIFI_TIMEOUT_MS = 30000UL;          /**< ms to wait for STA connect before falling back to AP */
+
+// Static IP configuration (optional) - router assigns 192.168.0.47 to the ESP32
+constexpr char STATIC_IP[] = "192.168.0.47";                /**< Preferred fixed IP assigned by router */

@@ -13,8 +13,9 @@
 
 // Standard library headers
 #include <Arduino.h>
+#include <AsyncTCP.h>
+#include <ESPAsyncWebServer.h>
 #include <ESPmDNS.h>
-#include <WebServer.h>
 #include <WiFi.h>
 
 // Local library headers
@@ -29,8 +30,13 @@
 
 // Global Static Constants & Variables
 static bool IsApMode = false;                               /**< WiFi running in AP mode to avoid STA reconnect attempts */
-static WebServer server(WEB_SERVER_PORT);                   /**< WebServer running on configured port to handle incoming HTTP requests */
+static AsyncWebServer server(WEB_SERVER_PORT);              /**< Async web server running on configured port to handle incoming HTTP requests */
 static const WifiCallbacks* CALLBACKS = nullptr;            /**< Registered WifiCallbacks for bridging HTTP handlers to core workflows */
+
+// Async init state
+static bool serverStarted = false;                          /**< true once HTTP server has been started */
+static bool waitingForSta = false;                          /**< true while waiting for STA connect timeout */
+static unsigned long staAttemptStart = 0;                   /**< timestamp when STA connect attempt began */
 
 // Externally declared UI variables
 extern String LastStartupReport;                            /**< Last human-readable report produced by the most recent startup tare attempt. */
@@ -38,7 +44,7 @@ extern String LastStartupPrompt;                            /**< Last human-read
 
 // Definitions for HTTP handlers
 
-void handleAppStatus()
+void handleAppStatus(AsyncWebServerRequest* request)
 {
   // Return structured JSON with EEPROM and calibration fields requested by UI
   extern bool eepromReady;
@@ -72,35 +78,34 @@ void handleAppStatus()
 
   payload += "}";
 
-  server.send(200, "application/json", payload);
+  request->send(200, "application/json", payload);
 }
 
-void handleCalibrate()
+void handleCalibrate(AsyncWebServerRequest* request)
 {
   float weight = 0.0f;
-
-  if (server.hasArg("weight")) {
-    weight = server.arg("weight").toFloat();
+  if (request->hasArg("weight")) {
+    weight = request->arg("weight").toFloat();
 
     if (CALLBACKS && CALLBACKS->enqueue_calibrate) {
       CALLBACKS->enqueue_calibrate(weight);
     }
 
-    server.send(200, "text/plain", "ok");
+    request->send(200, "text/plain", "ok");
   } else {
-    server.send(400, "text/plain", "missing weight param");
+    request->send(400, "text/plain", "missing weight param");
   }
 }
 
-void handleLevelAck()
+void handleLevelAck(AsyncWebServerRequest* request)
 {
   // Clear server-side stored prompt/report so browser won't see stale values
   LastLevelReport = String("");
   LastLevelPrompt = String("");
-  server.send(200, "application/json", "{\"success\":true}");
+  request->send(200, "application/json", "{\"success\":true}");
 }
 
-void handleLevelCancel()
+void handleLevelCancel(AsyncWebServerRequest* request)
 {
   // Cancel any in-progress level workflow
   if (levelCtx.state != LevelState::IDLE) {
@@ -113,17 +118,17 @@ void handleLevelCancel()
     LastLevelReport = String("Level read cancelled.");
   }
 
-  server.send(200, "application/json", "{\"success\":true,\"active\":false,\"message\":\"Level read cancelled\"}");
+  request->send(200, "application/json", "{\"success\":true,\"active\":false,\"message\":\"Level read cancelled\"}");
 }
 
-void handleLevelStart()
+void handleLevelStart(AsyncWebServerRequest* request)
 {
   // Start the level read workflow; liquidLevel() will guard against concurrent runs.
   liquidLevel();
-  server.send(200, "text/plain", "ok");
+  request->send(200, "text/plain", "ok");
 }
 
-void handleLevelStatus()
+void handleLevelStatus(AsyncWebServerRequest* request)
 {
   // Return a small JSON object with the workflow state and last report.
   const char* stateName = "IDLE";
@@ -168,32 +173,31 @@ void handleLevelStatus()
 
   payload += "}";
 
-  server.send(200, "application/json", payload);
+  request->send(200, "application/json", payload);
 }
 
-void handleRoot()
+void handleRoot(AsyncWebServerRequest* request)
 {
-  server.send(200, "text/html", ROOT_PAGE);
+  request->send(200, "text/html", ROOT_PAGE);
 }
 
-void handleSave()
+void handleSave(AsyncWebServerRequest* request)
 {
   if (CALLBACKS && CALLBACKS->save_calibration) {
     CALLBACKS->save_calibration();
   }
-
-  server.send(200, "text/plain", "ok");
+  request->send(200, "text/plain", "ok");
 }
 
-void handleStartupAck()
+void handleStartupAck(AsyncWebServerRequest* request)
 {
   // Acknowledge startup report so UI doesn't show stale results on next poll
   LastStartupReport = String("");
   LastStartupPrompt = String("");
-  server.send(200, "application/json", "{\"success\":true}\n");
+  request->send(200, "application/json", "{\"success\":true}\n");
 }
 
-void handleStartupCancel()
+void handleStartupCancel(AsyncWebServerRequest* request)
 {
   // Cancel any in-progress startup tare workflow
   if (tareCtx.state != TareState::IDLE) {
@@ -203,10 +207,10 @@ void handleStartupCancel()
     LastStartupReport = String("Startup tare cancelled.");
   }
 
-  server.send(200, "application/json", "{\"success\":true}\n");
+  request->send(200, "application/json", "{\"success\":true}\n");
 }
 
-void handleStartupStatus()
+void handleStartupStatus(AsyncWebServerRequest* request)
 {
   // Provide the current startup tare state, last prompt and last report for the browser UI
   const char* stateName = "IDLE";
@@ -246,43 +250,42 @@ void handleStartupStatus()
 
   payload += "}";
 
-  server.send(200, "application/json", payload);
+  request->send(200, "application/json", payload);
 }
 
-void handleStartupSkip()
+void handleStartupSkip(AsyncWebServerRequest* request)
 {
   if (CALLBACKS && CALLBACKS->skip_startup_tare) {
     CALLBACKS->skip_startup_tare();
   }
 
-  server.send(200, "application/json", "{\"success\":true}\n");
+  request->send(200, "application/json", "{\"success\":true}\n");
 }
 
-void handleStartupForce()
+void handleStartupForce(AsyncWebServerRequest* request)
 {
   if (CALLBACKS && CALLBACKS->force_startup_tare) {
     CALLBACKS->force_startup_tare();
   }
 
-  server.send(200, "application/json", "{\"success\":true}\n");
+  request->send(200, "application/json", "{\"success\":true}\n");
 }
 
-void handleTare()
+void handleTare(AsyncWebServerRequest* request)
 {
   if (CALLBACKS && CALLBACKS->enqueue_tare) {
     CALLBACKS->enqueue_tare();
   }
-
-  server.send(200, "text/plain", "ok");
+  request->send(200, "text/plain", "ok");
 }
 
-void handleTelemetry()
+void handleTelemetry(AsyncWebServerRequest* request)
 {
   if (CALLBACKS && CALLBACKS->get_telemetry_json) {
     String payload = CALLBACKS->get_telemetry_json();
-    server.send(200, "application/json", payload);
+    request->send(200, "application/json", payload);
   } else {
-    server.send(204, "text/plain", "");
+    request->send(204, "text/plain", "");
   }
 }
 
@@ -302,65 +305,36 @@ bool initWifi()
 
   WiFi.mode(WIFI_STA);
   WiFi.setHostname(MDNS_HOSTNAME);
+  
+  // If a static IP is configured at compile time, apply it before starting STA connect.
+  // `STATIC_IP` is defined in config.h as a string like "192.168.0.47".
+  IPAddress localIp;
+  if (localIp.fromString(STATIC_IP)) {
+    IPAddress gateway(192, 168, 0, 1);
+    IPAddress subnet(255, 255, 255, 0);
+    if (WiFi.config(localIp, gateway, subnet)) {
+      Serial.print(F("Applying static IP: "));
+      Serial.println(localIp);
+    } else {
+      Serial.println(F("Warning: WiFi.config() failed, continuing with DHCP"));
+    }
+  }
+
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
   // ESP32 is touchy, so need automatic reconnect and no modem sleeping
   WiFi.setAutoReconnect(true);
   WiFi.setSleep(false);
 
- // Wait for connection with timeout, then fall back to AP mode if it fails
- // This allows the device to be used even if the configured WiFi credentials are wrong or the network is down,
- // and avoids getting stuck in a long STA reconnect loop.
-  unsigned long start = millis();
-  const unsigned long timeout = WIFI_TIMEOUT_MS;
-  while (millis() - start < timeout) {
-    if (WiFi.status() == WL_CONNECTED) break;
-    delay(200);
-  }
+  // Start STA connect non-blocking. Defer AP fallback and server start to tickWifi().
+  waitingForSta = true;
+  staAttemptStart = millis();
+  IsApMode = false;
+  serverStarted = false;
 
-  bool started = false;
+  // Do not block here — return true to indicate WiFi init kicked off.
 
-  if (WiFi.status() == WL_CONNECTED) {
-    IsApMode = false;
-    Serial.print(F("STA connected, IP: "));
-    Serial.println(WiFi.localIP());
-
-    if (MDNS.begin(MDNS_HOSTNAME)) {
-      Serial.print(F("mDNS responder started: "));
-      Serial.println(MDNS_HOSTNAME);
-    }
-
-    started = true;
-  } else {
-    Serial.println(F("STA connect failed, attempting AP mode"));
-    WiFi.mode(WIFI_AP);
-    WiFi.setSleep(false);
-
-    // Attempt to start AP (secure if password provided)
-    bool apOk = false;
-    if (AP_PASSWORD[0] == '\0') {
-      apOk = WiFi.softAP(AP_SSID);
-    } else {
-      apOk = WiFi.softAP(AP_SSID, AP_PASSWORD);
-    }
-
-    if (apOk) {
-      IsApMode = true;
-      Serial.print(F("AP started, IP: "));
-      Serial.println(WiFi.softAPIP());
-      started = true;
-    } else {
-      Serial.println(F("Failed to start AP"));
-      started = false;
-    }
-  }
-
-  if (!started) {
-    LastStartupReport = String("WiFi initialization failed (STA and AP both failed).");
-    return false;
-  }
-
-  // Register routes and start server only if network is up
+  // Register routes now; start HTTP server later in tickWifi() once network is up
   server.on("/", HTTP_GET, handleRoot);
   server.on("/api/telemetry", HTTP_GET, handleTelemetry);
   server.on("/api/tare", HTTP_POST, handleTare);
@@ -377,8 +351,7 @@ bool initWifi()
   server.on("/api/startup/force", HTTP_POST, handleStartupForce);
   server.on("/api/app/status", HTTP_GET, handleAppStatus);
 
-  server.begin();
-  Serial.println(F("HTTP server started"));
+  // Do not call server.begin() here to avoid blocking in setup(); tickWifi() will start the server
 
   return true;
 }
@@ -390,7 +363,50 @@ void registerCallbacks(const WifiCallbacks* cb)
 
 void tickWifi()
 {
-  server.handleClient();
+  // Start HTTP server when network is ready (STA connected) or after AP fallback
+  if (!serverStarted) {
+    if (WiFi.status() == WL_CONNECTED) {
+      IsApMode = false;
+      Serial.print(F("STA connected, IP: "));
+      Serial.println(WiFi.localIP());
+
+      if (MDNS.begin(MDNS_HOSTNAME)) {
+        Serial.print(F("mDNS responder started: "));
+        Serial.println(MDNS_HOSTNAME);
+      }
+
+      server.begin();
+      Serial.println(F("HTTP server started"));
+      serverStarted = true;
+      waitingForSta = false;
+    } else if (waitingForSta && (millis() - staAttemptStart >= WIFI_TIMEOUT_MS)) {
+      // STA connect timed out — fallback to AP mode
+      Serial.println(F("STA connect failed, attempting AP mode"));
+      WiFi.mode(WIFI_AP);
+      WiFi.setSleep(false);
+
+      bool apOk = false;
+      if (AP_PASSWORD[0] == '\0') {
+        apOk = WiFi.softAP(AP_SSID);
+      } else {
+        apOk = WiFi.softAP(AP_SSID, AP_PASSWORD);
+      }
+
+      if (apOk) {
+        IsApMode = true;
+        Serial.print(F("AP started, IP: "));
+        Serial.println(WiFi.softAPIP());
+        server.begin();
+        Serial.println(F("HTTP server started"));
+        serverStarted = true;
+      } else {
+        Serial.println(F("Failed to start AP"));
+        LastStartupReport = String("WiFi initialization failed (STA and AP both failed).");
+      }
+
+      waitingForSta = false;
+    }
+  }
 
   // If configured for STA mode and not running as AP, attempt a throttled reconnect when disconnected
   if (!IsApMode) {
