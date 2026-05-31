@@ -27,7 +27,7 @@
 #include "workflows/workflows_contexts.h"                   // Workflow context types for managing state across non-blocking workflow steps
 
 // External Global State Variables
-extern HX711 scale;                                         /**< HX711 instance for interacting with the load cell amplifier */
+extern HX711 scale;                                          /**< HX711 instance for interacting with the load cell amplifier */
 
 // Global Averaging Context Variables
 AvgContext avgCtx;                                          /**< Averaging context instance to hold state for non-blocking average computations */
