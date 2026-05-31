@@ -1,4 +1,7 @@
  # CI workflow to verify AStyle formatting consistency.
+ #
+ # This workflow runs on Windows runners since AStyle is primarily a Windows tool 
+ # and the formatting rules are defined in a .astylerc file that is compatible with the Windows version of AStyle.
  # Notes:
  # - This job installs or restores AStyle and runs it across PropaneScale source files.
  # - We cache AStyle between runs to avoid reinstalling on every CI execution.
