@@ -4,7 +4,7 @@
  *
  * @brief Defines the HTML content for the root page served by the ESP32 web server.
  *
- * @details This file contains a raw string literal with the HTML, CSS, and JavaScript for the web interface of the PropaneScale project. 
+ * @details This file contains a raw string literal with the HTML, CSS, and JavaScript for the web interface of the PropaneScale project.
  * The page displays telemetry data and provides buttons to trigger tare and calibration actions via the WiFi API.
  *
  * @version 0.1

@@ -56,9 +56,9 @@ void handleAppStatus(AsyncWebServerRequest* request)
   // Attempt to read persisted runtime tare offset from EEPROM
   float savedRuntimeOffset = 0.0f;
   bool hasRuntimeOffset = loadFromEeprom(savedRuntimeOffset,
-                                        HX711_OFFSET_EEPROM_MAGIC_ADDR,
-                                        HX711_OFFSET_EEPROM_MAGIC,
-                                        HX711_OFFSET_EEPROM_VALUE_ADDR);
+                                         HX711_OFFSET_EEPROM_MAGIC_ADDR,
+                                         HX711_OFFSET_EEPROM_MAGIC,
+                                         HX711_OFFSET_EEPROM_VALUE_ADDR);
 
   String payload = "{";
   payload += "\"EEPROM ready\":" + String(eepromReady ? "true" : "false") + ",";
@@ -68,6 +68,7 @@ void handleAppStatus(AsyncWebServerRequest* request)
   payload += "\"tankTare\":" + String(tankTare, 3) + ",";
 
   payload += "\"runtime tare offset\":";
+
   if (hasRuntimeOffset) {
     // Provide runtime offset as a number (counts)
     // Print without decimal fraction for readability
@@ -84,6 +85,7 @@ void handleAppStatus(AsyncWebServerRequest* request)
 void handleCalibrate(AsyncWebServerRequest* request)
 {
   float weight = 0.0f;
+
   if (request->hasArg("weight")) {
     weight = request->arg("weight").toFloat();
 
@@ -186,6 +188,7 @@ void handleSave(AsyncWebServerRequest* request)
   if (CALLBACKS && CALLBACKS->save_calibration) {
     CALLBACKS->save_calibration();
   }
+
   request->send(200, "text/plain", "ok");
 }
 
@@ -219,12 +222,15 @@ void handleStartupStatus(AsyncWebServerRequest* request)
   case TareState::IDLE:
     stateName = "IDLE";
     break;
+
   case TareState::WAIT_STABLE:
     stateName = "WAIT_STABLE";
     break;
+
   case TareState::TARE:
     stateName = "TARE";
     break;
+
   case TareState::SKIP:
     stateName = "SKIP";
     break;
@@ -276,6 +282,7 @@ void handleTare(AsyncWebServerRequest* request)
   if (CALLBACKS && CALLBACKS->enqueue_tare) {
     CALLBACKS->enqueue_tare();
   }
+
   request->send(200, "text/plain", "ok");
 }
 
@@ -305,13 +312,15 @@ bool initWifi()
 
   WiFi.mode(WIFI_STA);
   WiFi.setHostname(MDNS_HOSTNAME);
-  
+
   // If a static IP is configured at compile time, apply it before starting STA connect.
   // `STATIC_IP` is defined in config.h as a string like "192.168.0.47".
   IPAddress localIp;
+
   if (localIp.fromString(STATIC_IP)) {
     IPAddress gateway(192, 168, 0, 1);
     IPAddress subnet(255, 255, 255, 0);
+
     if (WiFi.config(localIp, gateway, subnet)) {
       Serial.print(F("Applying static IP: "));
       Serial.println(localIp);
@@ -379,33 +388,35 @@ void tickWifi()
       Serial.println(F("HTTP server started"));
       serverStarted = true;
       waitingForSta = false;
-    } else if (waitingForSta && (millis() - staAttemptStart >= WIFI_TIMEOUT_MS)) {
-      // STA connect timed out — fallback to AP mode
-      Serial.println(F("STA connect failed, attempting AP mode"));
-      WiFi.mode(WIFI_AP);
-      WiFi.setSleep(false);
+    } else
+      if (waitingForSta && (millis() - staAttemptStart >= WIFI_TIMEOUT_MS)) {
+        // STA connect timed out — fallback to AP mode
+        Serial.println(F("STA connect failed, attempting AP mode"));
+        WiFi.mode(WIFI_AP);
+        WiFi.setSleep(false);
 
-      bool apOk = false;
-      if (AP_PASSWORD[0] == '\0') {
-        apOk = WiFi.softAP(AP_SSID);
-      } else {
-        apOk = WiFi.softAP(AP_SSID, AP_PASSWORD);
+        bool apOk = false;
+
+        if (AP_PASSWORD[0] == '\0') {
+          apOk = WiFi.softAP(AP_SSID);
+        } else {
+          apOk = WiFi.softAP(AP_SSID, AP_PASSWORD);
+        }
+
+        if (apOk) {
+          IsApMode = true;
+          Serial.print(F("AP started, IP: "));
+          Serial.println(WiFi.softAPIP());
+          server.begin();
+          Serial.println(F("HTTP server started"));
+          serverStarted = true;
+        } else {
+          Serial.println(F("Failed to start AP"));
+          LastStartupReport = String("WiFi initialization failed (STA and AP both failed).");
+        }
+
+        waitingForSta = false;
       }
-
-      if (apOk) {
-        IsApMode = true;
-        Serial.print(F("AP started, IP: "));
-        Serial.println(WiFi.softAPIP());
-        server.begin();
-        Serial.println(F("HTTP server started"));
-        serverStarted = true;
-      } else {
-        Serial.println(F("Failed to start AP"));
-        LastStartupReport = String("WiFi initialization failed (STA and AP both failed).");
-      }
-
-      waitingForSta = false;
-    }
   }
 
   // If configured for STA mode and not running as AP, attempt a throttled reconnect when disconnected

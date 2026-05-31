@@ -75,12 +75,14 @@ String getTelemetry()
                                          HX711_OFFSET_EEPROM_MAGIC,
                                          HX711_OFFSET_EEPROM_VALUE_ADDR);
   s += ",\"Runtime tare offset\":";
+
   if (hasRuntimeOffset) {
     long runtimeOffset = static_cast<long>(savedRuntimeOffset);
     s += String(runtimeOffset);
   } else {
     s += "null";
   }
+
   s += "}";
 
   return s;

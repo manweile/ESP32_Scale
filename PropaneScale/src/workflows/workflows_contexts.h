@@ -219,4 +219,5 @@ extern AvgContext avgCtx;                                   /**< Averaging conte
 extern CalContext calCtx;                                   /**< Calibration context instance to hold state for workflows */
 extern LevelContext levelCtx;                               /**< Level read context instance to hold state for workflow */
 extern TareContext tareCtx;                                 /**< Startup tare context instance to hold state for workflow */
-extern AvgContext thresholdCtx;                             /**< Shared threshold averaging context instance (used by calibration and level workflows) */
+extern AvgContext
+thresholdCtx;                             /**< Shared threshold averaging context instance (used by calibration and level workflows) */

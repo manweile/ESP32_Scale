@@ -27,70 +27,20 @@
 #include "workflows/workflows_contexts.h"                   // Workflow context types for managing state across non-blocking workflow steps
 
 // External Global State Variables
-extern HX711 scale;                                         // HX711 instance for interacting with the load cell amplifier
+extern HX711 scale;                                         /**< HX711 instance for interacting with the load cell amplifier */
 
 // Global Averaging Context Variables
-AvgContext avgCtx;                                          // Averaging context instance to hold state for non-blocking average computations
-AvgContext thresholdCtx;                                    // Shared threshold averaging context for both level and calibration
-ProbeContext probeCtx;                                       // Probe context instance to hold state for non-blocking HX711 responsiveness checks
+AvgContext avgCtx;                                          /**< Averaging context instance to hold state for non-blocking average computations */
+AvgContext thresholdCtx;                                    /**< Shared threshold averaging context for both level and calibration */
+ProbeContext probeCtx;                                      /**< Probe context instance to hold state for non-blocking HX711 responsiveness checks */
 
 //  Private Static Constants and Variables
-static constexpr size_t SERIAL_CAPACITY = 2048;              // Capacity of the internal serial output queue in bytes
-static size_t serialLength = 0;                              // Current length of data in the serial output queue
-static size_t serialOffset = 0;                              // Current offset for reading from the serial output queue
-static char serialQueue[SERIAL_CAPACITY];                    // Internal buffer for queued serial output
+static constexpr size_t SERIAL_CAPACITY = 2048;             /**< Capacity of the internal serial output queue in bytes */
+static size_t serialLength = 0;                             /**< Current length of data in the serial output queue */
+static size_t serialOffset = 0;                             /**< Current offset for reading from the serial output queue */
+static char serialQueue[SERIAL_CAPACITY];                   /**< Internal buffer for queued serial output */
 
-// Private Definitions & Declarations for input/output helper functions
-
-/**
- * @brief Probes the HX711 with multiple reads to determine if it is producing a responsive signal.
- *
- * @details Secondary check to detect if HX711 is powered but not properly connected.
- * Intentionally private implementation detail, only used as part of the scale ready workflow.
- *
- * @return {bool} True if the HX711 is producing a responsive signal with variability across multiple reads; false otherwise.
- *
- * @throws {none} This function does not throw exceptions.
- */
-static bool hasSignal()
-{
-  const int probeReads = LIVE_SAMPLES;                      // HX711 is set at 10 samples per second
-  bool haveSample = false;
-  long minRaw = 0;
-  long maxRaw = 0;
-
-  for (int i = 0; i < probeReads; ++i) {
-    // wait ready false means the HX711 is not responding at all
-    if (!scale.wait_ready_timeout(READY_TIMEOUT_MS)) {
-      return false;
-    }
-
-    // instantiate in this scope to ensure clean signal path and timing for each read
-    long raw = scale.read();
-
-    // if we can read at least one sample, can check for signal variability
-    if (!haveSample) {
-      minRaw = raw;
-      maxRaw = raw;
-      haveSample = true;
-      continue;
-    }
-
-    // update on each iteration to track signal variability
-    if (raw < minRaw) minRaw = raw;
-
-    if (raw > maxRaw) maxRaw = raw;
-  }
-
-  // if we couldn't get any samples, we can't confirm responsiveness
-  if (!haveSample) {
-    return false;
-  }
-
-  // true when at least one probe read changed
-  // false when all probe reads the same, indicating flat/stuck/unresponsive signal
-  return maxRaw != minRaw;
-}
+// Private Definition & Declaration for input/output helper functions
 
 /**
  * @brief Queues a message for serial output, handling buffer management.

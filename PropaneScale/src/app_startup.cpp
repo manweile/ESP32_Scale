@@ -90,9 +90,9 @@ void initializeApp()
         LastStartupReport = String("Success saving default known calibration weight to EEPROM.");
       }
     }
-    
+
     float eepromMaxPropane = 0.0f;
-    
+
     if (loadFromEeprom(eepromMaxPropane, MAX_PROPANE_EEPROM_MAGIC_ADDR, MAX_PROPANE_EEPROM_MAGIC, MAX_PROPANE_EEPROM_VALUE_ADDR)
         && isValidBoundedFloat(eepromMaxPropane, MIN_PLAUSIBLE_WEIGHT, MAX_PROJECT_WEIGHT)) {
       maxPropane = eepromMaxPropane;

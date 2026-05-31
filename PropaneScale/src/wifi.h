@@ -23,10 +23,10 @@ typedef struct WifiCallbacks WifiCallbacks;                 /**< WifiCallbacks s
  *
  * @details Returns a JSON object so the web UI can display initialization diagnostics and status messages produced during app startup.
  * The function handles errors by responding with appropriate HTTP status codes and messages.
- * 
+ *
  * @param request [AsyncWebServerRequest*] Pointer to the AsyncWebServerRequest object representing the incoming HTTP request.
- * 
- * @throws {none} This function does not throw exceptions. 
+ *
+ * @throws {none} This function does not throw exceptions.
  */
 void handleAppStatus(AsyncWebServerRequest* request);
 
@@ -37,10 +37,10 @@ void handleAppStatus(AsyncWebServerRequest* request);
  * Responds with a simple "ok" message on success, or an error message if the required parameter is missing.
  * This allows the web interface to trigger a calibration without blocking the main loop or interfering with other workflows.
  * It handles errors by responding with appropriate HTTP status codes and messages.
- * 
+ *
  * @param request [AsyncWebServerRequest*] Pointer to the AsyncWebServerRequest object representing the incoming HTTP request.
- * 
- * @throws {none} This function does not throw exceptions. 
+ *
+ * @throws {none} This function does not throw exceptions.
  */
 void handleCalibrate(AsyncWebServerRequest* request);
 
@@ -74,7 +74,7 @@ void handleLevelCancel(AsyncWebServerRequest* request);
  * This allows the web interface to trigger a level read without blocking the main loop or interfering with other workflows.
  *
  * @param request [AsyncWebServerRequest*] Pointer to the AsyncWebServerRequest object representing the incoming HTTP request.
- * 
+ *
  * @throws {none} This function does not throw exceptions.
  */
 void handleLevelStart(AsyncWebServerRequest* request);
@@ -118,9 +118,9 @@ void handleSave(AsyncWebServerRequest* request);
  *
  * @details Clears any stored startup prompt and report on the server so the browser UI
  * does not display stale results on subsequent polls. Responds with a JSON success object.
- * 
+ *
  * @param request [AsyncWebServerRequest*] Pointer to the AsyncWebServerRequest object representing the incoming HTTP request.
- * 
+ *
  * @throws {none} This function does not throw exceptions.
  */
 void handleStartupAck(AsyncWebServerRequest* request);
@@ -143,7 +143,7 @@ void handleStartupCancel(AsyncWebServerRequest* request);
  *
  * @details Requests skipping of the startup tare workflow. The server will update the workflow
  * state appropriately and respond with a JSON acknowledgement.
- * 
+ *
  * @param request [AsyncWebServerRequest*] Pointer to the AsyncWebServerRequest object representing the incoming HTTP request.
  *
  * @throws {none} This function does not throw exceptions.
@@ -155,7 +155,7 @@ void handleStartupSkip(AsyncWebServerRequest* request);
  *
  * @details Requests forcing of the startup tare workflow. The server will update the workflow
  * state appropriately and respond with a JSON acknowledgement.
- * 
+ *
  * @param request [AsyncWebServerRequest*] Pointer to the AsyncWebServerRequest object representing the incoming HTTP request.
  *
  * @throws {none} This function does not throw exceptions.
@@ -168,7 +168,7 @@ void handleStartupForce(AsyncWebServerRequest* request);
  * @details Returns a small JSON object describing the current startup tare state and any
  * last prompt or report written by the workflow. Intended for polling by the browser UI
  * during headless startup interactions.
- * 
+ *
  * @param request [AsyncWebServerRequest*] Pointer to the AsyncWebServerRequest object representing the incoming HTTP request.
  *
  * @throws {none} This function does not throw exceptions.
@@ -196,7 +196,7 @@ void handleTare(AsyncWebServerRequest* request);
  * telemetry.
  *
  * @param request [AsyncWebServerRequest*] Pointer to the AsyncWebServerRequest object representing the incoming HTTP request.
- * 
+ *
  * @throws {none} This function does not throw exceptions.
  */
 void handleTelemetry(AsyncWebServerRequest* request);
@@ -207,7 +207,7 @@ void handleTelemetry(AsyncWebServerRequest* request);
  * @details Attempts to connect to a WiFi network in station mode first. If that fails, it falls back to access point mode. Route registration occurs during initialization but the function is non-blocking: it kicks off the STA connect attempt and returns immediately. The HTTP server will be started later in `tickWifi()` once the network (STA or AP) is available. Any initialization errors are recorded in `LastStartupReport`.
  *
  * @return true if WiFi init was started successfully (non-blocking); false otherwise.
- * 
+ *
  * @throws {none} This function does not throw exceptions.
  */
 bool initWifi();

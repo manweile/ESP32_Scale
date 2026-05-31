@@ -91,11 +91,11 @@ void tickTare()
 
     // Build prompt using Arduino String concatenation so we avoid snprintf.
     LastStartupPrompt = String("Startup tare: waiting for empty scale...\n")
-                       + "Auto-detect is active.\n"
-                       + "Auto-detect timeout: "
-                       + String(autoTimeout)
-                       + " seconds.\n"
-                       + "Use web UI to skip startup tare.\n\n";
+                        + "Auto-detect is active.\n"
+                        + "Auto-detect timeout: "
+                        + String(autoTimeout)
+                        + " seconds.\n"
+                        + "Use web UI to skip startup tare.\n\n";
   }
 
   // fast idle detect to save cycles when we are not in a tare workflow

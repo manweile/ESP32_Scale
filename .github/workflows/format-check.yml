@@ -19,12 +19,22 @@ jobs:
         run: |
           # Use the same file discovery as the VS Code task to include .ino files
           $ws = "$env:GITHUB_WORKSPACE"
-          Get-ChildItem -Path "$ws/PropaneScale" -Recurse -Include *.c,*.cpp,*.h,*.hpp,*.ino | ForEach-Object {
-            & astyle --options="$ws\.astylerc" $_.FullName
+          # Ensure astyle is available after installation
+          if (-not (Get-Command astyle -ErrorAction SilentlyContinue)) {
+            Write-Error "AStyle not found after installation. Ensure Chocolatey installed it correctly."
+            exit 1
           }
-          # Print any changed files
+
+          $exts = '.c','.cpp','.h','.hpp','.ino'
+          Get-ChildItem -Path "$ws/PropaneScale" -Recurse -File -ErrorAction SilentlyContinue |
+            Where-Object { $exts -contains $_.Extension } |
+            ForEach-Object {
+              Write-Host "Formatting: $($_.FullName)"
+              & astyle --options="$ws\.astylerc" $_.FullName
+            }
+
+          # Print any changed files and fail if AStyle modified the working tree
           git --no-pager diff --name-only || Write-Host ""
-          # Fail if AStyle modified the working tree
           git diff --quiet
           if ($LASTEXITCODE -ne 0) {
             Write-Error "AStyle formatting violations detected. Run the workspace task 'Format Code (AStyle)' or: astyle --options=.astylerc -r PropaneScale"
