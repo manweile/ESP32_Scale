@@ -143,7 +143,6 @@ void loop()
   // level read is raison d'etre of this project,
   // it goes after taring is stable to ensure no interference from anything else
   if (levelCtx.state != LevelState::IDLE) {
-    handleLevelReadInput(temp);
     return;
   }
 

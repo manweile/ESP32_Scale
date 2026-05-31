@@ -77,6 +77,15 @@ void handleAppStatus(AsyncWebServerRequest* request)
     payload += "null";
   }
 
+  // Include any recent HX711 diagnostic for the web UI
+  payload += ",\"diagnostic\":";
+
+  if (LastDiagnostic.length() == 0) {
+    payload += "null";
+  } else {
+    payload += "\"" + LastDiagnostic + "\"";
+  }
+
   payload += "}";
 
   request->send(200, "application/json", payload);

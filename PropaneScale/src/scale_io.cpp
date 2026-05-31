@@ -29,6 +29,9 @@
 // External Global State Variables
 extern HX711 scale;                                         /**< HX711 instance for interacting with the load cell amplifier */
 
+// Global State Variables
+String LastDiagnostic = "";                                 /**< Last HX711 diagnostic message suitable for web UI display. */
+
 // Global Averaging Context Variables
 AvgContext avgCtx;                                          /**< Averaging context instance to hold state for non-blocking average computations */
 AvgContext thresholdCtx;                                    /**< Shared threshold averaging context for both level and calibration */
@@ -57,7 +60,7 @@ static char serialQueue[SERIAL_CAPACITY];                   /**< Internal buffer
  *
  * @throws {none} This function does not throw exceptions.
  */
-static bool queueSerialOutput(const char* message, size_t messageLength)
+static bool queueSerialOutputImpl(const char* message, size_t messageLength)
 {
   if (message == nullptr || messageLength == 0) {
     return true;
@@ -266,16 +269,15 @@ bool pollThresholdDetect(float& outThreshold)
 
 void printDiagnostic(const char* operation)
 {
-  Serial.print("HX711 not ready");
+  char buf[128];
 
   if (operation != nullptr && operation[0] != '\0') {
-    Serial.print(" during ");
-    Serial.print(operation);
+    snprintf(buf, sizeof(buf), "HX711 not ready during %s.\nCheck HX711 wiring, power, and data pins (DOUT/CLK).\n\n", operation);
+  } else {
+    snprintf(buf, sizeof(buf), "HX711 not ready.\nCheck HX711 wiring, power, and data pins (DOUT/CLK).\n\n");
   }
 
-  Serial.println('.');
-  Serial.println("Check HX711 wiring, power, and data pins (DOUT/CLK).");
-  Serial.println();
+  queueSerialOutput(buf);
 }
 
 bool queueSerialOutput(const char* message)
@@ -286,7 +288,7 @@ bool queueSerialOutput(const char* message)
     return true;
   }
 
-  return queueSerialOutput(message, strlen(message));
+  return queueSerialOutputImpl(message, strlen(message));
 }
 
 void saveRuntimeTareOffset()
@@ -321,4 +323,22 @@ void startThresholdDetect(float minimumThresholdLbs)
   thresholdCtx.total = 0.0f;
   thresholdCtx.minimumThreshold = minimumThresholdLbs;
   thresholdCtx.active = true;
+}
+
+void webDiagnostic(const char* operation)
+{
+  char buf[128];
+
+  if (operation != nullptr && operation[0] != '\0') {
+    snprintf(buf, sizeof(buf), "HX711 not ready during %s. Check HX711 wiring, power, and data pins (DOUT/CLK).", operation);
+  } else {
+    snprintf(buf, sizeof(buf), "HX711 not ready. Check HX711 wiring, power, and data pins (DOUT/CLK).");
+  }
+
+  LastDiagnostic = String(buf);
+
+  while (LastDiagnostic.length() > 0 && (LastDiagnostic.charAt(LastDiagnostic.length() - 1) == '\n'
+                                         || LastDiagnostic.charAt(LastDiagnostic.length() - 1) == '\r')) {
+    LastDiagnostic.remove(LastDiagnostic.length() - 1);
+  }
 }

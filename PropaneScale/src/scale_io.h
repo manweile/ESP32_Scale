@@ -14,6 +14,9 @@
 
 #pragma once
 
+// External Global State Variables
+extern String LastDiagnostic;                               /**< Last HX711 diagnostic message suitable for web UI display. */
+
 // Declarations for input/output functions for user workflows and HX711 interactions
 
 /**
@@ -148,3 +151,14 @@ void startProbe(unsigned long timeoutMs, int targetSamples);
  * @throws {none} This function does not throw exceptions.
  */
 void startThresholdDetect(float minimumThresholdLbs);
+
+/**
+ * @brief Record an HX711 diagnostic for the web UI without queuing serial output.
+ *
+ * @details Sets a short, trimmed message suitable for embedding in JSON responses consumed by the browser UI.
+ *
+ * @param operation {const char*} Short workflow label used in the error message.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+void webDiagnostic(const char* operation);

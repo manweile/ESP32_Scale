@@ -23,6 +23,7 @@
 // Local library headers
 #include "config.h"
 #include "src/eeprom_store.h"
+#include "src/scale_io.h"
 
 // External Global State Variables and Functions
 extern float calibrationFactor;
@@ -37,50 +38,50 @@ extern float tankTare;
 void defaultEeprom()
 {
   if (!eepromReady) {
-    Serial.println("EEPROM is not initialized; cannot reset to defaults.");
+    queueSerialOutput("EEPROM is not initialized; cannot reset to defaults.\n");
     return;
   }
 
-  Serial.println();
-  Serial.println("Resetting EEPROM to hardcoded defaults...");
+  queueSerialOutput("\nResetting EEPROM to hardcoded defaults...\n");
 
   calibrationFactor = DEF_CALIBRATION_FACTOR;
 
   if (!saveToEeprom(calibrationFactor, CAL_EEPROM_MAGIC, CAL_EEPROM_MAGIC_ADDR, CAL_EEPROM_VALUE_ADDR)) {
-    Serial.println("Failed to save default calibration factor.");
+    queueSerialOutput("Failed to save default calibration factor.\n");
   } else {
-    Serial.print("Calibration factor reset to: ");
-    Serial.println(calibrationFactor, 2);
+    char buf[128];
+    snprintf(buf, sizeof(buf), "Calibration factor reset to: %.2f\n", calibrationFactor);
+    queueSerialOutput(buf);
   }
 
   knownWeight = DEF_KNOWN_WEIGHT;
 
   if (!saveToEeprom(knownWeight, KNOWN_WEIGHT_EEPROM_MAGIC, KNOWN_WEIGHT_EEPROM_MAGIC_ADDR, KNOWN_WEIGHT_EEPROM_VALUE_ADDR)) {
-    Serial.println("Failed to save default known calibration weight.");
+    queueSerialOutput("Failed to save default known calibration weight.\n");
   } else {
-    Serial.print("Known calibration weight reset to: ");
-    Serial.print(knownWeight, 2);
-    Serial.println(" lbs");
+    char buf[128];
+    snprintf(buf, sizeof(buf), "Known calibration weight reset to: %.2f lbs\n", knownWeight);
+    queueSerialOutput(buf);
   }
 
   maxPropane = DEF_MAX_PROPANE;
 
   if (!saveToEeprom(maxPropane, MAX_PROPANE_EEPROM_MAGIC, MAX_PROPANE_EEPROM_MAGIC_ADDR, MAX_PROPANE_EEPROM_VALUE_ADDR)) {
-    Serial.println("Failed to save default max propane weight.");
+    queueSerialOutput("Failed to save default max propane weight.\n");
   } else {
-    Serial.print("Max propane weight reset to: ");
-    Serial.print(maxPropane, 2);
-    Serial.println(" lbs");
+    char buf[128];
+    snprintf(buf, sizeof(buf), "Max propane weight reset to: %.2f lbs\n", maxPropane);
+    queueSerialOutput(buf);
   }
 
   tankTare = DEF_TANK_TARE;
 
   if (!saveToEeprom(tankTare, TARE_EEPROM_MAGIC, TARE_EEPROM_MAGIC_ADDR, TARE_EEPROM_VALUE_ADDR)) {
-    Serial.println("Failed to save default tank tare.");
+    queueSerialOutput("Failed to save default tank tare.\n");
   } else {
-    Serial.print("Tank tare reset to: ");
-    Serial.print(tankTare, 2);
-    Serial.println(" lbs");
+    char buf[128];
+    snprintf(buf, sizeof(buf), "Tank tare reset to: %.2f lbs\n", tankTare);
+    queueSerialOutput(buf);
   }
 
   // Invalidate persisted runtime tare offset so next boot starts from a known state.
@@ -88,11 +89,11 @@ void defaultEeprom()
   EEPROM.put(HX711_OFFSET_EEPROM_MAGIC_ADDR, clearOffsetMagic);
 
   if (!EEPROM.commit()) {
-    Serial.println("Failed to clear saved runtime tare offset.");
+    queueSerialOutput("Failed to clear saved runtime tare offset.\n");
   } else {
-    Serial.println("Saved runtime tare offset record cleared.");
+    queueSerialOutput("Saved runtime tare offset record cleared.\n");
   }
 
   scale.set_scale(calibrationFactor);
-  Serial.println("EEPROM reset complete. Run re-zero ('r') on an empty scale, then recalibrate before use.");
+  queueSerialOutput("EEPROM reset complete. Run re-zero ('r') on an empty scale, then recalibrate before use.\n");
 }
