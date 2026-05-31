@@ -1,3 +1,8 @@
+ # CI workflow to verify AStyle formatting consistency.
+ # Notes:
+ # - This job installs or restores AStyle and runs it across PropaneScale source files.
+ # - We cache AStyle between runs to avoid reinstalling on every CI execution.
+ # - If you need to update AStyle, bump the cache key (change `v1` -> `v2`).
 name: Check formatting
 
 on:
@@ -9,10 +14,33 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install AStyle (Chocolatey)
+      # Cache AStyle binary between runs to avoid repeated Chocolatey installs.
+      # Cache key format: astyle-${{ runner.os }}-v1
+      # - Bump the trailing `v1` when you want to force reinstall/update.
+      # Cached paths include common Chocolatey tool locations and a portable AStyle folder.
+      - name: Cache AStyle
+        uses: actions/cache@v4
+        with:
+          # Cache common Chocolatey and portable AStyle locations
+          path: |
+            C:/ProgramData/chocolatey/lib/astyle/tools
+            C:/AStyle
+          key: astyle-${{ runner.os }}-v1
+          # restore-keys can help when exact key doesn't match (partial restore)
+          restore-keys: |
+            astyle-${{ runner.os }}-
+
+      # Ensure AStyle is available. If restored from cache, this will skip re-install.
+      # On cache miss this step installs AStyle via Chocolatey.
+      - name: Ensure AStyle
         shell: pwsh
         run: |
-          choco install astyle -y
+          # If astyle is already available (restored from cache or preinstalled), use it.
+          if (-not (Get-Command astyle -ErrorAction SilentlyContinue)) {
+            choco install astyle -y
+          } else {
+            Write-Host "AStyle already available (restored from cache or preinstalled)"
+          }
           astyle --version
       - name: Run AStyle and fail on changes
         shell: pwsh
@@ -34,7 +62,8 @@ jobs:
             }
 
           # Print any changed files and fail if AStyle modified the working tree
-          git --no-pager diff --name-only || Write-Host ""
+          $diff = git --no-pager diff --name-only 2>$null
+          if ($diff) { Write-Host $diff } else { Write-Host "" }
           git diff --quiet
           if ($LASTEXITCODE -ne 0) {
             Write-Error "AStyle formatting violations detected. Run the workspace task 'Format Code (AStyle)' or: astyle --options=.astylerc -r PropaneScale"
