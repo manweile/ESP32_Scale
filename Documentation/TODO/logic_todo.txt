@@ -287,3 +287,6 @@ If you only concatenate a literal and a number, prefer multiple Serial.print cal
 Serial.print(F("Waiting for weight placement on scale...\nSend 'q' to cancel.\nLoad placement timeout: "));
 Serial.println(loadDetectSeconds);
 Use snprintf only when you need complex formatting or a single contiguous string (or when you must queue a single buffer).
+
+13) Replace manual JSON assembly with a lightweight JSON helper or library for robustness.
+TO REVIEW
