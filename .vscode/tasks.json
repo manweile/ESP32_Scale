@@ -270,7 +270,10 @@
     // arduino-cli compile task with verbose output and clean build,
     // uses the esp32:esp32:esp32thing FQBN to specify the board configuration,
     // and sets the build.extra_flags property to include -Og for better debugging and -g3 for maximum debug info in the binary
-    // command line: arduino-cli compile -v --clean --fqbn esp32:esp32:esp32thing --build-property "build.extra_flags=-Og -g3" D:/MyArduino/Projects/ESP32_Scale/PropaneScale
+    // -DESP32 required to specifes miising architecture flags for gdb to properly recognize the target architecture and provide correct debugging information
+    // command line: arduino-cli compile -v --clean --fqbn esp32:esp32:esp32thing --build-property "build.extra_flags=-Og -g3 -DESP32" D:/MyArduino/Projects/ESP32_Scale/PropaneScale
+    // alternative that also works:
+    // comand line: arduino-cli compile -v --clean --optimize-for-debug --fqbn esp32:esp32:esp32thing D:/MyArduino/Projects/ESP32_Scale/PropaneScale
     {
       "label": "ESP32 Thing Debug File Compile",
       "type": "shell",
@@ -281,7 +284,7 @@
         "--clean",
         "--fqbn", "esp32:esp32:esp32thing",
         "--build-property",
-        "build.extra_flags=-Og -g3",
+        "build.extra_flags=-Og -g3 -DESP32",
         "${workspaceFolder}/PropaneScale"
       ],
       "problemMatcher": []
