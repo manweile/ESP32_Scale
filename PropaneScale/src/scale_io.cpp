@@ -37,62 +37,7 @@ AvgContext avgCtx;                                          /**< Averaging conte
 AvgContext thresholdCtx;                                    /**< Shared threshold averaging context for both level and calibration */
 ProbeContext probeCtx;                                      /**< Probe context instance to hold state for non-blocking HX711 responsiveness checks */
 
-//  Private Static Constants and Variables
-static constexpr size_t SERIAL_CAPACITY = 2048;             /**< Capacity of the internal serial output queue in bytes */
-static size_t serialLength = 0;                             /**< Current length of data in the serial output queue */
-static size_t serialOffset = 0;                             /**< Current offset for reading from the serial output queue */
-static char serialQueue[SERIAL_CAPACITY];                   /**< Internal buffer for queued serial output */
-
-// Private Definition & Declaration for input/output helper functions
-
-/**
- * @brief Queues a message for serial output, handling buffer management.
- *
- * @details Appends the provided message to an internal output queue.
- * The queue is drained incrementally from loop() using drainQueuedSerialOutput().
- * If the message exceeds the queue capacity, it will not be queued.
- * If the message is null or empty, it is treated as successfully queued.
- * Intentionally private implementation detail, only used as part of the scale ready workflow and user prompts
- *
- * @param message {const char*} The message to queue for serial output.
- * @param messageLength {size_t} The length of the message in bytes.
- * @return {bool} True if the message was successfully queued; false if there was insufficient space in the queue.
- *
- * @throws {none} This function does not throw exceptions.
- */
-static bool queueSerialOutputImpl(const char* message, size_t messageLength)
-{
-  if (message == nullptr || messageLength == 0) {
-    return true;
-  }
-
-  if (messageLength > SERIAL_CAPACITY) {
-    return false;
-  }
-
-  size_t queuedBytes = serialLength - serialOffset;
-
-  // compact the buffer when there is space at the front,
-  // else we risk fragmentation when we don't have contiguous space to queue the new message
-  if (serialOffset > 0 && (queuedBytes + messageLength) <= SERIAL_CAPACITY) {
-    memmove(serialQueue, serialQueue + serialOffset, queuedBytes);
-    serialOffset = 0;
-    serialLength = queuedBytes;
-  }
-
-  // If the message still doesn't fit after compaction, we can't queue it.
-  if ((serialLength + messageLength) > SERIAL_CAPACITY) {
-    return false;
-  }
-
-  memcpy(serialQueue + serialLength, message, messageLength);
-  serialLength += messageLength;
-  return true;
-}
-
-/**
- * @section Public Definitions for input/output functions
- */
+// Public Definitions for input/output functions
 
 bool averageUnits(int readings, int samplesPerReading, float& outAvg)
 {
@@ -138,53 +83,6 @@ void cancelThresholdDetect()
   thresholdCtx.index = 0;
   thresholdCtx.collected = 0;
   thresholdCtx.total = 0.0f;
-}
-
-void drainQueuedSerialOutput()
-{
-  // if there is no queued output, nothing to do
-  if (serialOffset >= serialLength) {
-    serialOffset = 0;
-    serialLength = 0;
-    return;
-  }
-
-  // we need space in the UART buffer before we can write
-  int availableBytes = Serial.availableForWrite();
-
-  if (availableBytes <= 0) {
-    return;
-  }
-
-  size_t bytesToWrite = serialLength - serialOffset;
-
-  // if the message exceeds the available space, we can only write part of it now
-  if (bytesToWrite > static_cast<size_t>(availableBytes)) {
-    bytesToWrite = static_cast<size_t>(availableBytes);
-  }
-
-  // Cap maximum written bytes per loop to avoid long blocking periods that can starve WiFi
-  const size_t MAX_WRITE_PER_TICK = 64;
-
-  if (bytesToWrite > MAX_WRITE_PER_TICK) {
-    bytesToWrite = MAX_WRITE_PER_TICK;
-  }
-
-  // reinterpret the char buffer for Serial.write, which expects a byte buffer
-  size_t writtenBytes = Serial.write(reinterpret_cast<const uint8_t*>(serialQueue + serialOffset), bytesToWrite);
-  serialOffset += writtenBytes;
-
-  if (serialOffset >= serialLength) {
-    serialOffset = 0;
-    serialLength = 0;
-  }
-}
-
-void flushSerialInput()
-{
-  while (Serial.available()) {
-    Serial.read();
-  }
 }
 
 bool pollProbe(bool &outResponsive, unsigned long timeoutMs, int targetSamples)
@@ -280,26 +178,26 @@ void printDiagnostic(const char* operation)
   queueSerialOutput(buf);
 }
 
-bool queueSerialOutput(const char* message)
-{
-  // want to avoid calling strlen() on a null pointer,
-  // so treat null as empty message that is successfully queued
-  if (message == nullptr) {
-    return true;
-  }
-
-  return queueSerialOutputImpl(message, strlen(message));
-}
-
 void saveRuntimeTareOffset()
 {
   float offsetToSave = static_cast<float>(scale.get_offset());
 
-  if (!saveToEeprom(offsetToSave,
-                    HX711_OFFSET_EEPROM_MAGIC,
-                    HX711_OFFSET_EEPROM_MAGIC_ADDR,
-                    HX711_OFFSET_EEPROM_VALUE_ADDR)) {
-    Serial.println("Warning: failed to save runtime tare offset to EEPROM.");
+  bool success = saveToEeprom(offsetToSave, HX711_OFFSET_EEPROM_MAGIC, HX711_OFFSET_EEPROM_MAGIC_ADDR, HX711_OFFSET_EEPROM_VALUE_ADDR);
+
+  if (!success) {
+    LastDiagnostic = String("Warning: failed to save runtime tare offset to EEPROM.");
+  } else {
+    LastDiagnostic = String("Saved runtime tare offset to EEPROM.");
+  }
+
+  // Trim any trailing newline characters for safe JSON embedding in web responses
+  uint8_t lenDiag = LastDiagnostic.length() - 1;
+  char lastChar = LastDiagnostic.charAt(lenDiag);
+
+  while (lenDiag > 0 && (lastChar == '\n' || lastChar == '\r')) {
+    LastDiagnostic.remove(lenDiag);
+    lenDiag--;
+    lastChar = LastDiagnostic.charAt(lenDiag);
   }
 }
 
@@ -335,10 +233,14 @@ void webDiagnostic(const char* operation)
     snprintf(buf, sizeof(buf), "HX711 not ready. Check HX711 wiring, power, and data pins (DOUT/CLK).");
   }
 
+  // Trim any trailing newline characters for safe JSON embedding in web responses
   LastDiagnostic = String(buf);
+  uint8_t lenDiag = LastDiagnostic.length() - 1;
+  char lastChar = LastDiagnostic.charAt(lenDiag);
 
-  while (LastDiagnostic.length() > 0 && (LastDiagnostic.charAt(LastDiagnostic.length() - 1) == '\n'
-                                         || LastDiagnostic.charAt(LastDiagnostic.length() - 1) == '\r')) {
-    LastDiagnostic.remove(LastDiagnostic.length() - 1);
+  while (lenDiag > 0 && (lastChar == '\n' || lastChar == '\r')) {
+    LastDiagnostic.remove(lenDiag);
+    lenDiag--;
+    lastChar = LastDiagnostic.charAt(lenDiag);
   }
 }

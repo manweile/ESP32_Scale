@@ -14,6 +14,9 @@
 
 #pragma once
 
+// Local library headers
+#include "scale_serial.h"                                   // Serial output helpers for web UI compatibility
+
 // External Global State Variables
 extern String LastDiagnostic;                               /**< Last HX711 diagnostic message suitable for web UI display. */
 
@@ -46,25 +49,6 @@ bool averageUnits(int readings, int samplesPerReading, float& outAvg);
  * @throws {none} This function does not throw exceptions.
  */
 void cancelThresholdDetect();
-
-/**
- * @brief Drains queued serial output without blocking.
- *
- * @details Writes at most the currently available UART buffer space from the
- * internal output queue and returns immediately.
- *
- * @throws {none} This function does not throw exceptions.
- */
-void drainQueuedSerialOutput();
-
-/**
- * @brief Flushes any buffered serial input.
- *
- * @details Reads and discards any available serial input to ensure that subsequent serial reads start with fresh input from the user.
- *
- * @throws {none} This function does not throw exceptions.
- */
-void flushSerialInput();
 
 /**
  * @brief Polls the HX711 probe operation for completion.

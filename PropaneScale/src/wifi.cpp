@@ -23,6 +23,7 @@
 #include "web_root.h"
 #include "wifi.h"
 #include "src/eeprom_store.h"
+#include "src/parsing_utils.h"
 #include "src/scale_io.h"
 #include "src/workflows/level_workflow.h"
 #include "src/workflows/startup_tare_workflow.h"
@@ -83,7 +84,16 @@ void handleAppStatus(AsyncWebServerRequest* request)
   if (LastDiagnostic.length() == 0) {
     payload += "null";
   } else {
-    payload += "\"" + LastDiagnostic + "\"";
+    payload += "\"" + jsonEscape(LastDiagnostic) + "\"";
+  }
+
+  // Include last console output (mirrored from queueSerialOutput) for web UI
+  payload += ",\"console\":";
+
+  if (LastConsoleOutput.length() == 0) {
+    payload += "null";
+  } else {
+    payload += "\"" + jsonEscape(LastConsoleOutput) + "\"";
   }
 
   payload += "}";
@@ -241,8 +251,6 @@ void handleTelemetry(AsyncWebServerRequest* request)
 
 bool initWifi()
 {
-  // Initialize serial here so only WiFi module performs console diagnostics
-  Serial.begin(BAUD);
   Serial.println(F("\nInitializing WiFi..."));
 
   // ESP32 is prone to weird issues if the SSID is invalid (including empty) and it's easy to misconfigure at compile time
