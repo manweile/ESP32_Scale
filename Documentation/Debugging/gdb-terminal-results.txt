@@ -1,0 +1,27 @@
+PS C:\Users\gmanw> & "C:\Users\gmanw\AppData\Local\Arduino15\packages\esp32\tools\xtensa-esp-elf-gdb\16.3_20250913\bin\xtensa-esp32-elf-gdb.exe" D:\MyArduino\Projects\ESP32_Scale\PropaneScale\build\esp32.esp32.esp32thing\PropaneScale.ino.elf
+GNU gdb (esp-gdb) 16.3_20250913
+Copyright (C) 2024 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.
+Type "show copying" and "show warranty" for details.
+This GDB was configured as "--host=x86_64-w64-mingw32 --target=xtensa-esp-elf".
+Type "show configuration" for configuration details.
+For bug reporting instructions, please see:
+<https://www.gnu.org/software/gdb/bugs/>.
+Find the GDB manual and other documentation resources online at:
+    <http://www.gnu.org/software/gdb/documentation/>.
+
+For help, type "help".
+Type "apropos word" to search for commands related to "word"...
+Reading symbols from D:\MyArduino\Projects\ESP32_Scale\PropaneScale\build\esp32.esp32.esp32thing\PropaneScale.ino.elf...
+
+after connection to openocd:
+(gdb) target extended-remote :3333
+Remote debugging using :3333
+warning: could not convert 'main' from the host encoding (CP1252) to UTF-32.
+This normally should not happen, please file a bug report.
+0x4008966a in esp_cpu_wait_for_intr () at /home/runner/work/esp32-arduino-lib-builder/esp32-arduino-lib-builder/esp-idf/components/esp_hw_support/cpu.c:64
+warning: 64     /home/runner/work/esp32-arduino-lib-builder/esp32-arduino-lib-builder/esp-idf/components/esp_hw_support/cpu.c: No such file or directory
+(gdb) monitor halt
+(gdb)

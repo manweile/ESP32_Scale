@@ -1,0 +1,77 @@
+the sparkfun esp32 thing has 2 cores. How do I debug both?
+
+To debug both cores of the ESP32 simultaneously, you take advantage of OpenOCD’s dual-core SMP (Symmetric Multiprocessing) feature. 
+OpenOCD has already grouped both cores together behind the scenes under a single GDB server on port 3333.
+When you issue commands in GDB, they apply to both cores at once. 
+Halting pauses both cores, and continuing resumes both cores.
+
+Here is how to monitor and switch between cpu0 (Protocol/App Core) and cpu1 (Real-time Core Core) inside your active GDB session.
+
+1. View the Status of Both Cores
+To see what each core is doing at this exact moment, run the info threads command at your (gdb) prompt:
+(gdb) info threads
+
+(gdb) info threads
+  Id   Target Id                                                      Frame
+* 1    Thread 1 "esp32.cpu0" (Name: esp32.cpu0, state: debug-request) 0x4008966a in esp_cpu_wait_for_intr ()
+    at /home/runner/work/esp32-arduino-lib-builder/esp32-arduino-lib-builder/esp-idf/components/esp_hw_support/cpu.c:64
+  2    Thread 2 "esp32.cpu1" (Name: esp32.cpu1, state: debug-request) 0x400e1dc3 in WiFiSTAClass::config (this=0x0, local_ip=..., gateway=..., subnet=..., dns1=..., dns2=...)
+    at C:\Users\gmanw\AppData\Local\Arduino15\packages\esp32\hardware\esp32\3.3.4\libraries\Network\src/NetworkInterface.h:41
+(gdb)
+
+What you will see:GDB maps each ESP32 core to a software "thread." 
+It will output a table showing Thread 1 (esp32.cpu0) and Thread 2 (esp32.cpu1) along with their current program counter memory addresses. 
+The asterisk * shows which core your current command view is focused on.
+
+2. Switch Your Focus to the Second Core
+If you want to inspect variables, local registers, or memory layouts local to Core 1 instead of Core 0, switch your active view using the thread command:
+(gdb) thread 2
+
+(gdb) thread 2
+[Switching to thread 2 (Thread 2)]
+#0  0x400e1dc3 in WiFiSTAClass::config (this=0x0, local_ip=..., gateway=..., subnet=..., dns1=..., dns2=...)
+    at C:\Users\gmanw\AppData\Local\Arduino15\packages\esp32\hardware\esp32\3.3.4\libraries\Network\src/NetworkInterface.h:41
+warning: Source file is more recent than executable.
+41          IPAddress dns1 = (uint32_t)0x00000000, IPAddress dns2 = (uint32_t)0x00000000, IPAddress dns3 = (uint32_t)0x00000000
+(gdb)
+
+Note: Type thread 1 to switch back to Core 0.
+(gdb) thread 1
+[Switching to thread 1 (Thread 1)]
+#0  0x4008966a in esp_cpu_wait_for_intr () at /home/runner/work/esp32-arduino-lib-builder/esp32-arduino-lib-builder/esp-idf/components/esp_hw_support/cpu.c:64
+warning: 64     /home/runner/work/esp32-arduino-lib-builder/esp32-arduino-lib-builder/esp-idf/components/esp_hw_support/cpu.c: No such file or directory
+(gdb)
+
+
+3. Core-Specific Breakpoints
+Because the framework handles the dual-core clustering, when you set a standard breakpoint like break loop, GDB evaluates it hardware-wide. 
+Whichever core hits that specific section of code first will trigger the break, automatically halting the companion core at the exact same instant so your data stays synchronized.
+If you are running specific background tasks on Core 1 using Arduino's xTaskCreatePinnedToCore(), you can target those background functions directly:
+(gdb) break <yourCore1TaskFunction>
+(gdb) c
+
+Quick Reference Workflow
+Try this exact sequence in your current open GDB window right now:
+a) monitor halt (Make sure the chip is paused)
+b) info threads (Observe where cpu0 and cpu1 are sitting)
+c) thread 2 (Target the second core)
+d) where (Print the backtrace stack trace for core 1)
+
+(gdb) monitor halt
+(gdb) info threads
+  Id   Target Id                                                      Frame
+* 1    Thread 1 "esp32.cpu0" (Name: esp32.cpu0, state: debug-request) 0x4008966a in esp_cpu_wait_for_intr ()
+    at /home/runner/work/esp32-arduino-lib-builder/esp32-arduino-lib-builder/esp-idf/components/esp_hw_support/cpu.c:64
+  2    Thread 2 "esp32.cpu1" (Name: esp32.cpu1, state: debug-request) 0x400e1dc3 in WiFiSTAClass::config (this=0x0, local_ip=..., gateway=..., subnet=..., dns1=..., dns2=...)
+    at C:\Users\gmanw\AppData\Local\Arduino15\packages\esp32\hardware\esp32\3.3.4\libraries\Network\src/NetworkInterface.h:41
+(gdb) thread 2
+[Switching to thread 2 (Thread 2)]
+#0  0x400e1dc3 in WiFiSTAClass::config (this=0x0, local_ip=..., gateway=..., subnet=..., dns1=..., dns2=...)
+    at C:\Users\gmanw\AppData\Local\Arduino15\packages\esp32\hardware\esp32\3.3.4\libraries\Network\src/NetworkInterface.h:41
+41          IPAddress dns1 = (uint32_t)0x00000000, IPAddress dns2 = (uint32_t)0x00000000, IPAddress dns3 = (uint32_t)0x00000000
+(gdb) where
+#0  0x400e1dc3 in WiFiSTAClass::config (this=0x0, local_ip=..., gateway=..., subnet=..., dns1=..., dns2=...)
+    at C:\Users\gmanw\AppData\Local\Arduino15\packages\esp32\hardware\esp32\3.3.4\libraries\Network\src/NetworkInterface.h:41
+#1  0x4008c4c0 in vPortTaskWrapper (pxCode=0x400e1d84 <WiFiSTAClass::config(IPAddress, IPAddress, IPAddress, IPAddress, IPAddress)+476>, pvParameters=0x0)
+    at /home/runner/work/esp32-arduino-lib-builder/esp32-arduino-lib-builder/esp-idf/components/freertos/FreeRTOS-Kernel/portable/xtensa/port.c:139
+(gdb)

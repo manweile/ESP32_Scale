@@ -8,7 +8,7 @@
       "id": "gdbPath",
       "type": "promptString",
       "description": "xtensa-esp32-elf-gdb executable path",
-      "default": "C:/Users/gmanw/AppData/Local/Arduino15/packages/esp32/tools/xtensa-esp-elf-gdb/11.2_20220823/bin/xtensa-esp32-elf-gdb.exe"
+      "default": "C:/Users/gmanw/AppData/Local/Arduino15/packages/esp32/tools/xtensa-esp-elf-gdb/16.3_20250913/bin/xtensa-esp32-elf-gdb.exe"
     },
 
     // Baudrate options for the serial monitor configuration. 
@@ -36,7 +36,7 @@
       "name": "JTAG Debug (ESP32 + ESP-Prog + OpenOCD)",
       "type": "cppdbg",
       "request": "launch",
-      "program": "${workspaceFolder}/.build/esp32-thing-debug/${fileBasename}.elf",
+      "program": "${workspaceFolder}/.build/esp32.esp32.esp32thing/${fileBasename}.elf",
       "cwd": "${workspaceFolder}/PropaneScale",
       "MIMode": "gdb",
       "miDebuggerPath": "${input:gdbPath}",
@@ -55,8 +55,57 @@
           "description": "Reset and halt target",
           "text": "monitor reset halt",
           "ignoreFailures": true
+        },
+        {
+          "description": "Lock the scheduler to prevent cross-core context switching while stepping",
+          "text": "set scheduler-locking step",
+          "ignoreFailures": true
         }
       ]
+    },
+
+    // Attach-only configuration for when OpenOCD is already running in a terminal
+    {
+      "name": "GDB Attach to OpenOCD",
+      "type": "cppdbg",
+      "request": "launch",
+      "MIMode": "gdb",
+      "miDebuggerPath": "C:/Users/gmanw/AppData/Local/Arduino15/packages/esp32/tools/xtensa-esp-elf-gdb/16.3_20250913/bin/xtensa-esp32-elf-gdb.exe",
+      "program": "${workspaceFolder}/PropaneScale/build/esp32.esp32.esp32thing/PropaneScale.ino.elf",
+      "setupCommands": [
+          {
+              "description": "Connect to running OpenOCD server",
+              "text": "-target-select remote localhost:3333",
+              "ignoreFailures": false
+          },
+          {
+              "description": "Reset and halt the ESP32 chip",
+              "text": "monitor reset halt",
+              "ignoreFailures": false
+          },
+          {
+              "description": "Clear lingering breakpoints",
+              "text": "Delete",
+              "ignoreFailures": true
+          },
+          {
+              "description": "Enforce ESP32 hardware breakpoint limit",
+              "text": "set remote hardware-breakpoint-limit 2",
+              "ignoreFailures": true
+          },
+          {
+              "description": "Enforce ESP32 hardware watchpoint limit",
+              "text": "set remote hardware-watchpoint-limit 2",
+              "ignoreFailures": true
+          },
+          {
+            "description": "Lock the scheduler to prevent cross-core context switching while stepping",
+            "text": "set scheduler-locking step",
+            "ignoreFailures": true
+          }
+      ],
+      "cwd": "${workspaceFolder}/PropaneScale",
+      "internalConsoleOptions": "openOnSessionStart"
     },
 
     // This configuration is for launching a serial monitor using a PowerShell script that wraps the arduino-cli monitor command. 
