@@ -25,12 +25,12 @@
 #include "src/scale_io.h"                                   // Input/output functions for user workflows and HX711 interactions
 #include "src/wifi.h"                                       // WiFi module interface for handling HTTP requests and providing telemetry
 #include "src/wifi_bridge.h"                                // Wifi callbacks for WiFi handlers
+#include "src/workflows/calibration_workflow.h"             // Functions for the calibration workflow
 #include "src/workflows/input_context.h"                    // Input context definitions for non-blocking user input workflows
 #include "src/workflows/input_known_weight.h"               // Handlers for the known weight update workflow
 #include "src/workflows/input_propane_weight.h"             // Handlers for the max propane weight update workflow
 #include "src/workflows/input_tank_tare.h"                  // Handlers for the tank tare weight update workflow
 #include "src/workflows/level_workflow.h"                   // Functions for the liquid level read workflow
-#include "src/workflows/calibration_workflow.h"             // Functions for the calibration workflow
 #include "src/workflows/startup_tare_workflow.h"            // Functions for the startup tare workflow
 #include "src/workflows/workflows_contexts.h"               // Context definitions for non-blocking workflows
 
@@ -71,6 +71,68 @@ void resetInputContext()
   inputCtx.buffer[0] = '\0';
 }
 
+// Declarations for FreeRTOS Tasks
+
+/**
+ * @brief Task function for handling scale logic, including HX711 interactions and user workflows.
+ *
+ * @details Runs an infinite loop to manage scale readings, advance user workflows (calibration, level read, tare), and process serial input.
+ *
+ * @param pvParameters {void*} Unused parameter required by FreeRTOS task signature.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+void scaleTask(void* pvParameters)
+{
+  (void)pvParameters;
+
+  // Wait for WiFi to be available so startup can report status to UI
+  while (!wifiStarted) {
+    vTaskDelay(pdMS_TO_TICKS(100));
+  }
+
+  // Initialize scale, start workflows, etc.
+  initializeApp();
+
+  for (;;) {
+    tickTare();
+
+    if (tareCtx.state != TareState::IDLE) {
+      vTaskDelay(pdMS_TO_TICKS(10));
+      continue;
+    }
+
+    tickLevelRead();
+    vTaskDelay(pdMS_TO_TICKS(10));
+  }
+}
+
+/**
+ * @brief Task function for handling WiFi and web UI operations.
+ *
+ * @details Runs an infinite loop to manage WiFi connectivity, handle incoming HTTP requests, and provide telemetry data to the web UI.
+ *
+ * @param pvParameters {void*} Unused parameter required by FreeRTOS task signature.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+void wifiTask(void* pvParameters)
+{
+  (void)pvParameters;
+
+  // Block until WiFi (STA or AP) is successfully started.
+  while (!initWifi()) {
+    vTaskDelay(pdMS_TO_TICKS(2000));
+  }
+
+  wifiStarted = true;
+
+  for (;;) {
+    tickWifi();
+    vTaskDelay(pdMS_TO_TICKS(10));
+  }
+}
+
 // Definitions & Declarations for Project lifecycle functions
 
 /**
@@ -83,53 +145,29 @@ void resetInputContext()
  */
 void setup()
 {
-  // Wifi and web ui are integral to the user experience of this project,
-  // so initialize those first before doing anything else
+  Serial.begin(BAUD);
+
+  // Register callbacks used by the WiFi/web UI code.
   registerCallbacks(&g_wifi_callbacks);
 
-  // Block until WiFi (STA or AP) is successfully started.
-  while (!initWifi()) {
-    delay(2000);
-  }
+  // WiFi task creation on core 0
+  // separate from scale task so that network activity does not delay HX711 readings and workflows
+  xTaskCreatePinnedToCore(wifiTask, "WiFiTask", 4096, NULL, 1, NULL, 0);
 
-  wifiStarted = true;
-
-  // Now that WiFi is up, can initialize the scale and start the startup tare workflow,
-  // which may need to report status or errors to the web UI
-  initializeApp();
+  // Scale task creation on core 1
+  // priority 5 to ensure timely processing of HX711 readings and workflows.
+  xTaskCreatePinnedToCore(scaleTask, "ScaleTask", 4096, NULL, 5, NULL, 1);
 }
 
 /**
- * @brief Main application loop that processes serial input and advances workflows.
+ * @brief Main application loop function, runs indefinitely after setup() completes.
  *
- * @details Advances the calibration, level read, and tare workflows on each iteration.
- * Processes serial input for workflow interactions and command dispatch.
+ * @details The main loop is unused in this application since we're running dedicated FreeRTOS tasks for WiFi and scale logic.
+ * This function simply yields to reduce CPU usage.
  *
  * @throws {none} This function does not throw exceptions.
  */
 void loop()
 {
-  // tickWifi to keep the HTTP server responsive and handle incoming requests,
-  // which may trigger workflow actions via callbacks
-  if (wifiStarted) {
-    tickWifi();
-  }
-
-  // tickTare has to preempt all other workflows and user input until complete,
-  // to guarantee stable tare condition before allowing any other interactions or workflows to run
-  tickTare();
-
-  if (tareCtx.state != TareState::IDLE) {
-    return;
-  }
-
-  // Advance other active state machines each iteration
-  tickLevelRead();
-  // tickCalibration();
-
-  // level read is raison d'etre of this project,
-  // it goes after taring is stable to ensure no interference from anything else
-  if (levelCtx.state != LevelState::IDLE) {
-    return;
-  }
+  vTaskDelay(pdMS_TO_TICKS(1000));
 }

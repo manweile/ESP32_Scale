@@ -11,16 +11,15 @@
  * @copyright Copyright (c) 2026 Gerald Manweiler
  */
 
-// Standard library headers
 #include <Arduino.h>
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
 #include <ESPmDNS.h>
 #include <WiFi.h>
+#include <LittleFS.h>
 
 // Local library headers
 #include "config.h"
-#include "web_root.h"
 #include "wifi.h"
 #include "src/eeprom_store.h"
 #include "src/parsing_utils.h"
@@ -182,7 +181,7 @@ void handleLevelStatus(AsyncWebServerRequest* request)
 
 void handleRoot(AsyncWebServerRequest* request)
 {
-  request->send(200, "text/html", ROOT_PAGE);
+  request->send(LittleFS, "/index.html", "text/html");
 }
 
 void handleStartupAck(AsyncWebServerRequest* request)
@@ -252,6 +251,15 @@ void handleTelemetry(AsyncWebServerRequest* request)
 bool initWifi()
 {
   Serial.println(F("\nInitializing WiFi..."));
+
+  // Mount LittleFS to serve static web assets (index.html, css, js)
+  if (!LittleFS.begin()) {
+    Serial.println(F("Warning: LittleFS mount failed - static files unavailable"));
+  } else {
+    Serial.println(F("LittleFS mounted"));
+    // Serve files from the LittleFS root and use index.html as default
+    server.serveStatic("/", LittleFS, "/").setDefaultFile("index.html");
+  }
 
   // ESP32 is prone to weird issues if the SSID is invalid (including empty) and it's easy to misconfigure at compile time
   if (WIFI_SSID[0] == '\0') {

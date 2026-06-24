@@ -74,6 +74,39 @@ Uploading is done via esptool.exe
     esptool.exe --chip esp32 --port COM4 --baud 921600 write-flash -z 0x0 D:/MyArduino/Projects/ESP32_Scale/PropaneScale/build/esp32.esp32.esp32thing/PropaneScale.ino.merged.bin
     ```
 
+  ### LittleFS data upload (web UI)
+
+  This project serves the web UI from a LittleFS filesystem. The `data/` folder at the sketch root contains `index.html`, `styles.css`, and `app.js`. Upload the LittleFS image with the CLI as follows.
+
+  1. Create the LittleFS image from `data/` (example uses `mklittlefs`):
+
+  ```bash
+  mklittlefs -c data -p 256 -s 0x200000 -o littlefs.bin
+  ```
+
+  1. Determine the LittleFS partition offset for your board:
+
+  - Inspect the partition CSV used by your board package: `%LOCALAPPDATA%/Arduino15/packages/esp32/hardware/esp32/<version>/tools/partitions/` (Windows) or `~/.arduino15/packages/esp32/hardware/esp32/<version>/tools/partitions/` (Linux/macOS).
+  - Open the CSV matching your partition scheme (Tools → Partition Scheme in the Arduino IDE) and find the row named `littlefs`, `spiffs`, or `data`. The offset column (hex) is the value to use with `esptool` (for example `0x110000`).
+
+  1. Upload the `littlefs.bin` image with `esptool` (example):
+
+  Windows (adjust COM port and path):
+
+  ```powershell
+  & "$env:LOCALAPPDATA\Arduino15\packages\esp32\tools\esptool_py\5.1.0\esptool.exe" --chip esp32 --port COM3 --baud 921600 write_flash -z 0x110000 littlefs.bin
+  ```
+
+  Linux/macOS example:
+
+  ```bash
+  esptool.py --chip esp32 --port /dev/ttyUSB0 --baud 921600 write_flash -z 0x110000 littlefs.bin
+  ```
+
+  1. Verify by opening the serial monitor (`arduino-cli monitor`) and checking for `LittleFS mounted` or by browsing the device web UI.
+
+  See `data/README.md` for more details and alternative upload methods (Arduino IDE plugin, PlatformIO).
+
 ## Configuration
 
 - Edit `PropaneScale/config.h` to change:
