@@ -1,28 +1,42 @@
 #!/bin/sh
 # Pre-commit hook: format staged C/C++/Arduino files with astyle and re-stage them.
-# Install astyle and ensure core.hooksPath is set: git config core.hooksPath .githooks
+# Ensure core.hooksPath is set: `git config core.hooksPath .githooks`
 
-# Get staged files (Added, Copied, Modified)
-STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep -E "\.(c|cc|cpp|h|hpp|ino)$" || true)
+# Resolve repository root (ensures options path is correct regardless of CWD)
+REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo ".")
+ASTYLE_OPTIONS="$REPO_ROOT/.astylerc"
 
-if [ -z "$STAGED_FILES" ]; then
-  exit 0
+# Locate astyle: prefer PATH, fallback to common Windows install location
+if command -v astyle >/dev/null 2>&1; then
+  ASTYLE_CMD="astyle"
+elif [ -x "/c/AStyle/astyle.exe" ]; then
+  ASTYLE_CMD="/c/AStyle/astyle.exe"
+elif [ -x "C:/AStyle/astyle.exe" ]; then
+  ASTYLE_CMD="C:/AStyle/astyle.exe"
+else
+  echo "error: astyle not found in PATH or at C:/AStyle/astyle.exe. Install astyle or add it to PATH to enable automatic formatting in pre-commit."
+  echo "To bypass this hook temporarily, run: git commit --no-verify"
+  # Fail the commit when astyle is missing to enforce formatting compliance
+  exit 1
 fi
 
-FORMAT_CHANGED=0
-for file in $STAGED_FILES; do
-  if [ -f "$file" ]; then
-    echo "Formatting $file"
-    astyle --options=".astylerc" "$file"
-    git add "$file"
-    FORMAT_CHANGED=1
-  fi
-done
+# Process staged files safely (handles filenames with spaces/newlines)
+git diff --cached --name-only --diff-filter=ACM -z |
+  while IFS= read -r -d '' file; do
+    case "$file" in
+      *.c|*.cc|*.cpp|*.h|*.hpp|*.ino)
+        if [ -f "$file" ]; then
+          echo "Formatting $file"
+          "$ASTYLE_CMD" --options="$ASTYLE_OPTIONS" "$file" || { echo "astyle failed on $file"; exit 1; }
+          git add "$file"
+        fi
+        ;;
+    esac
+  done
 
-if [ $FORMAT_CHANGED -eq 1 ]; then
-  echo "Files reformatted and re-staged. Please review and re-run commit if necessary."
-  # Allow commit to continue with formatted files staged
-  exit 0
+# Re-check staged C/C++/INO files and inform the user that files may have been reformatted.
+if git diff --cached --name-only --diff-filter=ACM | grep -E "\.(c|cc|cpp|h|hpp|ino)$" >/dev/null 2>&1; then
+  echo "Files may have been reformatted and re-staged. Please review and re-run commit if necessary."
 fi
 
 exit 0

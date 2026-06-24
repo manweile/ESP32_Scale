@@ -15,6 +15,9 @@
 
 #pragma once
 
+// Standard library headers
+#include <Arduino.h>
+
 // Declarations for parsing and validation utility functions
 
 /**
@@ -31,6 +34,20 @@
  * @throws {none} This function does not throw exceptions.
  */
 bool isValidBoundedFloat(float value, float minimumValue, float maximumValue, bool useAbsoluteMagnitude = false);
+
+/**
+ * @brief Escape a string for safe embedding inside JSON string quotes.
+ *
+ * @details Escapes special characters in the input string according to JSON string escaping rules, so that the output can be safely embedded inside JSON string quotes without breaking the JSON syntax.
+ * The function does not add surrounding quotes; it only escapes the characters within the string.
+ * This is useful for preparing strings that will be included in JSON responses sent to the web UI, ensuring that any special characters do not cause JSON parsing errors on the client side.
+ *
+ * @param s Input string to escape.
+ * @return Escaped string (without surrounding quotes).
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+String jsonEscape(const String& s);
 
 /**
  * @brief Parses a non-negative float from a null-terminated C string.

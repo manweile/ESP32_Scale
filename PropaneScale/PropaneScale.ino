@@ -23,24 +23,27 @@
 #include "src/parsing_utils.h"                              // Utility functions for validating and parsing input values
 #include "src/runtime_report.h"                             // Declarations for runtime reporting functions
 #include "src/scale_io.h"                                   // Input/output functions for user workflows and HX711 interactions
+#include "src/wifi.h"                                       // WiFi module interface for handling HTTP requests and providing telemetry
+#include "src/wifi_bridge.h"                                // Wifi callbacks for WiFi handlers
+#include "src/workflows/calibration_workflow.h"             // Functions for the calibration workflow
 #include "src/workflows/input_context.h"                    // Input context definitions for non-blocking user input workflows
 #include "src/workflows/input_known_weight.h"               // Handlers for the known weight update workflow
 #include "src/workflows/input_propane_weight.h"             // Handlers for the max propane weight update workflow
 #include "src/workflows/input_tank_tare.h"                  // Handlers for the tank tare weight update workflow
 #include "src/workflows/level_workflow.h"                   // Functions for the liquid level read workflow
-#include "src/workflows/workflows_contexts.h"               // Context definitions for non-blocking workflows
 #include "src/workflows/startup_tare_workflow.h"            // Functions for the startup tare workflow
-#include "src/workflows/calibration_workflow.h"             // Functions for the calibration workflow
+#include "src/workflows/workflows_contexts.h"               // Context definitions for non-blocking workflows
 
 // Global Class Instances
 HX711 scale;                                                /**< HX711 instance for interacting with the load cell amplifier */
 
 // Global State Variables
 float calibrationFactor = 0.0f;                             /**< Calibration factor for converting raw HX711 readings to weight in pounds */
-bool eepromReady = false;                                   /**< Flag to track if EEPROM was successfully initialized */
-float knownWeight = 0.0f;                                   /**< Known weight for calibration */
-float maxPropane = 0.0f;                                    /**< Maximum legal propane weight in pounds */
-float tankTare = 0.0f;                                      /**< Tare weight of the empty propane tank in pounds */
+bool  eepromReady       = false;                            /**< Flag to track if EEPROM was successfully initialized */
+float knownWeight       = 0.0f;                             /**< Known weight for calibration */
+float maxPropane        = 0.0f;                             /**< Maximum legal propane weight in pounds */
+float tankTare          = 0.0f;                             /**< Tare weight of the empty propane tank in pounds */
+bool  wifiStarted       = false;                            /**< Tracks whether WiFi has been initialized */
 
 // State Machine Variables
 CalContext calCtx;                                          /**< Calibration context instance to hold state for calibration workflows */
@@ -68,179 +71,103 @@ void resetInputContext()
   inputCtx.buffer[0] = '\0';
 }
 
+// Declarations for FreeRTOS Tasks
+
+/**
+ * @brief Task function for handling scale logic, including HX711 interactions and user workflows.
+ *
+ * @details Runs an infinite loop to manage scale readings, advance user workflows (calibration, level read, tare), and process serial input.
+ *
+ * @param pvParameters {void*} Unused parameter required by FreeRTOS task signature.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+void scaleTask(void* pvParameters)
+{
+  (void)pvParameters;
+
+  // Wait for WiFi to be available so startup can report status to UI
+  while (!wifiStarted) {
+    vTaskDelay(pdMS_TO_TICKS(100));
+  }
+
+  // Initialize scale, start workflows, etc.
+  initializeApp();
+
+  for (;;) {
+    tickTare();
+
+    if (tareCtx.state != TareState::IDLE) {
+      vTaskDelay(pdMS_TO_TICKS(10));
+      continue;
+    }
+
+    tickLevelRead();
+    vTaskDelay(pdMS_TO_TICKS(10));
+  }
+}
+
+/**
+ * @brief Task function for handling WiFi and web UI operations.
+ *
+ * @details Runs an infinite loop to manage WiFi connectivity, handle incoming HTTP requests, and provide telemetry data to the web UI.
+ *
+ * @param pvParameters {void*} Unused parameter required by FreeRTOS task signature.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+void wifiTask(void* pvParameters)
+{
+  (void)pvParameters;
+
+  // Block until WiFi (STA or AP) is successfully started.
+  while (!initWifi()) {
+    vTaskDelay(pdMS_TO_TICKS(2000));
+  }
+
+  wifiStarted = true;
+
+  for (;;) {
+    tickWifi();
+    vTaskDelay(pdMS_TO_TICKS(10));
+  }
+}
+
 // Definitions & Declarations for Project lifecycle functions
 
 /**
- * @brief Initializes the application and starts the startup tare workflow.
+ * @brief Initializes the application, starts the startup tare workflow and initializes WiFi.
  *
  * @details Initializes the serial interface, sets up the HX711 scale, applies calibration from EEPROM,
- * and begins the startup tare workflow.
+ * and begins the startup tare workflow, and initializes WiFi.
  *
  * @throws {none} This function does not throw exceptions.
  */
 void setup()
 {
   Serial.begin(BAUD);
-  
-  Serial.println();
-  Serial.println(APP_TITLE);
 
-  initializeApp();
-  beginStartupTare();
+  // Register callbacks used by the WiFi/web UI code.
+  registerCallbacks(&g_wifi_callbacks);
+
+  // WiFi task creation on core 0
+  // separate from scale task so that network activity does not delay HX711 readings and workflows
+  xTaskCreatePinnedToCore(wifiTask, "WiFiTask", 4096, NULL, 1, NULL, 0);
+
+  // Scale task creation on core 1
+  // priority 5 to ensure timely processing of HX711 readings and workflows.
+  xTaskCreatePinnedToCore(scaleTask, "ScaleTask", 4096, NULL, 5, NULL, 1);
 }
 
 /**
- * @brief Main application loop that processes serial input and advances workflows.
+ * @brief Main application loop function, runs indefinitely after setup() completes.
  *
- * @details Advances the calibration, level read, and tare workflows on each iteration.
- * Processes serial input for workflow interactions and command dispatch.
+ * @details The main loop is unused in this application since we're running dedicated FreeRTOS tasks for WiFi and scale logic.
+ * This function simply yields to reduce CPU usage.
  *
  * @throws {none} This function does not throw exceptions.
  */
 void loop()
 {
-  // can't have any queued serial output before processing new input or advancing workflows
-  drainQueuedSerialOutput();
-
-  // tickTare has to preempt all other workflows and user input until complete,
-  // to guarantee stable tare condition before allowing any other interactions or workflows to run
-  tickTare();
-
-  if (tareCtx.state != TareState::IDLE) {
-    // While startup tare is active, keep serial reads centralized here and
-    // forward to the startup tare input handler so user can send 'q' to skip.
-    if (Serial.available()) {
-      char temp = Serial.read();
-      handleStartupTareInput(temp);
-    }
-    return;
-  }
-
-  // Advance other active state machines each iteration
-  tickLevelRead();
-  tickCalibration();
-
-  // On no serial input, need return so state machines can continue running until next loop iteration
-  if (!Serial.available()) {
-    return;
-  }
-
-  char temp = Serial.read();
-
-  // level read is raison d'etre of this project,
-  // it goes after taring is stable to ensure no interference from anything else
-  if (levelCtx.state != LevelState::IDLE) {
-    handleLevelReadInput(temp);
-    return;
-  }
-
-  // multi-character input workflows all require user hit enter after inputting new value,
-  // do not interact with the scale hardware at all, and have unique input handling requirements
-  // tank tare & propane weight likely to be used in preparation for level workflow,
-  // and may require a calibration workflow afterward
-  // known weight likely to used in preparation for calibration workflow
-
-  if (inputCtx.mode == InputMode::TANK_TARE) {
-    handleTankTareInput(temp);
-    return;
-  }
-
-  if (inputCtx.mode == InputMode::PROPANE_WEIGHT) {
-    handlePropaneWeightInput(temp);
-    return;
-  }
-
-  if (inputCtx.mode == InputMode::KNOWN_WEIGHT) {
-    handleKnownWeightInput(temp);
-    return;
-  }
-
-  // Don't want accidentally triggered multiple commands in a row
-  // MUST come after all the input handlers because user hits enter somewhere in those workflows,
-  // so newlines need to be processed by handlers but ignored for general command dispatch
-  if (temp == '\r' || temp == '\n') {
-    return;
-  }
-
-  // calibration workflows (especially manual) are special workflows that require single-character command to start,
-  // do interact with the scale hardware, and have unique input handling and display logic separate from the other multi-character input workflows,
-  // so they go after the input context workflow checks but before the single-character command dispatch
-  if (calCtx.state != CalState::IDLE) {
-    handleCalibrationInput(temp);
-    return;
-  }
-
-  bool handled = true;
-
-  // by having empty lower case input cases, do not need to call tolower() on the input
-  // this allows the user to send either upper or lower case commands
-  // without needing to worry about case sensitivity
-  switch (temp) {
-  case 'a':
-  case 'A':
-    automaticCalibration();
-    break;
-
-  case 'c':
-  case 'C':
-    currentRuntimeValues();
-    break;
-
-  case 'd':
-  case 'D':
-    defaultEeprom();
-    break;
-
-  case 'e':
-  case 'E':
-    eepromValues();
-    break;
-
-  case 'h':
-  case 'H':
-    helpMenu();
-    break;
-
-  case 'k':
-  case 'K':
-    knownWeightUpdate();
-    break;
-
-  case 'l':
-  case 'L':
-    liquidLevel();
-    break;
-
-  case 'm':
-  case 'M':
-    manualCalibration();
-    break;
-
-  case 'p':
-  case 'P':
-    propaneWeightUpdate();
-    break;
-
-  case 'r':
-  case 'R':
-    reZero();
-    break;
-
-  case 't':
-  case 'T':
-    tankTareUpdate();
-    break;
-
-  default:
-    handled = false;
-    Serial.print("Unknown command: '");
-    Serial.print(temp);
-    Serial.println("'. Send 'h' for help.");
-    break;
-  }
-
-  // flush any extra input after handling a command to prevent accidental multiple command triggers from a single line of input
-  if (handled && inputCtx.mode == InputMode::NONE) {
-    flushSerialInput();
-  }
+  vTaskDelay(pdMS_TO_TICKS(1000));
 }

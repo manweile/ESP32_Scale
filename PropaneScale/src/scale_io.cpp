@@ -27,119 +27,17 @@
 #include "workflows/workflows_contexts.h"                   // Workflow context types for managing state across non-blocking workflow steps
 
 // External Global State Variables
-extern HX711 scale;                                         // HX711 instance for interacting with the load cell amplifier
+extern HX711 scale;                                         /**< HX711 instance for interacting with the load cell amplifier */
+
+// Global State Variables
+String LastDiagnostic = "";                                 /**< Last HX711 diagnostic message suitable for web UI display. */
 
 // Global Averaging Context Variables
-AvgContext avgCtx;                                          // Averaging context instance to hold state for non-blocking average computations
-AvgContext thresholdCtx;                                    // Shared threshold averaging context for both level and calibration
-ProbeContext probeCtx;                                       // Probe context instance to hold state for non-blocking HX711 responsiveness checks
+AvgContext avgCtx;                                          /**< Averaging context instance to hold state for non-blocking average computations */
+AvgContext thresholdCtx;                                    /**< Shared threshold averaging context for both level and calibration */
+ProbeContext probeCtx;                                      /**< Probe context instance to hold state for non-blocking HX711 responsiveness checks */
 
-//  Private Static Constants and Variables
-static constexpr size_t SERIAL_CAPACITY = 2048;              // Capacity of the internal serial output queue in bytes
-static size_t serialLength = 0;                              // Current length of data in the serial output queue
-static size_t serialOffset = 0;                              // Current offset for reading from the serial output queue
-static char serialQueue[SERIAL_CAPACITY];                    // Internal buffer for queued serial output
-
-// Private Definitions & Declarations for input/output helper functions
-
-/**
- * @brief Probes the HX711 with multiple reads to determine if it is producing a responsive signal.
- *
- * @details Secondary check to detect if HX711 is powered but not properly connected.
- * Intentionally private implementation detail, only used as part of the scale ready workflow.
- *
- * @return {bool} True if the HX711 is producing a responsive signal with variability across multiple reads; false otherwise.
- *
- * @throws {none} This function does not throw exceptions.
- */
-static bool hasSignal()
-{
-  const int probeReads = LIVE_SAMPLES;                      // HX711 is set at 10 samples per second
-  bool haveSample = false;
-  long minRaw = 0;
-  long maxRaw = 0;
-
-  for (int i = 0; i < probeReads; ++i) {
-    // wait ready false means the HX711 is not responding at all
-    if (!scale.wait_ready_timeout(READY_TIMEOUT_MS)) {
-      return false;
-    }
-
-    // instantiate in this scope to ensure clean signal path and timing for each read
-    long raw = scale.read();
-
-    // if we can read at least one sample, can check for signal variability
-    if (!haveSample) {
-      minRaw = raw;
-      maxRaw = raw;
-      haveSample = true;
-      continue;
-    }
-
-    // update on each iteration to track signal variability
-    if (raw < minRaw) minRaw = raw;
-
-    if (raw > maxRaw) maxRaw = raw;
-  }
-
-  // if we couldn't get any samples, we can't confirm responsiveness
-  if (!haveSample) {
-    return false;
-  }
-
-  // true when at least one probe read changed
-  // false when all probe reads the same, indicating flat/stuck/unresponsive signal
-  return maxRaw != minRaw;
-}
-
-/**
- * @brief Queues a message for serial output, handling buffer management.
- *
- * @details Appends the provided message to an internal output queue.
- * The queue is drained incrementally from loop() using drainQueuedSerialOutput().
- * If the message exceeds the queue capacity, it will not be queued.
- * If the message is null or empty, it is treated as successfully queued.
- * Intentionally private implementation detail, only used as part of the scale ready workflow and user prompts
- *
- * @param message {const char*} The message to queue for serial output.
- * @param messageLength {size_t} The length of the message in bytes.
- * @return {bool} True if the message was successfully queued; false if there was insufficient space in the queue.
- *
- * @throws {none} This function does not throw exceptions.
- */
-static bool queueSerialOutput(const char* message, size_t messageLength)
-{
-  if (message == nullptr || messageLength == 0) {
-    return true;
-  }
-
-  if (messageLength > SERIAL_CAPACITY) {
-    return false;
-  }
-
-  size_t queuedBytes = serialLength - serialOffset;
-
-  // compact the buffer when there is space at the front,
-  // else we risk fragmentation when we don't have contiguous space to queue the new message
-  if (serialOffset > 0 && (queuedBytes + messageLength) <= SERIAL_CAPACITY) {
-    memmove(serialQueue, serialQueue + serialOffset, queuedBytes);
-    serialOffset = 0;
-    serialLength = queuedBytes;
-  }
-
-  // If the message still doesn't fit after compaction, we can't queue it.
-  if ((serialLength + messageLength) > SERIAL_CAPACITY) {
-    return false;
-  }
-
-  memcpy(serialQueue + serialLength, message, messageLength);
-  serialLength += messageLength;
-  return true;
-}
-
-/**
- * @section Public Definitions for input/output functions
- */
+// Public Definitions for input/output functions
 
 bool averageUnits(int readings, int samplesPerReading, float& outAvg)
 {
@@ -185,46 +83,6 @@ void cancelThresholdDetect()
   thresholdCtx.index = 0;
   thresholdCtx.collected = 0;
   thresholdCtx.total = 0.0f;
-}
-
-void drainQueuedSerialOutput()
-{
-  // if there is no queued output, nothing to do
-  if (serialOffset >= serialLength) {
-    serialOffset = 0;
-    serialLength = 0;
-    return;
-  }
-
-  // we need space in the UART buffer before we can write
-  int availableBytes = Serial.availableForWrite();
-
-  if (availableBytes <= 0) {
-    return;
-  }
-
-  size_t bytesToWrite = serialLength - serialOffset;
-
-  // if the message exceeds the available space, we can only write part of it now
-  if (bytesToWrite > static_cast<size_t>(availableBytes)) {
-    bytesToWrite = static_cast<size_t>(availableBytes);
-  }
-
-  // reinterpret the char buffer for Serial.write, which expects a byte buffer
-  size_t writtenBytes = Serial.write(reinterpret_cast<const uint8_t*>(serialQueue + serialOffset), bytesToWrite);
-  serialOffset += writtenBytes;
-
-  if (serialOffset >= serialLength) {
-    serialOffset = 0;
-    serialLength = 0;
-  }
-}
-
-void flushSerialInput()
-{
-  while (Serial.available()) {
-    Serial.read();
-  }
 }
 
 bool pollProbe(bool &outResponsive, unsigned long timeoutMs, int targetSamples)
@@ -309,38 +167,37 @@ bool pollThresholdDetect(float& outThreshold)
 
 void printDiagnostic(const char* operation)
 {
-  Serial.print("HX711 not ready");
+  char buf[128];
 
   if (operation != nullptr && operation[0] != '\0') {
-    Serial.print(" during ");
-    Serial.print(operation);
+    snprintf(buf, sizeof(buf), "HX711 not ready during %s.\nCheck HX711 wiring, power, and data pins (DOUT/CLK).\n\n", operation);
+  } else {
+    snprintf(buf, sizeof(buf), "HX711 not ready.\nCheck HX711 wiring, power, and data pins (DOUT/CLK).\n\n");
   }
 
-  Serial.println('.');
-  Serial.println("Check HX711 wiring, power, and data pins (DOUT/CLK).");
-  Serial.println();
-}
-
-bool queueSerialOutput(const char* message)
-{
-  // want to avoid calling strlen() on a null pointer,
-  // so treat null as empty message that is successfully queued
-  if (message == nullptr) {
-    return true;
-  }
-
-  return queueSerialOutput(message, strlen(message));
+  queueSerialOutput(buf);
 }
 
 void saveRuntimeTareOffset()
 {
   float offsetToSave = static_cast<float>(scale.get_offset());
 
-  if (!saveToEeprom(offsetToSave,
-                    HX711_OFFSET_EEPROM_MAGIC,
-                    HX711_OFFSET_EEPROM_MAGIC_ADDR,
-                    HX711_OFFSET_EEPROM_VALUE_ADDR)) {
-    Serial.println("Warning: failed to save runtime tare offset to EEPROM.");
+  bool success = saveToEeprom(offsetToSave, HX711_OFFSET_EEPROM_MAGIC, HX711_OFFSET_EEPROM_MAGIC_ADDR, HX711_OFFSET_EEPROM_VALUE_ADDR);
+
+  if (!success) {
+    LastDiagnostic = String("Warning: failed to save runtime tare offset to EEPROM.");
+  } else {
+    LastDiagnostic = String("Saved runtime tare offset to EEPROM.");
+  }
+
+  // Trim any trailing newline characters for safe JSON embedding in web responses
+  uint8_t lenDiag = LastDiagnostic.length() - 1;
+  char lastChar = LastDiagnostic.charAt(lenDiag);
+
+  while (lenDiag > 0 && (lastChar == '\n' || lastChar == '\r')) {
+    LastDiagnostic.remove(lenDiag);
+    lenDiag--;
+    lastChar = LastDiagnostic.charAt(lenDiag);
   }
 }
 
@@ -364,4 +221,26 @@ void startThresholdDetect(float minimumThresholdLbs)
   thresholdCtx.total = 0.0f;
   thresholdCtx.minimumThreshold = minimumThresholdLbs;
   thresholdCtx.active = true;
+}
+
+void webDiagnostic(const char* operation)
+{
+  char buf[128];
+
+  if (operation != nullptr && operation[0] != '\0') {
+    snprintf(buf, sizeof(buf), "HX711 not ready during %s. Check HX711 wiring, power, and data pins (DOUT/CLK).", operation);
+  } else {
+    snprintf(buf, sizeof(buf), "HX711 not ready. Check HX711 wiring, power, and data pins (DOUT/CLK).");
+  }
+
+  // Trim any trailing newline characters for safe JSON embedding in web responses
+  LastDiagnostic = String(buf);
+  uint8_t lenDiag = LastDiagnostic.length() - 1;
+  char lastChar = LastDiagnostic.charAt(lenDiag);
+
+  while (lenDiag > 0 && (lastChar == '\n' || lastChar == '\r')) {
+    LastDiagnostic.remove(lenDiag);
+    lenDiag--;
+    lastChar = LastDiagnostic.charAt(lenDiag);
+  }
 }

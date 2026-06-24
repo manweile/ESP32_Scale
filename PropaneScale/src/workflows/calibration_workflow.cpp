@@ -115,15 +115,16 @@ static void transitionFromWaitEmpty()
 
   // workflow - auto calibration waiting on user to place known weight on scale after empty confirmation
   if (calCtx.mode == CalMode::AUTO) {
-    char buf[64];
-    snprintf(buf, sizeof(buf), "Place the known weight on the scale: %.2f lbs\n", knownWeight);
-    queueSerialOutput(buf);
+    // char buf[64];
+    // snprintf(buf, sizeof(buf), "Place the known weight on the scale: %.2f lbs\n", knownWeight);
+    // queueSerialOutput(buf);
+    Serial.println(F("Place the saved known weight on the scale."));
   }
 
   // workflow - manual calibration waiting on user to place known weight on scale after empty confirmation,
   // but user will provide the known weight value instead of using the default
   if (calCtx.mode == CalMode::MANUAL) {
-    Serial.println("Place known weight on scale");
+    Serial.println(F("Place a known weight on scale"));
   }
 
   // Defensive guard: only AUTO/MANUAL should reach this point.
@@ -134,10 +135,13 @@ static void transitionFromWaitEmpty()
     return;
   }
 
-  char buf[128];
-  unsigned long loadDetectSeconds = CONFIRM_TIMEOUT_MS / 1000UL;
-  snprintf(buf, sizeof(buf), "Waiting for weight placement on scale...\nSend 'q' to cancel.\nLoad placement timeout: %lu seconds.\n", loadDetectSeconds);
-  queueSerialOutput(buf);
+  // char buf[128];
+  // unsigned long loadDetectSeconds = CONFIRM_TIMEOUT_MS / 1000UL;
+  // snprintf(buf, sizeof(buf), "Waiting for weight placement on scale...\nSend 'q' to cancel.\nLoad placement timeout: %lu seconds.\n", loadDetectSeconds);
+  // queueSerialOutput(buf);
+  Serial.println(F("Waiting for weight placement on scale..."));
+  Serial.println(F("Send 'q' to cancel."));
+  Serial.println(F("Load placement timeout: 15 seconds"));
 
   calCtx.stateStartMs = millis();
   calCtx.state = CalState::WAIT_LOAD;
@@ -206,14 +210,16 @@ void handleCalibrationInput(char serialchar)
     // a user typo is always possible
     if (serialchar != 'q' && serialchar != 'Q') {
       if (calCtx.mode == CalMode::AUTO) {
-        char buf[64];
-        snprintf(buf, sizeof(buf), "Invalid automatic calibration key: '%c'. Use 'q' to cancel.\n", serialchar);
-        Serial.print(buf);
+        // char buf[64];
+        // snprintf(buf, sizeof(buf), "Invalid automatic calibration key: '%c'. Use 'q' to cancel.\n", serialchar);
+        // Serial.print(buf);
+        Serial.println(F("Invalid automatic calibration key. Use 'q' to cancel."));
       } else
         if (calCtx.mode == CalMode::REZERO) {
-          char buf[96];
-          snprintf(buf, sizeof(buf), "Invalid re-zero key: '%c'. Use 'q' to cancel or 'z' to force re-zero.\n", serialchar);
-          Serial.print(buf);
+          // char buf[96];
+          // snprintf(buf, sizeof(buf), "Invalid re-zero key: '%c'. Use 'q' to cancel or 'z' to force re-zero.\n", serialchar);
+          // Serial.print(buf);
+          Serial.println(F("Invalid re-zero key. Use 'q' to cancel or 'z' to force re-zero."));
         }
 
       return;
@@ -223,7 +229,7 @@ void handleCalibrationInput(char serialchar)
     // REZERO doesn't change it at all
 
     if (calCtx.mode == CalMode::AUTO || calCtx.mode == CalMode::MANUAL) {
-      Serial.println("Calibration cancelled. Changes were not saved.");
+      Serial.println(F("Calibration cancelled. Changes were not saved."));
       calibrationFactor = calCtx.originalCalibrationFactor;
 
       if (calCtx.thresholdPending) {
@@ -235,7 +241,7 @@ void handleCalibrationInput(char serialchar)
     }
 
     if (calCtx.mode == CalMode::REZERO) {
-      Serial.println("Runtime re-zero cancelled.");
+      Serial.println(F("Runtime re-zero cancelled."));
     }
 
     calCtx.state = CalState::IDLE;
@@ -276,9 +282,9 @@ void handleCalibrationInput(char serialchar)
           Serial.print(buf);
 
           if (!saveToEeprom(calibrationFactor, CAL_EEPROM_MAGIC, CAL_EEPROM_MAGIC_ADDR, CAL_EEPROM_VALUE_ADDR)) {
-            Serial.println("Failed to save calibration to EEPROM.");
+            Serial.println(F("Failed to save calibration to EEPROM."));
           } else {
-            Serial.println("Calibration saved to EEPROM.");
+            Serial.println(F("Calibration saved to EEPROM."));
           }
 
           calCtx.state = CalState::IDLE;
@@ -288,14 +294,15 @@ void handleCalibrationInput(char serialchar)
           if (serialchar == 'q' || serialchar == 'Q') {
             calibrationFactor = calCtx.originalCalibrationFactor;
             scale.set_scale(calibrationFactor);
-            Serial.println("Manual calibration cancelled. Changes were not saved.");
+            Serial.println(F("Manual calibration cancelled. Changes were not saved."));
             calCtx.state = CalState::IDLE;
             calCtx.mode  = CalMode::NONE;
 
           } else {
-            char buf[96];
-            snprintf(buf, sizeof(buf), "Invalid manual calibration key: '%c'. Use '+', '-', 's' (save), or 'q' (cancel).\n", serialchar);
-            Serial.print(buf);
+            // char buf[96];
+            // snprintf(buf, sizeof(buf), "Invalid manual calibration key: '%c'. Use '+', '-', 's' (save), or 'q' (cancel).\n", serialchar);
+            // Serial.print(buf);
+            Serial.println(F("Invalid manual calibration key. Use '+', '-', 's' (save), or 'q' (cancel)."));
           }
   }
 }
@@ -308,7 +315,7 @@ void manualCalibration()
   // due to shared contexts and potential for HX711 conflicts,
   // also UX confusion with multiple concurrent workflows
   if (calCtx.state != CalState::IDLE) {
-    Serial.println("Manual calibration already in progress. Send 'q' to cancel first.");
+    Serial.println(F("Manual calibration already in progress. Send 'q' to cancel first."));
     return;
   }
 
@@ -343,7 +350,7 @@ void reZero()
   // due to shared contexts and potential for HX711 conflicts,
   // also UX confusion with multiple concurrent workflows
   if (calCtx.state != CalState::IDLE) {
-    Serial.println("Runtime re-zero already in progress. Send 'q' to cancel first.");
+    Serial.println(F("Runtime re-zero already in progress. Send 'q' to cancel first."));
     return;
   }
 
@@ -379,11 +386,13 @@ void tickCalibration()
 
       if (calCtx.mode == CalMode::AUTO) {
         op = "automatic calibration";
-      } else if (calCtx.mode == CalMode::MANUAL) {
-        op = "manual calibration";
-      } else if (calCtx.mode == CalMode::REZERO) {
-        op = "re-zero";
-      }
+      } else
+        if (calCtx.mode == CalMode::MANUAL) {
+          op = "manual calibration";
+        } else
+          if (calCtx.mode == CalMode::REZERO) {
+            op = "re-zero";
+          }
 
       printDiagnostic(op);
       calCtx.mode = CalMode::NONE;
@@ -403,24 +412,26 @@ void tickCalibration()
 
       if (calCtx.mode == CalMode::AUTO) {
         header = "Automatic calibration mode";
-      } else if (calCtx.mode == CalMode::MANUAL) {
-        header = "Manual calibration mode";
-      } else if (calCtx.mode == CalMode::REZERO) {
-        header = "Runtime re-zero requested.";
-        extraLine = "If reading is offset-biased, send 'z' to force re-zero after verifying empty scale.\n";
-      }
+      } else
+        if (calCtx.mode == CalMode::MANUAL) {
+          header = "Manual calibration mode";
+        } else
+          if (calCtx.mode == CalMode::REZERO) {
+            header = "Runtime re-zero requested.";
+            extraLine = "If reading is offset-biased, send 'z' to force re-zero after verifying empty scale.\n";
+          }
 
       char calPrompt[288];
       snprintf(calPrompt, sizeof(calPrompt),
-           "\n%s\n"
-           "\nRemove all weight from scale.\n"
-           "Auto-detect is active.\n"
-           "Send 'q' to cancel.\n"
-           "%s"
-           "Confirmation timeout: %lu seconds.\n",
-           header,
-           extraLine,
-           userConfirmSeconds);
+               "\n%s\n"
+               "\nRemove all weight from scale.\n"
+               "Auto-detect is active.\n"
+               "Send 'q' to cancel.\n"
+               "%s"
+               "Confirmation timeout: %lu seconds.\n",
+               header,
+               extraLine,
+               userConfirmSeconds);
 
       queueSerialOutput(calPrompt);
 
@@ -458,14 +469,14 @@ void tickCalibration()
       bool emptyDetected = fabsf(calCtx.measuredUnits) <= MINIMUM_LOAD_WEIGHT;
 
       if (emptyDetected) {
-        Serial.println("Empty scale auto-confirmed at timeout (stable scale).");
+        Serial.println(F("Empty scale auto-confirmed at timeout (stable scale)."));
         Serial.println();
         transitionFromWaitEmpty();
       } else {
-        Serial.println("Confirmation timed out: scale not empty; cancelled.");
+        Serial.println(F("Confirmation timed out: scale not empty; cancelled."));
 
         if (calCtx.mode == CalMode::REZERO) {
-          Serial.println("If scale is confirmed empty, send 'z' during re-zero to seed runtime offset.");
+          Serial.println(F("If scale is confirmed empty, send 'z' during re-zero to seed runtime offset."));
         }
 
         Serial.println();
@@ -526,16 +537,17 @@ void tickCalibration()
     calCtx.measuredUnits = tmpAvg;
 
     if (fabsf(calCtx.measuredUnits) < calCtx.loadDetectThreshold) {
-      Serial.println("Weight placement timed out; calibration cancelled.");
+      Serial.println(F("Weight placement timed out; calibration cancelled."));
       calCtx.state = CalState::IDLE;
       calCtx.mode  = CalMode::NONE;
       return;
     }
 
-    char buf[80];
-    unsigned long settleSeconds = CAL_SETTLE_DELAY_MS / 1000UL;
-    snprintf(buf, sizeof(buf), "Weight detected. Settling for %lu seconds before measuring...\n", settleSeconds);
-    Serial.print(buf);
+    // char buf[80];
+    // unsigned long settleSeconds = CAL_SETTLE_DELAY_MS / 1000UL;
+    // snprintf(buf, sizeof(buf), "Weight detected. Settling for %lu seconds before measuring...\n", settleSeconds);
+    // Serial.print(buf);
+    Serial.println(F("Weight detected. Settling for 5 seconds before measuring..."));
     calCtx.stateStartMs = millis();
     calCtx.state        = CalState::SETTLING;
     return;
@@ -555,7 +567,7 @@ void tickCalibration()
       // Print a measuring message both when starting the final measurement
       // and on subsequent ticks while the non-blocking operation is in-progress.
       if (calCtx.avgPhase == AvgPhase::NONE) {
-        Serial.println("Measuring stable reading...");
+        Serial.println(F("Measuring stable reading..."));
         float tmp = 0.0f;
 
         if (!averageUnits(CAL_SAMPLES, LIVE_SAMPLES, tmp)) {
@@ -579,7 +591,7 @@ void tickCalibration()
       }
 
       if (knownWeight == 0.0f || calCtx.measuredUnits == 0.0f) {
-        Serial.println("Automatic calibration failed: invalid known weight or reading.");
+        Serial.println(F("Automatic calibration failed: invalid known weight or reading."));
         calCtx.state = CalState::IDLE;
         calCtx.mode  = CalMode::NONE;
         return;

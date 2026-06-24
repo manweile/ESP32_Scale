@@ -107,117 +107,10 @@
       "id": "openocdScriptsDir",
       "type": "promptString",
       "description": "OpenOCD scripts directory (contains interface/ and target/)",
-      "default": "C:/Espressif/tools/openocd-esp32/share/openocd/scripts"
+      "default": "C:/OpenOCD/openocd/scripts"
     }
-
   ],
-
   "tasks": [
-
-    // Arduino-cli tasks
-
-    // FQBN Production Quick Compile
-    // arduino-cli compile task with verbose output and no clean build,
-    // uses the FQBN input to specify the board configuration,
-    // command line: arduino-cli compile -v --fqbn esp32:esp32:esp32thing D:/MyArduino/Projects/ESP32_Scale/PropaneScale
-    // {
-    //   "label": "FQBN Production Quick Compile",
-    //   "type": "shell",
-    //   "command": "arduino-cli",
-    //   "args": [
-    //     "compile",
-    //     "-v",
-    //     "--fqbn",
-    //     "${input:FQBN}",
-    //     "${workspaceFolder}/PropaneScale"
-    //   ],
-    //   "group": {
-    //     "kind": "build",
-    //     "isDefault": true
-    //   },
-    //   "presentation": {
-    //     "echo": true,
-    //     "reveal": "always",
-    //     "focus": false,
-    //     "panel": "shared"
-    //   },
-    //   "problemMatcher": []
-    // },
-
-    // FQBN Production Clean Rebuild
-    // arduino-cli compile task with verbose output and clean build, 
-    // uses the FQBN input to specify the board configuration, 
-    // command line: arduino-cli compile -v --clean --fqbn esp32:esp32:esp32thing D:/MyArduino/Projects/ESP32_Scale/PropaneScale
-    // {
-    //   "label": "FQBN Production Clean Rebuild",
-    //   "type": "shell",
-    //   "command": "arduino-cli",
-    //   "args": [
-    //     "compile",
-    //     "-v",
-    //     "--clean",
-    //     "--fqbn",
-    //     "${input:FQBN}",
-    //     "${workspaceFolder}/PropaneScale"
-    //   ],
-    //   "presentation": {
-    //     "echo": true,
-    //     "reveal": "always",
-    //     "focus": false,
-    //     "panel": "shared"
-    //   },
-    //   "problemMatcher": []
-    // },
-
-    // COMPort & FQBN & FQBNDIR USB Upload
-    // arduino-cli upload task using COM port, FQBN, and FQBNDIR inputs
-    // to specify the serial port, board configuration, and build directory for the pre-built binary
-    // command line: arduino-cli upload -v -p COM4 --fqbn esp32:esp32:esp32thing 
-    // --input-dir D:/MyArduino/Projects/ESP32_Scale/PropaneScale/build/esp32.esp32.esp32thing D:/MyArduino/Projects/ESP32_Scale/PropaneScale
-    // {
-    //   "label": "COMPort & FQBN & FQBNDIR USB Upload",
-    //   "type": "shell",
-    //   "command": "arduino-cli",
-    //   "args": [
-    //     "upload",
-    //     "-v",
-    //     "-p",
-    //     "${input:COMPort}",
-    //     "--fqbn",
-    //     "${input:FQBN}",
-    //     "--input-dir",
-    //     "${workspaceFolder}/PropaneScale/build/${input:FQBNDIR}",
-    //     "${workspaceFolder}/PropaneScale"
-    //   ],
-    //   "problemMatcher": []
-    // },
-
-    // COMPort & Baud & FQBN Select USB Serial Monitor
-    // arduino-cli monitor task using COM port, FQBN, and baudrate inputs to open a serial monitor for the specified board and port
-    // command line: arduino-cli monitor -p COM4 --config baudrate=115200 --fqbn esp32:esp32:esp32thing D:/MyArduino/Projects/ESP32_Scale/PropaneScale
-    // {
-    //   "label": "COMPort & Baud & FQBN Select USB Serial Monitor",
-    //   "type": "shell",
-    //   "command": "arduino-cli",
-    //   "args": [
-    //     "monitor",
-    //     "-p",
-    //     "${input:COMPort}",
-    //     "--config",
-    //     "baudrate=${input:monitorBaud}",
-    //     "--fqbn",
-    //     "${input:FQBN}"
-    //   ],
-    //   "isBackground": true,
-    //   "presentation": {
-    //     "echo": true,
-    //     "reveal": "always",
-    //     "focus": true,
-    //     "panel": "dedicated"
-    //   },
-    //   "problemMatcher": []
-    // },
-
     // Arduino-CLI for ESP32 Thing tasks
 
     // ESP32 Thing Quick Compile
@@ -270,7 +163,10 @@
     // arduino-cli compile task with verbose output and clean build,
     // uses the esp32:esp32:esp32thing FQBN to specify the board configuration,
     // and sets the build.extra_flags property to include -Og for better debugging and -g3 for maximum debug info in the binary
-    // command line: arduino-cli compile -v --clean --fqbn esp32:esp32:esp32thing --build-property "build.extra_flags=-Og -g3" D:/MyArduino/Projects/ESP32_Scale/PropaneScale
+    // -DESP32 required to specifes miising architecture flags for gdb to properly recognize the target architecture and provide correct debugging information
+    // command line: arduino-cli compile -v --clean --fqbn esp32:esp32:esp32thing --build-property "build.extra_flags=-Og -g3 -DESP32" D:/MyArduino/Projects/ESP32_Scale/PropaneScale
+    // alternative that also works:
+    // comand line: arduino-cli compile -v --clean --optimize-for-debug --fqbn esp32:esp32:esp32thing D:/MyArduino/Projects/ESP32_Scale/PropaneScale
     {
       "label": "ESP32 Thing Debug File Compile",
       "type": "shell",
@@ -281,7 +177,7 @@
         "--clean",
         "--fqbn", "esp32:esp32:esp32thing",
         "--build-property",
-        "build.extra_flags=-Og -g3",
+        "build.extra_flags=-Og -g3 -DESP32",
         "${workspaceFolder}/PropaneScale"
       ],
       "problemMatcher": []
@@ -311,8 +207,6 @@
       "problemMatcher": []
     },
 
-
-
     // ESPTool tasks
 
     // ESPTool ESP32 COMPort Merged Bin Upload
@@ -331,7 +225,7 @@
         "--port", "${input:COMPort}",
         "--baud", "921600",
         "write-flash", "-z", "0x0",
-        "${workspaceFolder}/PropaneScale/build/esp32.esp32.esp32thing/${fileBasename}.merged.bin"
+        "${workspaceFolder}/PropaneScale/build/${input:FQBNDIR}/PropaneScale.ino.merged.bin"
       ],
       "problemMatcher": []
     },
@@ -432,45 +326,6 @@
       "problemMatcher": []
     },
 
-    // ESPTool USB Upload
-    // a compound task to first echo the selected FQBNDIR and a warning about the merged binary, 
-    // then echo the selected COM port, baudrate, and merged binary path, and finally run the ESPTool flash command for ESP32,
-    // {
-    //   "label": "ESPTool USB Upload",
-    //   "dependsOrder": "sequence",
-    //   "dependsOn": [
-    //     "FQBNDIR with Bin Warning",
-    //     "ESPTool COMPort & ESP Speed & Merged Bin Dialog Flash"
-    //   ],
-    //   "problemMatcher": []
-    // },
-
-    // ESP32 Thing Quick Compile + ESPTool Upload
-    // a compound task to first compile the ESP32 Thing sketch with arduino-cli and then flash with ESPTool, for ESP32 Thing,
-    // ensures the user has selected the correct COM port, baudrate, and binary path before uploading by including the pre-task to echo those values and warnings
-    // {
-    //   "label": "ESP32 Thing Quick Compile + ESPTool Upload",
-    //   "dependsOrder": "sequence",
-    //   "dependsOn": [
-    //     "ESP32 Thing Quick Compile",
-    //     "ESPTool COMPort USB Merged Bin Upload"
-    //   ],
-    //   "problemMatcher": []
-    // },
-
-    // ESP32 Thing Clean Rebuild + ESPTool Upload
-    // a compound task to first clean build the ESP32 Thing sketch with arduino-cli and then flash with ESPTool, for ESP32 Thing,
-    // ensures the user has selected the correct COM port, baudrate, and binary path before uploading by including the pre-task to echo those values and warnings
-    // {
-    //   "label": "ESP32 Thing Clean Rebuild + ESPTool Upload",
-    //   "dependsOrder": "sequence",
-    //   "dependsOn": [
-    //     "ESP32 Thing Clean Rebuild",
-    //     "ESPTool ESP32 COMPort Merged Bin Upload"
-    //   ],
-    //   "problemMatcher": []
-    // },
-
     // Doxygen tasks
 
     // Create Doxygen Documentation
@@ -522,32 +377,6 @@
 
     // web server tasks
 
-    // Serve Web Bluetooth client (Python simple HTTP server via script)
-    {
-      "label": "Serve Web Bluetooth",
-      "type": "shell",
-      "command": "powershell",
-      "args": [
-        "-NoProfile",
-        "-ExecutionPolicy",
-        "Bypass",
-        "-File",
-        "${workspaceFolder}/scripts/serve-web-bluetooth.ps1",
-        "-WorkspaceFolder",
-        "${workspaceFolder}"
-      ],
-      "isBackground": true,
-      "presentation": {
-        "echo": true,
-        "reveal": "always",
-        "focus": false,
-        "panel": "dedicated",
-        "showReuseMessage": true,
-        "clear": false
-      },
-      "problemMatcher": []
-    },
-
     // Open Chrome to local web bluetooth client
     {
       "label": "Open Chrome Localhost",
@@ -579,6 +408,75 @@
         "Serve Web Bluetooth",
         "Open Chrome Localhost"
       ],
+      "problemMatcher": []
+    },
+
+    // JTAG Debug tasks (OpenOCD + GDB)
+    // OpenOCD: start the OpenOCD server using the FTDI ESP32 DevKitJ v1 interface and ESP32 target config
+    // Command observed working in Documentation/Debugging/openocd-terminal-results.txt:
+    // openocd -f interface/ftdi/esp32_devkitj_v1.cfg -f target/esp32.cfg -c "init"
+    {
+      "label": "JTAG Debug (ESP32 + ESP-Prog + OpenOCD)",
+      "type": "shell",
+      "command": "openocd",
+      "args": [
+        "-f", "interface/ftdi/esp32_devkitj_v1.cfg",
+        "-f", "target/esp32.cfg",
+        "-c", "init"
+      ],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+
+    // GDB: launch the Xtensa GDB, load the ELF, connect to OpenOCD on :3333 and halt the target
+    // Command observed in Documentation/Debugging/gdb-terminal-results.txt for the GDB binary and ELF path
+    {
+      "label": "JTAG Debug: GDB (xtensa-esp32-elf-gdb)",
+      "type": "shell",
+      "command": "C:/Users/gmanw/AppData/Local/Arduino15/packages/esp32/tools/xtensa-esp-elf-gdb/16.3_20250913/bin/xtensa-esp32-elf-gdb.exe",
+      "args": [
+        "${workspaceFolder}/PropaneScale/build/esp32.esp32.esp32thing/PropaneScale.ino.elf",
+        "-ex", "target extended-remote :3333",
+        "-ex", "monitor halt"
+      ],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+
+    // JTAG pre/post tasks used by launch.json
+    // Compound preLaunch task: build debug ELF and start OpenOCD
+    {
+      "label": "JTAG: Build Debug + Start OpenOCD",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "ESP32 Thing Debug File Compile",
+        "JTAG Debug (ESP32 + ESP-Prog + OpenOCD)"
+      ],
+      "problemMatcher": []
+    },
+
+    // postDebug task: stop OpenOCD by killing the openocd process on Windows
+    {
+      "label": "JTAG: Stop OpenOCD",
+      "type": "shell",
+      "command": "taskkill",
+      "args": ["/IM", "openocd.exe", "/F"],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      },
       "problemMatcher": []
     },
 

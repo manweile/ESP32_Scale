@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>PropaneScale</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <h1>PropaneScale</h1>
+  <div class="card">
+    <div><strong>Connection:</strong> ESP32 AP - PropaneScale</div>
+    <div id="status">Loading telemetry...</div>
+    <!-- Only show connection and status lines; diagnostic fields remain in JSON telemetry -->
+    <div id="initEeprom"></div>
+    <div id="initCal"></div>
+    <div id="levelPrompt"></div>
+    <div id="startupPrompt"></div>
+    <pre id="startupReport"></pre>
+    <pre id="telemetry">{}</pre>
+    <div>
+      <button id="btnLevel">Level Read</button>
+      <button id="btnLevelCancel">Cancel</button>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+  
+  <div id="reportModal"><div class="box"><h3>Level Read Result</h3><pre id="reportText"></pre><div class="actions"><button id="reportOk">OK</button></div></div></div>
+</body>
+</html>

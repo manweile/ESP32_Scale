@@ -115,3 +115,15 @@ constexpr float CAL_FACTOR_ABS_MAX   = 500000.0f;           /**< Maximum absolut
 constexpr float CAL_FACTOR_ABS_MIN   = 100.0f;              /**< Minimum absolute value for valid calibration factor */
 constexpr float MAX_PROJECT_WEIGHT   = 60.0f;               /**< Project will never measure a propane tank above nominal 60 lbs */
 constexpr float MIN_PLAUSIBLE_WEIGHT = 0.1f;                /**< Minimum plausible non-zero weight for user-entered values */
+
+// WiFi & Webserver Configuration
+constexpr char AP_PASSWORD[]            = "propane123";     /**< AP password (min 8 chars for WPA2) */
+constexpr char AP_SSID[]                = "PropaneScale";   /**< AP SSID when station mode fails */
+constexpr char MDNS_HOSTNAME[]          = "propanescale";   /**< mDNS hostname (http://propanescale.local/) */
+constexpr int WEB_SERVER_PORT           = 80;               /**< HTTP server port */
+constexpr char WIFI_PASSWORD[]          = "buddie22";       /**< WiFi station password */
+constexpr char WIFI_SSID[]              = "DIR-645";        /**< WiFi station SSID to attempt first */
+constexpr unsigned long WIFI_TIMEOUT_MS = 30000UL;          /**< ms to wait for STA connect before falling back to AP */
+
+// Static IP configuration (optional) - router assigns 192.168.0.47 to the ESP32
+constexpr char STATIC_IP[] = "192.168.0.47";                /**< Preferred fixed IP assigned by router */

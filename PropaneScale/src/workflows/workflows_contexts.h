@@ -129,7 +129,6 @@ struct CalContext {
 
 // Level Enums and Structs
 
-
 /**
  * @enum LevelState
  *
@@ -196,6 +195,19 @@ struct TareContext {
   TareState     state            = TareState::IDLE;         /**< Current state within the workflow */
   unsigned long stateStartMs     = 0;                       /**< millis() when WAIT_STABLE state was entered */
 };
+
+// Wifi Typedef Struct
+
+/**
+ * @struct WifiCallbacks
+ *
+ * @brief Struct of function pointers for callbacks from WiFi handlers to workflows.
+ *
+ * @details Provides a way for the web server handlers to interact with the workflow logic without tight coupling.
+ */
+typedef struct WifiCallbacks {
+  String (*get_telemetry_json)();
+} WifiCallbacks;
 
 // External global State Variables
 extern AvgContext avgCtx;                                   /**< Averaging context instance to hold state for non-blocking computations */

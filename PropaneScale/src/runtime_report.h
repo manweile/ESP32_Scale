@@ -46,13 +46,3 @@ void eepromValues();
  * @throws {none} This function does not throw exceptions.
  */
 void helpMenu();
-
-/**
- * @brief Prints a summary of the startup configuration and EEPROM values.
- *
- * @details Displays the application title, loaded calibration factor, known weight,
- * maximum propane weight, and tank tare from EEPROM. Also prints startup tare prompts.
- *
- * @throws {none} This function does not throw exceptions.
- */
-void printStartupSummary();

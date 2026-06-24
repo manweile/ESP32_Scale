@@ -258,7 +258,8 @@ void currentRuntimeValues()
   char report[512];
   int usedLength = 0;
   appendReportf(report, sizeof(report), usedLength,
-                "\nCurrent Runtime Values\n\n"
+                "\n\n"
+                "Current Runtime Values\n"
                 "EEPROM ready: %s\n"
                 "Calibration factor: %.2f\n"
                 "Known calibration weight: %.2f lbs\n"
@@ -350,24 +351,5 @@ void helpMenu()
 
   if (helpTextLen > 0) {
     queueSerialOutput(helpText);
-  }
-}
-
-void printStartupSummary()
-{
-  char startupSummary[256];
-  int startupSummaryLen = snprintf(startupSummary,
-                                   sizeof(startupSummary),
-                                   "\nLoaded calibration factor from EEPROM: %.2f\n"
-                                   "Loaded known calibration weight from EEPROM: %.2f lbs\n"
-                                   "Loaded max propane weight from EEPROM: %.2f lbs\n"
-                                   "Loaded tank tare from EEPROM: %.2f lbs\n\n",
-                                   calibrationFactor,
-                                   knownWeight,
-                                   maxPropane,
-                                   tankTare);
-
-  if (startupSummaryLen > 0) {
-    queueSerialOutput(startupSummary);
   }
 }

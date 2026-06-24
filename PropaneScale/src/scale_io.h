@@ -14,6 +14,12 @@
 
 #pragma once
 
+// Local library headers
+#include "scale_serial.h"                                   // Serial output helpers for web UI compatibility
+
+// External Global State Variables
+extern String LastDiagnostic;                               /**< Last HX711 diagnostic message suitable for web UI display. */
+
 // Declarations for input/output functions for user workflows and HX711 interactions
 
 /**
@@ -43,25 +49,6 @@ bool averageUnits(int readings, int samplesPerReading, float& outAvg);
  * @throws {none} This function does not throw exceptions.
  */
 void cancelThresholdDetect();
-
-/**
- * @brief Drains queued serial output without blocking.
- *
- * @details Writes at most the currently available UART buffer space from the
- * internal output queue and returns immediately.
- *
- * @throws {none} This function does not throw exceptions.
- */
-void drainQueuedSerialOutput();
-
-/**
- * @brief Flushes any buffered serial input.
- *
- * @details Reads and discards any available serial input to ensure that subsequent serial reads start with fresh input from the user.
- *
- * @throws {none} This function does not throw exceptions.
- */
-void flushSerialInput();
 
 /**
  * @brief Polls the HX711 probe operation for completion.
@@ -148,3 +135,14 @@ void startProbe(unsigned long timeoutMs, int targetSamples);
  * @throws {none} This function does not throw exceptions.
  */
 void startThresholdDetect(float minimumThresholdLbs);
+
+/**
+ * @brief Record an HX711 diagnostic for the web UI without queuing serial output.
+ *
+ * @details Sets a short, trimmed message suitable for embedding in JSON responses consumed by the browser UI.
+ *
+ * @param operation {const char*} Short workflow label used in the error message.
+ *
+ * @throws {none} This function does not throw exceptions.
+ */
+void webDiagnostic(const char* operation);
