@@ -1,0 +1,19 @@
+1) port web_root.h into separate files (in a data or www folder):
+  a) index.html
+  b) styles.css
+  c) app.js
+  d) Add #include <LittleFS.h> in wifi.cpp
+  e) Mount in initWifi():
+      if (!LittleFS.begin()) {
+      Serial.println("LittleFS mount failed");
+      } else {
+      server.serveStatic("/", LittleFS, "/").setDefaultFile("index.html");
+      }
+  f) upload with Arduino "ESP32 LittleFS Data Upload" tool or the arduino-cli/platform plugin that uploads LittleFS contents
+  g) Ensure LittleFS partition size is adequate (Tools → Partition Scheme or board config)
+  h) Remove or simplify handleRoot() (you can leave it, but static serving via serveStatic is cleaner). 
+    Example handleRoot fallback:
+      request->send(LittleFS, "/index.html", "text/html");
+
+2) consider using Preferences (NVS) uses key-value and is robust; 
+    it's an easy migration: Preferences.putFloat("cal", val) / getFloat.

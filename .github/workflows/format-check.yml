@@ -1,3 +1,11 @@
+ # CI workflow to verify AStyle formatting consistency.
+ #
+ # This workflow runs on Windows runners since AStyle is primarily a Windows tool 
+ # and the formatting rules are defined in a .astylerc file that is compatible with the Windows version of AStyle.
+ # Notes:
+ # - This job installs or restores AStyle and runs it across PropaneScale source files.
+ # - We cache AStyle between runs to avoid reinstalling on every CI execution.
+ # - If you need to update AStyle, bump the cache key (change `v1` -> `v2`).
 name: Check formatting
 
 on:
@@ -6,16 +14,61 @@ on:
 
 jobs:
   astyle-check:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install AStyle
+      # Cache AStyle binary between runs to avoid repeated Chocolatey installs.
+      # Cache key format: astyle-${{ runner.os }}-v1
+      # - Bump the trailing `v1` when you want to force reinstall/update.
+      # Cached paths include common Chocolatey tool locations and a portable AStyle folder.
+      - name: Cache AStyle
+        uses: actions/cache@v4
+        with:
+          # Cache common Chocolatey and portable AStyle locations
+          path: |
+            C:/ProgramData/chocolatey/lib/astyle/tools
+            C:/AStyle
+          key: astyle-${{ runner.os }}-v1
+          # restore-keys can help when exact key doesn't match (partial restore)
+          restore-keys: |
+            astyle-${{ runner.os }}-
+
+      # Ensure AStyle is available. If restored from cache, this will skip re-install.
+      # On cache miss this step installs AStyle via Chocolatey.
+      - name: Ensure AStyle
+        shell: pwsh
         run: |
-          sudo apt-get update
-          sudo apt-get install -y astyle
+          # If astyle is already available (restored from cache or preinstalled), use it.
+          if (-not (Get-Command astyle -ErrorAction SilentlyContinue)) {
+            choco install astyle -y
+          } else {
+            Write-Host "AStyle already available (restored from cache or preinstalled)"
+          }
+          astyle --version
       - name: Run AStyle and fail on changes
+        shell: pwsh
         run: |
-          # Run AStyle recursively on all .cpp and .h files in the PropaneScale folder
-          astyle --options=.astylerc -r "PropaneScale/*.cpp" "PropaneScale/*.h"
-          # If AStyle made changes, the git working tree will differ
-          git diff --exit-code || (echo "AStyle formatting violations detected. Run 'astyle --options=.astylerc -r \"PropaneScale/*.cpp\" \"PropaneScale/*.h\"' locally and commit the results." && exit 1)
+          # Use the same file discovery as the VS Code task to include .ino files
+          $ws = "$env:GITHUB_WORKSPACE"
+          # Ensure astyle is available after installation
+          if (-not (Get-Command astyle -ErrorAction SilentlyContinue)) {
+            Write-Error "AStyle not found after installation. Ensure Chocolatey installed it correctly."
+            exit 1
+          }
+
+          $exts = '.c','.cpp','.h','.hpp','.ino'
+          Get-ChildItem -Path "$ws/PropaneScale" -Recurse -File -ErrorAction SilentlyContinue |
+            Where-Object { $exts -contains $_.Extension } |
+            ForEach-Object {
+              Write-Host "Formatting: $($_.FullName)"
+              & astyle --options="$ws\.astylerc" $_.FullName
+            }
+
+          # Print any changed files and fail if AStyle modified the working tree
+          $diff = git --no-pager diff --name-only 2>$null
+          if ($diff) { Write-Host $diff } else { Write-Host "" }
+          git diff --quiet
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "AStyle formatting violations detected. Run the workspace task 'Format Code (AStyle)' or: astyle --options=.astylerc -r PropaneScale"
+            exit 1
+          }

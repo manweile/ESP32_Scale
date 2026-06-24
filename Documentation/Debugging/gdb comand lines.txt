@@ -1,0 +1,16 @@
+gdb command lines
+for latest to oldest:
+ & "C:\Users\gmanw\AppData\Local\Arduino15\packages\esp32\tools\xtensa-esp-elf-gdb\16.3_20250913\bin\xtensa-esp32-elf-gdb.exe" D:\MyArduino\Projects\ESP32_Scale\PropaneScale\build\esp32.esp32.esp32thing\PropaneScale.ino.elf -ex "target extended-remote :3333" -ex "monitor halt" -ex "break loop" -ex "c"
+ 
+ PS C:\Users\gmanw> & "C:\Users\gmanw\AppData\Local\Arduino15\packages\esp32\tools\xtensa-esp-elf-gdb\16.3_20250913\bin\xtensa-esp32-elf-gdb.exe" D:\MyArduino\Projects\ESP32_Scale\PropaneScale\build\esp32.esp32.esp32thing\PropaneScale.ino.elf -ex "target extended-remote :3333" -ex "hbreak PropaneScale.ino:88" -ex "monitor reset run"
+ 
+ PS C:\Users\gmanw> & "C:\Users\gmanw\AppData\Local\Arduino15\packages\esp32\tools\xtensa-esp-elf-gdb\16.3_20250913\bin\xtensa-esp32-elf-gdb.exe" D:\MyArduino\Projects\ESP32_Scale\PropaneScale\build\esp32.esp32.esp32thing\PropaneScale.ino.elf -ex "target extended-remote :3333" -ex "monitor halt"
+ 
+ PS C:\Users\gmanw> & "C:\Users\gmanw\AppData\Local\Arduino15\packages\esp32\tools\xtensa-esp-elf-gdb\16.3_20250913\bin\xtensa-esp32-elf-gdb.exe" D:\MyArduino\Projects\ESP32_Scale\PropaneScale\build\esp32.esp32.esp32thing\PropaneScale.ino.elf -ex "target extended-remote :3333" -ex "monitor halt" -ex "set remote write-size 4096" -ex "thb call_user_start_cpu0" -ex "c"
+ 
+ PS C:\Users\gmanw> & "C:\Users\gmanw\AppData\Local\Arduino15\packages\esp32\tools\xtensa-esp-elf-gdb\16.3_20250913\bin\xtensa-esp32-elf-gdb.exe" D:\MyArduino\Projects\ESP32_Scale\PropaneScale\build\esp32.esp32.esp32thing\PropaneScale.ino.elf -ex "target extended-remote :3333" -ex "monitor halt" -ex "load"
+ 
+ PS C:\Users\gmanw> & "C:\Users\gmanw\AppData\Local\Arduino15\packages\esp32\tools\xtensa-esp-elf-gdb\16.3_20250913\bin\xtensa-esp32-elf-gdb.exe" D:\MyArduino\Projects\ESP32_Scale\PropaneScale\build\esp32.esp32.esp32thing\PropaneScale.ino.elf
+ 
+ 
+ 

@@ -81,7 +81,7 @@ void resetInputContext()
 void setup()
 {
   Serial.begin(BAUD);
-  
+
   Serial.println();
   Serial.println(APP_TITLE);
 
@@ -113,6 +113,7 @@ void loop()
       char temp = Serial.read();
       handleStartupTareInput(temp);
     }
+
     return;
   }
 

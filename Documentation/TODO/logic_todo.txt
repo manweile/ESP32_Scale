@@ -72,153 +72,6 @@ level_workflow.cpp: handleLevelReadInput
 
 COMPLETED
 
-Note:
-refer to copilot session from May 21 on Github for moving Serial.available() out of tickCalibration.
-handleCalibrationInput should be doing that logic.
-
-data:
-- file: "PropaneScale/PropaneScale.ino"
-  line: 221
-  snippet: "if (!Serial.available()) {"
-- file: "PropaneScale/src/workflows/calibration_workflow.cpp"
-  line: 373
-  snippet: "if (Serial.available()) {"
-- file: "PropaneScale/src/scale_io.cpp"
-  line: 68
-  snippet: "while (Serial.available()) {"
-- file: "Examples/mine/mine.ino"
-  line: 126
-  snippet: "if (Serial.available()) {"
-- file: "Examples/mine/mine.ino"
-  line: 206
-  snippet: "while (Serial.available()) {"
-- file: "Examples/mine/mine.ino"
-  line: 209
-  snippet: "if (Serial.available()) {"
-- file: "Examples/mine/copilot_scale.ino"
-  line: 290
-  snippet: "while (Serial.available()) {"
-- file: "Examples/mine/copilot_scale.ino"
-  line: 413
-  snippet: "if (Serial.available()) {"
-- file: "Examples/mine/copilot_scale.ino"
-  line: 989
-  snippet: "if (Serial.available()) {"
-- file: "Examples/mine/copilot_scale.ino"
-  line: 1072
-  snippet: "while (Serial.available()) {"
-  
-Here is a concrete refactoring example (diff) based on your actual project structure for moving all calibration user input handling to `handleCalibrationInput`. This refactor assumes your main Arduino loop is in **PropaneScale/PropaneScale.ino** and it already calls `tickCalibration()` (or will after this change):
-
----
-
-### 1. **Remove Serial Input Handling from `tickCalibration`**
-
-**Before:** (in `PropaneScale/src/workflows/calibration_workflow.cpp`)
-```cpp
-if (calCtx.state == CalState::WAIT_EMPTY) {
-    if (Serial.available()) {
-        char c = Serial.read();
-        // User input handling for 'q', 'z'...
-    }
-    // ...timeout logic
-}
-```
-
-**After:**  
-```cpp
-if (calCtx.state == CalState::WAIT_EMPTY) {
-    // Only handle timeout logic here.
-    // User input is now handled in handleCalibrationInput() by the main loop.
-    // ...timeout logic
-}
-```
-
-> Remove the entire `Serial.available()` block and all user input checking from **tickCalibration**.
-
----
-
-### 2. **Update Main loop() in PropaneScale.ino**
-
-#### Find your current main loop (example context from results):
-
-```cpp
-void loop() {
-    // ...other variable declarations...
-    // Main loop body...
-}
-```
-
-**Insert this code before calling tickCalibration():**
-```cpp
-    // If calibration is active and a serial character is available, route it to handleCalibrationInput
-    if (calCtx.state != CalState::IDLE && Serial.available()) {
-        char c = Serial.read();
-        handleCalibrationInput(c);
-    }
-
-    tickCalibration();
-```
-
-**Full Example Integration:**
-```cpp
-void loop() {
-    // ...other variables, logic...
-
-    // Calibration input refactor (add these lines):
-    if (calCtx.state != CalState::IDLE && Serial.available()) {
-        char c = Serial.read();
-        handleCalibrationInput(c);
-    }
-
-    tickCalibration();
-
-    // ...rest of your loop logic, if any
-}
-```
-> Be sure to include `#include "src/workflows/workflows_contexts.h"` or wherever `calCtx` and related states are defined.
-
----
-
-### 3. **Review and Update Comments for Clarity**
-
-Update any relevant comments in both `tickCalibration()` and your `loop()` to explain that:
-- User input is now directed exclusively through `handleCalibrationInput()`.
-- `tickCalibration()` only advances state based on timing and sensor logic.
-
----
-
-### 4. **Sanity Check handleCalibrationInput**
-
-No changes are necessary if `handleCalibrationInput(char)` already handles all relevant states/inputs (WAIT_EMPTY, ADJUSTING, etc.).  
-If not, move the user-input logic that was previously in `tickCalibration` into the corresponding `handleCalibrationInput` state branch.
-
----
-
-## Summary of Improved Flow
-
-- **loop()**:
-    - Reads and routes input to `handleCalibrationInput()` if calibration is active.
-    - Always calls `tickCalibration()` to advance the non-blocking state machine.
-
-- **handleCalibrationInput()**:
-    - Handles ALL user calibration input logic per-state.
-
-- **tickCalibration()**:
-    - Handles timeouts, sensor readings, and ordinary state transitions only.
-
----
-
-## Resulting Advantages
-
-- **Single responsibility**: All calibration input logic in one place.
-- **Non-blocking**: `loop()` stays responsive.
-- **Easy to maintain** and reason about calibration workflow logic.
-
----
-
-If you'd like an actual patch/diff for your project files, just ask!
-
 6) Extract SKIP handling from `tickTare()` on PropaneScale.ino into a dedicated
 input handler `handleStartupTareInput()` in the startup tare workflow module.
 
@@ -260,3 +113,33 @@ I don't need to see this if reading & baseline are within established zero param
 I only need to see startup tare timeout check on negative weight or true positive weight
 
 LEAVE
+
+12) review all printing logic!
+
+what costs more in ram/cycles:
+this kind of print pattern:
+Serial.print("Attempting STA connect to: ");
+Serial.println(WIFI_SSID);
+
+or this kind:
+char buf[128];
+unsigned long loadDetectSeconds = CONFIRM_TIMEOUT_MS / 1000UL;
+snprintf(buf, sizeof(buf), "Waiting for weight placement on scale...\nSend 'q' to cancel.\nLoad placement timeout: %lu seconds.\n", loadDetectSeconds);
+queueSerialOutput(buf);
+
+Short answer: the snprintf path costs more — both RAM (stack) and CPU cycles — than the two-call Serial.print/println approach.
+
+Why:
+
+RAM: snprintf(buf,128,...) allocates the full buffer on the stack (here 128 bytes) plus snprintf's internal temporaries. Two Serial.print calls use essentially no extra stack (they read the strings from flash/data).
+CPU: snprintf does parsing/formatting and integer -> ASCII conversion (divides/mods), which is relatively expensive. Two Serial.print calls do far less work (just stream the literal and the string/number to the driver).
+Additional cost caveat: if queueSerialOutput() copies the string into a queue/heap, that adds heap/RAM; multiple small prints may avoid a large transient copy but do more driver calls.
+Recommendation:
+
+If you only concatenate a literal and a number, prefer multiple Serial.print calls (use F("...") for flash-stored literals) to minimize stack and cycles:
+Serial.print(F("Waiting for weight placement on scale...\nSend 'q' to cancel.\nLoad placement timeout: "));
+Serial.println(loadDetectSeconds);
+Use snprintf only when you need complex formatting or a single contiguous string (or when you must queue a single buffer).
+
+13) Replace manual JSON assembly with a lightweight JSON helper or library for robustness.
+TO REVIEW

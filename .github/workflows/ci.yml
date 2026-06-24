@@ -35,7 +35,6 @@ jobs:
       - name: Install HX711 library
         run: |
           arduino-cli lib update-index
-          # ensure HX711 library is available for builds/tests
           arduino-cli lib install "HX711"
 
       - name: Show arduino-cli info
