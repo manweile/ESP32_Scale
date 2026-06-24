@@ -255,24 +255,21 @@ static const char* tareStateNameFor(TareState state)
 
 void currentRuntimeValues()
 {
-  char report[768];
+  char report[512];
   int usedLength = 0;
-
   appendReportf(report, sizeof(report), usedLength,
-                "\n%s\n\n"
-                "Current Runtime Values\n"
+                "\nCurrent Runtime Values\n\n"
                 "EEPROM ready: %s\n"
                 "Calibration factor: %.2f\n"
                 "Known calibration weight: %.2f lbs\n"
                 "Max propane weight: %.2f lbs\n"
-                "Tank tare: %.2f lbs\n"
+                "Tank tare: %.2f lbs\n\n"
                 "Calibration mode: %d (%s)\n"
                 "Calibration state: %d (%s)\n"
                 "Level state: %d (%s)\n"
                 "Tare state: %d (%s)\n"
                 "Input mode: %d (%s)\n"
                 "Input state: %d (%s)\n",
-                APP_TITLE,
                 eepromReady ? "yes" : "no",
                 calibrationFactor,
                 knownWeight,
@@ -301,7 +298,7 @@ void eepromValues()
     return;
   }
 
-  queueSerialOutput("\nEEPROM Saved Values\n");
+  queueSerialOutput("\nEEPROM Saved Values\n\n");
 
   printEepromField("Calibration factor",
                    CAL_EEPROM_MAGIC_ADDR, CAL_EEPROM_MAGIC, CAL_EEPROM_VALUE_ADDR,
@@ -326,10 +323,10 @@ void eepromValues()
                      HX711_OFFSET_EEPROM_MAGIC,
                      HX711_OFFSET_EEPROM_VALUE_ADDR)) {
     char line[96];
-    snprintf(line, sizeof(line), "Runtime tare offset (HX711 counts): %.0f\n", savedRuntimeOffset);
+    snprintf(line, sizeof(line), "Runtime tare offset: %.0f\n", savedRuntimeOffset);
     queueSerialOutput(line);
   } else {
-    queueSerialOutput("Runtime tare offset (HX711 counts): <invalid or not set>\n");
+    queueSerialOutput("Runtime tare offset: <invalid or not set>\n");
   }
 }
 
@@ -358,15 +355,13 @@ void helpMenu()
 
 void printStartupSummary()
 {
-  char startupSummary[384];
+  char startupSummary[256];
   int startupSummaryLen = snprintf(startupSummary,
                                    sizeof(startupSummary),
-                                   "\n%s\n\n"
-                                   "Loaded calibration factor from EEPROM: %.2f\n"
+                                   "\nLoaded calibration factor from EEPROM: %.2f\n"
                                    "Loaded known calibration weight from EEPROM: %.2f lbs\n"
                                    "Loaded max propane weight from EEPROM: %.2f lbs\n"
                                    "Loaded tank tare from EEPROM: %.2f lbs\n\n",
-                                   APP_TITLE,
                                    calibrationFactor,
                                    knownWeight,
                                    maxPropane,

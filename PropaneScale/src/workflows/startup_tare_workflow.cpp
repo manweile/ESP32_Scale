@@ -39,7 +39,7 @@ extern void helpMenu();                                     // Function to displ
 
 void beginStartupTare()
 {
-  // HX711 readiness = DOUT going low when an ADC conversion is complete. 
+  // HX711 readiness = DOUT going low when an ADC conversion is complete.
   // That only happens after the first conversion finishes.
   // Conversion period depends on RATE, which is 10 Hz.
   // 10 Hz → ~100 ms per conversion * 10 live samples = 1000 ms.
@@ -84,8 +84,9 @@ void tickTare()
   if (tareCtx.probePending) {
     bool responsive = false;
 
+    // keep probe active until it has a result or hits its timeout
     if (!pollProbe(responsive, READY_TIMEOUT_MS, LIVE_SAMPLES)) {
-      return; // still probing; try again next tick
+      return;
     }
 
     // timeout or unresponsive, warn user to prevent long waits and provide diagnostic info
@@ -109,17 +110,14 @@ void tickTare()
     printStartupSummary();
 
     const unsigned long autoTimeout = CONFIRM_TIMEOUT_MS / 1000UL;
-    char startupPrompt[512];
+    char startupPrompt[256];
     const int startupPromptLen = snprintf(startupPrompt,
                                           sizeof(startupPrompt),
                                           "Startup tare: waiting for empty scale...\n"
                                           "Auto-detect is active.\n"
-                                          "Auto-detect timeout: %lu seconds.\n\n"
-                                          "Not-empty threshold: >= %.2f lbs (tank tare + max propane + margin).\n"
-                                          "Stability tolerance: +/- %.2f lbs once below not-empty threshold.\n"
-                                          "Timeout expiry with empty + stable readings auto-confirms taring workflow.\n"
+                                          "Auto-detect timeout: %lu seconds.\n"
                                           "Send 'q' to skip startup tare.\n\n",
-                                          autoTimeout, startupNotEmptyThreshold, SETUP_EMPTY_WEIGHT);
+                                          autoTimeout);
 
     if (startupPromptLen > 0 && startupPromptLen < static_cast<int>(sizeof(startupPrompt))) {
       queueSerialOutput(startupPrompt);
@@ -147,15 +145,8 @@ void tickTare()
     return;
   }
 
-  // if we have gotten here, we are in WAIT_STABLE,
-  // delegate serial handling to the dedicated input handler
-  if (Serial.available()) {
-    char c = Serial.read();
-
-    if (handleStartupTareInput(c)) {
-      return;
-    }
-  }
+  // if we get here, are in WAIT_STABLE and need to check for stability or timeout conditions
+  // Serial input is handled via the central input dispatcher to avoid polling Serial
 
   // will only see this on application initialization
   if (tareCtx.baselinePending) {

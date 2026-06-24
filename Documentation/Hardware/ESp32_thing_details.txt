@@ -1,0 +1,71 @@
+PS C:\Users\gmanw> arduino-cli board details --fqbn esp32:esp32:esp32thing
+Board name:            SparkFun ESP32 Thing
+FQBN:                  esp32:esp32:esp32thing
+Board version:         3.3.4
+
+Package name:          esp32
+Package maintainer:    Espressif Systems
+Package URL:           https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+Package website:       https://github.com/espressif/arduino-esp32
+Package online help:   https://esp32.com
+
+Platform name:         esp32
+Platform category:     ESP32
+Platform architecture: esp32
+Platform URL:          https://github.com/espressif/arduino-esp32/releases/download/3.3.4/esp32-3.3.4.zip
+Platform file name:    esp32-3.3.4.zip
+Platform size (bytes): 27299511
+Platform checksum:     SHA-256:b9793a76ff067fb064c7b934bfc9bb19a00fa9ea4474597d6f65385ebd6a3a60
+
+Required tool: arduino:dfu-util                     0.11.0-arduino5
+Required tool: esp32:esp-rv32                       2507
+Required tool: esp32:esp-x32                        2507
+Required tool: esp32:esp32-arduino-libs             idf-release_v5.5-8410210c-v2
+Required tool: esp32:esptool_py                     5.1.0
+Required tool: esp32:mklittlefs                     4.0.2-db0513a
+Required tool: esp32:mkspiffs                       0.2.3
+Required tool: esp32:openocd-esp32                  v0.12.0-esp32-20250707
+Required tool: esp32:riscv32-esp-elf-gdb            16.3_20250913
+Required tool: esp32:xtensa-esp-elf-gdb             16.3_20250913
+
+Option:        Upload Speed                                                      UploadSpeed
+               921600                               ✔                            UploadSpeed=921600
+               115200                                                            UploadSpeed=115200
+               256000                                                            UploadSpeed=256000
+               230400                                                            UploadSpeed=230400
+               512000                                                            UploadSpeed=512000
+Option:        Flash Frequency                                                   FlashFreq
+               80MHz                                ✔                            FlashFreq=80
+               40MHz                                                             FlashFreq=40
+Option:        Partition Scheme                                                  PartitionScheme
+               Default                              ✔                            PartitionScheme=default
+               No OTA (Large APP)                                                PartitionScheme=no_ota
+               Minimal SPIFFS (Large APPS with OTA)                              PartitionScheme=min_spiffs
+Option:        Core Debug Level                                                  DebugLevel
+               None                                 ✔                            DebugLevel=none
+               Error                                                             DebugLevel=error
+               Warn                                                              DebugLevel=warn
+               Info                                                              DebugLevel=info
+               Debug                                                             DebugLevel=debug
+               Verbose                                                           DebugLevel=verbose
+Option:        Erase All Flash Before Sketch Upload                              EraseFlash
+               Disabled                             ✔                            EraseFlash=none
+               Enabled                                                           EraseFlash=all
+Programmers:   ID                                   Name
+               esptool                              Esptool
+               
+from C:\Users\gmanw\AppData\Local\Arduino15\packages\esp32\hardware\esp32\3.3.4\tools\partitions\default.csv:
+# Name	    Type    SubType     Offset      Size	 Flags
+nvs	        data	nvs	        0x9000	    0x5000	
+otadata	    data	ota	        0xe000	    0x2000	
+app0	    app	    ota_0	    0x10000	    0x140000	
+app1	    app	    ota_1	    0x150000	0x140000	
+spiffs	    data	spiffs	    0x290000	0x160000	
+coredump    data	coredump	0x3F0000	0x10000	
+
+suggested custom partitions.csv
+# Name,   Type, SubType, Offset,  Size, Flags
+nvs,      data, nvs,     ,        0x6000,
+phy_init, data, phy,     ,        0x1000,
+factory,  app,  factory, ,        2M,
+storage,  data, spiffs,  ,        1.5M,

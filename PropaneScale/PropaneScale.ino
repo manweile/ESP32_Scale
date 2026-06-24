@@ -82,6 +82,10 @@ void resetInputContext()
 void setup()
 {
   Serial.begin(BAUD);
+
+  Serial.println();
+  Serial.println(APP_TITLE);
+
   initializeApp();
   beginStartupTare();
   webBleInit();
@@ -105,6 +109,13 @@ void loop()
   tickTare();
 
   if (tareCtx.state != TareState::IDLE) {
+    // While startup tare is active, keep serial reads centralized here and
+    // forward to the startup tare input handler so user can send 'q' to skip.
+    if (Serial.available()) {
+      char temp = Serial.read();
+      handleStartupTareInput(temp);
+    }
+
     return;
   }
 
