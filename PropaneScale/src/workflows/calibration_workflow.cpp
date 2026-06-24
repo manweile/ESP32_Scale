@@ -136,7 +136,8 @@ static void transitionFromWaitEmpty()
 
   char buf[128];
   unsigned long loadDetectSeconds = CONFIRM_TIMEOUT_MS / 1000UL;
-  snprintf(buf, sizeof(buf), "Waiting for weight placement on scale...\nSend 'q' to cancel.\nLoad placement timeout: %lu seconds.\n", loadDetectSeconds);
+  snprintf(buf, sizeof(buf), "Waiting for weight placement on scale...\nSend 'q' to cancel.\nLoad placement timeout: %lu seconds.\n",
+           loadDetectSeconds);
   queueSerialOutput(buf);
 
   calCtx.stateStartMs = millis();
@@ -379,11 +380,13 @@ void tickCalibration()
 
       if (calCtx.mode == CalMode::AUTO) {
         op = "automatic calibration";
-      } else if (calCtx.mode == CalMode::MANUAL) {
-        op = "manual calibration";
-      } else if (calCtx.mode == CalMode::REZERO) {
-        op = "re-zero";
-      }
+      } else
+        if (calCtx.mode == CalMode::MANUAL) {
+          op = "manual calibration";
+        } else
+          if (calCtx.mode == CalMode::REZERO) {
+            op = "re-zero";
+          }
 
       printDiagnostic(op);
       calCtx.mode = CalMode::NONE;
@@ -403,24 +406,26 @@ void tickCalibration()
 
       if (calCtx.mode == CalMode::AUTO) {
         header = "Automatic calibration mode";
-      } else if (calCtx.mode == CalMode::MANUAL) {
-        header = "Manual calibration mode";
-      } else if (calCtx.mode == CalMode::REZERO) {
-        header = "Runtime re-zero requested.";
-        extraLine = "If reading is offset-biased, send 'z' to force re-zero after verifying empty scale.\n";
-      }
+      } else
+        if (calCtx.mode == CalMode::MANUAL) {
+          header = "Manual calibration mode";
+        } else
+          if (calCtx.mode == CalMode::REZERO) {
+            header = "Runtime re-zero requested.";
+            extraLine = "If reading is offset-biased, send 'z' to force re-zero after verifying empty scale.\n";
+          }
 
       char calPrompt[288];
       snprintf(calPrompt, sizeof(calPrompt),
-           "\n%s\n"
-           "\nRemove all weight from scale.\n"
-           "Auto-detect is active.\n"
-           "Send 'q' to cancel.\n"
-           "%s"
-           "Confirmation timeout: %lu seconds.\n",
-           header,
-           extraLine,
-           userConfirmSeconds);
+               "\n%s\n"
+               "\nRemove all weight from scale.\n"
+               "Auto-detect is active.\n"
+               "Send 'q' to cancel.\n"
+               "%s"
+               "Confirmation timeout: %lu seconds.\n",
+               header,
+               extraLine,
+               userConfirmSeconds);
 
       queueSerialOutput(calPrompt);
 
