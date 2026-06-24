@@ -1,0 +1,25 @@
+PS C:\Users\gmanw> openocd -f interface/ftdi/esp32_devkitj_v1.cfg -f target/esp32.cfg -c "init"
+xPack Open On-Chip Debugger 0.12.0+dev-02228-ge5888bda3-dirty (2025-10-04-22:44)
+Licensed under GNU GPL v2
+For bug reports, read
+        http://openocd.org/doc/doxygen/bugs.html
+Info : [esp32.cpu0] Hardware thread awareness created
+Info : [esp32.cpu1] Hardware thread awareness created
+force hard breakpoints
+Info : clock speed 500 kHz
+Info : JTAG tap: esp32.cpu0 tap/device found: 0x120034e5 (mfg: 0x272 (Tensilica), part: 0x2003, ver: 0x1)
+Info : JTAG tap: esp32.cpu1 tap/device found: 0x120034e5 (mfg: 0x272 (Tensilica), part: 0x2003, ver: 0x1)
+Info : [esp32.cpu0] Examination succeed
+Info : [esp32.cpu1] Examination succeed
+Info : [esp32.cpu0] starting gdb server on 3333
+Info : Listening on port 3333 for gdb connections
+Info : Listening on port 6666 for tcl connections
+Info : Listening on port 4444 for telnet connections
+Info : Set GDB target to 'esp32.cpu0'
+Info : [esp32.cpu1] Debug controller was reset.
+Info : [esp32.cpu1] Core was reset.
+
+After gdb:
+Info : accepting 'gdb' connection on tcp/3333
+Info : Set GDB target to 'esp32.cpu0'
+Info : New GDB Connection: 1, Target esp32.cpu0, state: halted
